@@ -150,18 +150,16 @@ export function TLCandidateViewModal({ candidate, onClose, onSaved }: Props) {
             </div>
           </div>
 
-          {/* ── READ-ONLY: First Call Status ── */}
+          {/* ── READ-ONLY: Candidate Status ── */}
           <div className="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
               <Phone className="w-4 h-4 text-amber-400" />
-              <span className="text-amber-700 text-sm" style={{ fontWeight: 600 }}>First Call Status</span>
+              <span className="text-amber-700 text-sm" style={{ fontWeight: 600 }}>Candidate Status</span>
               <span className="ml-auto text-xs text-slate-400 flex items-center gap-1"><Lock className="w-3 h-3" /> Read-only</span>
             </div>
             <div className="px-5 py-4 grid sm:grid-cols-3 gap-4">
-              <ROField label="First Call Status" value={candidate.firstCallStatus} />
+              <ROField label="Candidate Status" value={candidate.firstCallStatus || candidate.status} />
               <ROField label="Communication Rating" value={candidate.communicationRating} />
-              <ROField label="Interview Type" value={candidate.firstCallInterviewType || candidate.interviewType} />
-              <ROField label="Eligible Role" value={candidate.eligibleRole} />
               <ROField label="First Call Date" value={candidate.firstCallDate ? new Date(candidate.firstCallDate).toLocaleDateString() : ''} />
               <ROField label="Comments" value={candidate.comments} />
             </div>

@@ -7,16 +7,13 @@ import {
   Upload, File,
 } from 'lucide-react';
 import api from '../../services/api';
+import { CANDIDATE_STATUS_OPTIONS, CANDIDATE_STATUS_COLORS } from '../../utils/candidateStatusUtils';
 
 // ─── Constants ────────────────────────────────────────────────
-const WALKIN_STATUSES = ['New', 'Contacted', 'Interview Scheduled', 'Selected', 'Rejected'];
+const WALKIN_STATUSES = [...CANDIDATE_STATUS_OPTIONS];
 
 const STATUS_COLORS: Record<string, string> = {
-  'New':                 'bg-slate-100 text-slate-600',
-  'Contacted':           'bg-green-100 text-green-700',
-  'Interview Scheduled': 'bg-violet-100 text-violet-700',
-  'Selected':            'bg-emerald-100 text-emerald-700',
-  'Rejected':            'bg-red-100 text-red-600',
+  ...CANDIDATE_STATUS_COLORS,
 };
 
 const YEARS_OPTIONS = Array.from({ length: 31 }, (_, i) => i);

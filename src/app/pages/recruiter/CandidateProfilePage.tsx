@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { calculateAge } from '../../utils/ageCalculator';
 import { dedupeCompanies } from '../../utils/companyUtils';
-import { CANDIDATE_STATUS_OPTIONS, CANDIDATE_STATUS_COLORS, isTLOnlyStatus } from '../../utils/candidateStatusUtils';
+import { CANDIDATE_STATUS_OPTIONS, CANDIDATE_STATUS_COLORS, canUserUpdateCandidateStatus, isTLOnlyStatus } from '../../utils/candidateStatusUtils';
 import { CopyableContact } from '../../components/CopyableContact';
 
 
@@ -25,37 +25,9 @@ const EMAIL_TEMPLATES = [
   { value: 'offer_letter',            label: 'Letter for Initial Job Offer' },
 ];
 
-const STATUS_OPTIONS = [
-  'New', 'Contacted', 'Interested', 'Selected for Call', 'Screening',
-  'Interview Scheduled', 'Selected', 'Rejected',
-  'Eligible Candidates', 'Wrong Number', 'Unreachable',
-  'Did Not Pick', 'Unanswered Calls', 'Call Back',
-  'HR Shortlist', 'Written Test', 'Operations Round',
-  'Document Pending', 'Documentation', 'Yet To Join', 'Joined', 'Exited',
-];
+const STATUS_OPTIONS = [...CANDIDATE_STATUS_OPTIONS];
 const STATUS_COLORS: Record<string, string> = {
-  New: 'bg-slate-100 text-slate-600 border-slate-200',
-  Contacted: 'bg-green-100 text-green-700 border-green-200',
-  Interested: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  'Selected for Call': 'bg-cyan-100 text-cyan-700 border-cyan-200',
-  Screening: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-  'Interview Scheduled': 'bg-violet-100 text-violet-700 border-violet-200',
-  Selected: 'bg-teal-100 text-teal-700 border-teal-200',
-  Rejected: 'bg-red-100 text-red-600 border-red-200',
-  'Eligible Candidates': 'bg-green-100 text-green-700 border-green-200',
-  'Wrong Number': 'bg-orange-100 text-orange-700 border-orange-200',
-  Unreachable: 'bg-orange-100 text-orange-700 border-orange-200',
-  'Did Not Pick': 'bg-amber-100 text-amber-700 border-amber-200',
-  'Unanswered Calls': 'bg-amber-100 text-amber-700 border-amber-200',
-  'Call Back': 'bg-yellow-100 text-yellow-700 border-yellow-200',
-  'HR Shortlist': 'bg-indigo-100 text-indigo-700 border-indigo-200',
-  'Written Test': 'bg-blue-100 text-blue-700 border-blue-200',
-  'Operations Round': 'bg-sky-100 text-sky-700 border-sky-200',
-  'Document Pending': 'bg-rose-100 text-rose-700 border-rose-200',
-  Documentation: 'bg-rose-100 text-rose-700 border-rose-200',
-  'Yet To Join': 'bg-purple-100 text-purple-700 border-purple-200',
-  Joined: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  Exited: 'bg-red-100 text-red-700 border-red-200',
+  ...CANDIDATE_STATUS_COLORS,
 };
 
 const OWNERSHIP_STATUS_COLORS: Record<string, string> = {
@@ -72,12 +44,7 @@ const OUTCOME_COLORS: Record<string, string> = {
   'Call Back': 'text-green-700 bg-green-50',
 };
 
-const SECOND_CALL_STATUSES = [
-  'Not Reachable', 'Call Back Scheduled', 'Screening in Progress',
-  'Eligible – Second Round', 'SPOC Follow-up', 'Not Interested',
-  'Rejected – Second Round', 'On Hold', 'Interview Confirmed',
-  'Offer Discussion', 'Other',
-];
+const SECOND_CALL_STATUSES = [...CANDIDATE_STATUS_OPTIONS];
 
 const DOCUMENT_TYPES = [
   'Resume', 'Aadhar Card', 'PAN Card', 'Passport',
@@ -191,9 +158,9 @@ export function CandidateProfilePage() {
 
   // ── Lock state ───────────────────────────────────────────────
   const isBlockedAsDuplicate = candidate?.isDuplicate && !isAdmin;
-  const isLockedForRecruiter = candidate?.firstCallSubmitted && isRecruiter;
+  const isLockedForRecruiter = false; // Recruiters can update candidate status
   const isLockedForTL = false; // TL can edit now
-  const isLockedForAll = candidate?.tlCallSubmitted && !isAdmin;
+  const isLockedForAll = false; // TL and Recruiters can edit now
   const isLockedForManager = false; // Managers can edit now
   const isInactive = candidate?.candidateActiveStatus === 'Inactive';
   const isFinalInterviewLocked = candidate?.finalInterviewLocked && !isAdmin;
@@ -312,7 +279,7 @@ export function CandidateProfilePage() {
   }, [id]);
 
   const handleStatusUpdate = async (newStatus: string) => {
-    if (isLockedForRecruiter || isLockedForAll || isLockedForTL || isBlockedAsDuplicate || isLockedForManager) return;
+    if (isBlockedAsDuplicate) return;
     
     if (newStatus === 'Joined') {
       setShowJoiningModal(true);
@@ -401,46 +368,39 @@ export function CandidateProfilePage() {
   };
 
   const handleSaveFirstCall = async () => {
-    if (fcContacted && !fcStatus) { setFirstCallError('First call status is required'); return; }
+    if (!fcStatus) { setFirstCallError('Candidate status is required'); return; }
     setFirstCallError('');
     setSavingFirstCall(true);
     try {
-      let tsDate = fcDate;
-      let tsTime = fcTime;
-
-      if (fcContacted) {
-        tsDate = fcDate || new Date().toISOString().split('T')[0];
-        tsTime = fcTime || new Date().toTimeString().slice(0, 5);
-      }
+      const tsDate = fcDate || new Date().toISOString().split('T')[0];
+      const tsTime = fcTime || new Date().toTimeString().slice(0, 5);
 
       const payload: any = {
-        candidateContacted: fcContacted,
+        candidateContacted: true,
+        firstCallSubmitted: true,
+        firstCallStatus: fcStatus,
+        status: fcStatus,
+        firstCallOtherReason: fcOtherReason,
+        communicationRating: fcRating,
+        firstCallDate: tsDate,
+        firstCallTime: tsTime,
+        firstCallEmail: fcEmail,
+        firstCallInterviewType: fcInterviewType,
+        eligibleRole: fcEligibleRole,
+        callBack: fcCallBack,
+        comments: fcComments,
       };
-
-      if (fcContacted) {
-        payload.firstCallSubmitted = true;
-        payload.firstCallStatus = fcStatus;
-        payload.firstCallOtherReason = fcOtherReason;
-        payload.communicationRating = fcRating;
-        payload.firstCallDate = tsDate;
-        payload.firstCallTime = tsTime;
-        payload.firstCallEmail = fcEmail;
-        payload.firstCallInterviewType = fcInterviewType;
-        payload.eligibleRole = fcEligibleRole;
-        payload.callBack = fcCallBack;
-        payload.comments = fcComments;
-      }
       
       const updated = await api.updateCandidate(id!, payload);
-      setCandidate(updated.candidate || updated);
-      if (fcContacted) {
-        setFcDate(tsDate);
-        setFcTime(tsTime);
-      }
+      const cData = updated.candidate || updated;
+      setCandidate(cData);
+      if (cData.status) setStatus(cData.status);
+      setFcDate(tsDate);
+      setFcTime(tsTime);
       setFirstCallOpen(false);
-      alert('First Call details saved.');
+      alert('Candidate Status details saved.');
     } catch (err: any) {
-      setFirstCallError(err.message || 'Failed to save first call');
+      setFirstCallError(err.message || 'Failed to save status');
     } finally {
       setSavingFirstCall(false);
     }
@@ -863,6 +823,9 @@ export function CandidateProfilePage() {
               </div>
             </div>
             <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-3 gap-4 text-sm">
+              <div><p className="text-slate-400 text-xs mb-1">Client / Company</p><p className="text-blue-600 font-semibold">{candidate.clientName || candidate.company || candidate.companyName || candidate.client || 'N/A'}</p></div>
+              <div><p className="text-slate-400 text-xs mb-1">JR Number</p><p className="text-slate-700 font-mono" style={{ fontWeight: 500 }}>{candidate.jrNumber || 'N/A'}</p></div>
+              <div><p className="text-slate-400 text-xs mb-1">Division</p><p className="text-slate-700 font-semibold">{candidate.division || 'BPO'}</p></div>
               <div><p className="text-slate-400 text-xs mb-1">Source</p><p className="text-slate-700" style={{ fontWeight: 500 }}>{candidate.source || 'N/A'}</p></div>
               <div><p className="text-slate-400 text-xs mb-1">Added On</p><p className="text-slate-700" style={{ fontWeight: 500 }}>{candidate.createdAt ? new Date(candidate.createdAt).toLocaleDateString() : 'N/A'}</p></div>
               <div><p className="text-slate-400 text-xs mb-1">Assigned To</p><p className="text-slate-700" style={{ fontWeight: 500 }}>{candidate.assignedRecruiterName || candidate.assignedRecruiter?.name || 'Unassigned'}</p></div>
@@ -954,15 +917,15 @@ export function CandidateProfilePage() {
             </div>
           </div>
 
-          {/* ── First Call Status Section (Recruiter Editable) ─────────── */}
+          {/* ── Candidate Status Section (Recruiter Editable) ─────────── */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
             <button onClick={() => setFirstCallOpen(o => !o)} className="w-full flex items-center justify-between px-6 py-4 text-left">
               <div className="flex items-center gap-2">
                 <Phone className="w-4 h-4 text-amber-600" />
-                <span className="text-slate-800 text-sm" style={{ fontWeight: 600 }}>First Call Status</span>
+                <span className="text-slate-800 text-sm" style={{ fontWeight: 600 }}>Candidate Status</span>
                 {candidate.firstCallSubmitted && (
                   <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <Lock className="w-3 h-3" /> Submitted
+                    <Lock className="w-3 h-3" /> Saved
                   </span>
                 )}
               </div>
@@ -971,40 +934,14 @@ export function CandidateProfilePage() {
 
             {firstCallOpen && (
               <div className="px-6 pb-6 border-t border-slate-100 pt-4 space-y-4">
-                <div className="mb-4 bg-amber-50/50 p-4 rounded-xl border border-amber-100">
-                  <label className="block text-sm text-slate-800 mb-3" style={{ fontWeight: 600 }}>
-                    Have you spoken to the candidate?
-                  </label>
-                  <div className="flex items-center gap-6">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="fcContacted" checked={fcContacted}
-                        onChange={() => {
-                          setFcContacted(true);
-                          if (!fcDate) setFcDate(new Date().toISOString().split('T')[0]);
-                          if (!fcTime) setFcTime(new Date().toTimeString().slice(0, 5));
-                        }}
-                        disabled={candidate.firstCallSubmitted && !isAdmin}
-                        className="w-4 h-4 text-amber-600 focus:ring-amber-500 border-slate-300" />
-                      <span className="text-sm text-slate-700" style={{ fontWeight: 500 }}>Yes</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" name="fcContacted" checked={!fcContacted}
-                        onChange={() => setFcContacted(false)}
-                        disabled={candidate.firstCallSubmitted && !isAdmin}
-                        className="w-4 h-4 text-slate-400 focus:ring-amber-500 border-slate-300" />
-                      <span className="text-sm text-slate-700" style={{ fontWeight: 500 }}>No</span>
-                    </label>
-                  </div>
-                </div>
-
-                <fieldset disabled={(candidate.firstCallSubmitted && !isAdmin) || !fcContacted} className={`space-y-4 ${((candidate.firstCallSubmitted && !isAdmin) || !fcContacted) ? 'opacity-50 cursor-not-allowed select-none' : ''}`}>
+                <fieldset disabled={false} className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 500 }}>First Call Status *</label>
+                      <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 500 }}>Candidate Status *</label>
                       <select value={fcStatus} onChange={e => setFcStatus(e.target.value)}
                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-amber-400 disabled:bg-slate-50">
                         <option value="">— Select Status —</option>
-                        {['No response', 'Not reachable', 'Call back scheduled', 'Screening in Progress', 'Eligible', 'SPOC Shortlisted', 'Rejected – Communication', 'Rejected – Experience Mismatch', 'Rejected – Salary Mismatch', 'Rejected – Location Constraint', 'Rejected – Notice Period', 'On Hold', 'Duplicate Profile', 'Not Interested', 'Interview Scheduled', 'Interview Completed', 'Selected', 'Offer Released', 'Offer Accepted', 'Offer Declined', 'Joined', 'Other'].map(s => <option key={s} value={s}>{s}</option>)}
+                        {CANDIDATE_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
                     {fcStatus === 'Other' && (
@@ -1022,24 +959,7 @@ export function CandidateProfilePage() {
                         {['Excellent', 'Good', 'Average', 'Poor', 'None'].map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 500 }}>Candidate Email</label>
-                      <input type="email" value={fcEmail} onChange={e => setFcEmail(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-amber-400 disabled:bg-slate-50" />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 500 }}>Interview Type</label>
-                      <select value={fcInterviewType} onChange={e => setFcInterviewType(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-amber-400 disabled:bg-slate-50">
-                        <option value="">— Select —</option>
-                        {['Virtual', 'Walk-in Company', 'Walk-in WHM', 'Video Call', 'Phone Call', 'Face2Face'].map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 500 }}>Eligible Role</label>
-                      <input type="text" value={fcEligibleRole} onChange={e => setFcEligibleRole(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-amber-400 disabled:bg-slate-50" />
-                    </div>
+
                     <div>
                       <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 500 }}>Call Back</label>
                       <input type="datetime-local" value={fcCallBack} onChange={e => setFcCallBack(e.target.value)}
@@ -1687,24 +1607,32 @@ export function CandidateProfilePage() {
           {/* Status Update */}
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
             <h3 className="text-slate-700 text-sm mb-2" style={{ fontWeight: 600 }}>Update Status</h3>
-            {(isLockedForRecruiter || isLockedForAll || isLockedForTL || isBlockedAsDuplicate || isLockedForManager) && (
+            {isBlockedAsDuplicate && (
               <p className="text-xs text-slate-400 mb-3 flex items-center gap-1">
-                <Lock className="w-3 h-3" /> {isLockedForManager ? 'Read-only access' : isLockedForAll ? 'Locked — Admin only' : isBlockedAsDuplicate ? 'Locked — duplicate profile' : isLockedForTL ? 'TL view only — use Second Call section' : 'Locked after first call'}
+                <Lock className="w-3 h-3" /> Locked — duplicate profile
               </p>
             )}
-            <div className="space-y-2">
-              {STATUS_OPTIONS.map(s => (
-                <button key={s} onClick={() => handleStatusUpdate(s)}
-                  disabled={isLockedForRecruiter || isLockedForAll || isLockedForTL || isBlockedAsDuplicate || isLockedForManager}
-                  className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg text-sm border transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                    status === s
-                      ? (STATUS_COLORS[s] || 'bg-slate-100 text-slate-600 border-slate-200') + ' border'
-                      : 'border-slate-100 hover:bg-slate-50 text-slate-600'
-                  }`} style={{ fontWeight: status === s ? 600 : 400 }}>
-                  {s}
-                  {status === s && <CheckCircle2 className="w-4 h-4" />}
-                </button>
-              ))}
+            <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+              {STATUS_OPTIONS.map(s => {
+                const canUpdate = canUserUpdateCandidateStatus(s, user?.role);
+                const isLocked = isBlockedAsDuplicate || !canUpdate;
+                return (
+                  <button key={s} onClick={() => handleStatusUpdate(s)}
+                    disabled={isLocked}
+                    title={!canUpdate ? 'Requires Team Leader / Admin permission' : undefined}
+                    className={`flex items-center justify-between w-full px-3 py-2.5 rounded-lg text-sm border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      status === s
+                        ? (STATUS_COLORS[s] || 'bg-slate-100 text-slate-600 border-slate-200') + ' border font-semibold'
+                        : 'border-slate-100 hover:bg-slate-50 text-slate-700'
+                    }`} style={{ fontWeight: status === s ? 600 : 400 }}>
+                    <span className="flex items-center gap-1.5 truncate">
+                      {!canUpdate && <Lock className="w-3 h-3 text-slate-400 flex-shrink-0" />}
+                      {s}
+                    </span>
+                    {status === s && <CheckCircle2 className="w-4 h-4 flex-shrink-0" />}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

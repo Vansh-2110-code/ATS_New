@@ -78,10 +78,24 @@ exports.list = async (req, res, next) => {
       const statuses = statusIn.split(',').map(s => s.trim()).filter(Boolean);
       if (statuses.length > 0) query.status = { $in: statuses };
     } else if (status) {
-      if (status === 'Eligible Candidates' || status === 'Eligible') {
-        query.status = { $in: ['Eligible', 'Eligible Candidates'] };
-      } else if (status === 'Documentation' || status === 'Document Pending') {
-        query.status = { $in: ['Documentation', 'Document Pending', 'Documentation Completed', 'Documentation Incomplete', 'Documennt Initialted', 'Document Initialized'] };
+      const reverseMap = {
+        'Eligible': ['Eligible', 'Eligible Candidates', 'New', 'Screening', 'Contacted', 'Interested', 'Selected for Call', 'SPOC Shortlisted', 'Other', 'Screening in Progress'],
+        'No Response': ['No Response', 'No response', 'Did Not Pick', 'Not reachable'],
+        'Not Eligible': ['Not Eligible', 'Rejected', 'Rejected – Communication', 'Rejected – Experience Mismatch', 'Rejected – Salary Mismatch', 'Rejected – Location Constraint', 'Rejected – Notice Period'],
+        'Final Select': ['Final Select', 'Selected', 'Final Round Scheduled'],
+        'Offer Accept': ['Offer Accept', 'Yet To Join', 'Offer Released', 'Offer Accepted', 'Salary Negotiation in Progress'],
+        'Document Initialized': ['Document Initialized', 'Documentation', 'Documents Pending', 'Document Pending', 'Documennt Initialted'],
+        'Test Select': ['Test Select', 'Written Test'],
+        'L1 Select': ['L1 Select', 'HR Shortlist', 'HR Round Scheduled'],
+        'Interview Scheduled': ['Interview Scheduled', 'Interview Completed', 'Interview Rescheduled'],
+        'Hold': ['Hold', 'On Hold', 'Interview Feedback Pending'],
+        'Submitted to Client': ['Submitted to Client', 'Shortlisted'],
+        'Waiting for Offer': ['Waiting for Offer', 'Offer in Progress', 'Offer Approval Pending'],
+        'Offer Reject': ['Offer Reject', 'Offer Declined'],
+        'Duplicate-Client': ['Duplicate-Client', 'Duplicate Profile'],
+      };
+      if (reverseMap[status]) {
+        query.status = { $in: reverseMap[status] };
       } else {
         query.status = status;
       }
@@ -192,62 +206,121 @@ exports.list = async (req, res, next) => {
     } else if (!isAllRecruiters && (req.user.role === 'tl' || req.user.role === 'admin' || req.user.role === 'manager')) {
       const mongoose = require('mongoose');
       const User = require('../models/User');
+      let cond = [];
       if (mongoose.Types.ObjectId.isValid(recruiter)) {
-        query.assignedRecruiter = recruiter;
+        cond.push({ assignedRecruiter: recruiter });
+        const recUser = await User.findById(recruiter).select('_id name');
+        if (recUser) cond.push({ assignedRecruiterName: recUser.name });
       } else {
+        cond.push({ assignedRecruiterName: recruiter });
         const recUser = await User.findOne({ name: recruiter }).select('_id name');
-        if (recUser) {
-          query.assignedRecruiter = recUser._id;
+        if (recUser) cond.push({ assignedRecruiter: recUser._id });
+      }
+      if (cond.length > 0) {
+        if (query.$or) {
+          query.$and = [{ $or: query.$or }, { $or: cond }];
+          delete query.$or;
         } else {
-          query.assignedRecruiterName = recruiter;
+          query.$or = cond;
         }
+      }
+    } else if (req.user.role === 'recruiter') {
+      const recCond = [
+        { assignedRecruiter: req.user._id },
+        { assignedRecruiterName: req.user.name }
+      ];
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: recCond }];
+        delete query.$or;
+      } else {
+        query.$or = recCond;
       }
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const rejectedOrNotSelected = [
-      'Rejected', 'Wrong Number', 'Unreachable', 'Did Not Pick', 'Unanswered Calls', 'Exited',
-      'Rejected – Communication', 'Rejected – Experience Mismatch',
-      'Rejected – Salary Mismatch', 'Rejected – Location Constraint',
-      'Rejected – Notice Period', 'Not Interested', 'Duplicate Profile',
-      'Rejected – Interview Round', 'Rejected – Second Round'
-    ];
+    // Compute status counts across the entire dataset matching non-status query filters
+    const countQuery = { ...query };
+    delete countQuery.status;
 
-    // Item 7: Move candidates > 30 days cooling period to General Data (fire-and-forget, non-blocking)
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    Candidate.updateMany(
-      {
-        ownershipStatus: { $ne: 'General Data' },
-        $or: [
-          { assignedAt: { $lt: thirtyDaysAgo } },
-          { createdAt: { $lt: thirtyDaysAgo } },
-        ]
-      },
-      { 
-        $set: { 
-          ownershipStatus: 'General Data',
-          assignedRecruiter: null,
-          assignedRecruiterName: 'General Pool'
-        } 
-      }
-    ).catch(e => console.error('[cooling-period] updateMany error:', e));
-
-    const [candidates, total] = await Promise.all([
+    const [candidates, total, statusAgg] = await Promise.all([
       Candidate.find(query)
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit))
         .select('-notes'),
       Candidate.countDocuments(query),
+      Candidate.aggregate([
+        { $match: countQuery },
+        { $group: { _id: '$status', count: { $sum: 1 } } }
+      ])
     ]);
+
+    const CANONICAL_STATUS_MAP = {
+      'Eligible Candidates': 'Eligible',
+      'New': 'Eligible',
+      'Screening': 'Eligible',
+      'Contacted': 'Eligible',
+      'Interested': 'Eligible',
+      'Selected for Call': 'Eligible',
+      'SPOC Shortlisted': 'Eligible',
+      'Screening in Progress': 'Eligible',
+      'Other': 'Eligible',
+      'Did Not Pick': 'No Response',
+      'No response': 'No Response',
+      'Not reachable': 'No Response',
+      'Rejected': 'Not Eligible',
+      'Rejected – Communication': 'Not Eligible',
+      'Rejected – Experience Mismatch': 'Not Eligible',
+      'Rejected – Salary Mismatch': 'Not Eligible',
+      'Rejected – Location Constraint': 'Not Eligible',
+      'Rejected – Notice Period': 'Not Eligible',
+      'Rejected – Second Round': 'L2 Reject',
+      'Rejected – Interview Round': 'L1 Reject',
+      'Selected': 'Final Select',
+      'Final Round Scheduled': 'Final Select',
+      'Yet To Join': 'Offer Accept',
+      'Offer Released': 'Offer Accept',
+      'Offer Accepted': 'Offer Accept',
+      'Salary Negotiation in Progress': 'Offer Accept',
+      'Offer Declined': 'Offer Reject',
+      'Documentation': 'Document Initialized',
+      'Documents Pending': 'Document Initialized',
+      'Document Pending': 'Document Initialized',
+      'Documennt Initialted': 'Document Initialized',
+      'Written Test': 'Test Select',
+      'HR Shortlist': 'L1 Select',
+      'HR Round Scheduled': 'L1 Select',
+      'Interview Completed': 'Interview Scheduled',
+      'Interview Rescheduled': 'Interview Scheduled',
+      'On Hold': 'Hold',
+      'Interview Feedback Pending': 'Hold',
+      'Shortlisted': 'Submitted to Client',
+      'Offer in Progress': 'Waiting for Offer',
+      'Offer Approval Pending': 'Waiting for Offer',
+      'Duplicate Profile': 'Duplicate-Client',
+      'Call back scheduled': 'Call Back',
+    };
+
+    const statusCounts = {};
+    let totalCandidatesCount = 0;
+    statusAgg.forEach(s => {
+      if (s._id) {
+        const canonical = CANONICAL_STATUS_MAP[s._id] || s._id;
+        statusCounts[canonical] = (statusCounts[canonical] || 0) + s.count;
+        totalCandidatesCount += s.count;
+      }
+    });
 
     res.json({
       candidates,
+      statusCounts,
+      totalCount: totalCandidatesCount || total,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total,
+        total: totalCandidatesCount || total,
+        filteredTotal: total,
         pages: Math.ceil(total / parseInt(limit)),
       },
     });
@@ -450,8 +523,15 @@ exports.create = async (req, res, next) => {
       const job = await Job.findOne({ jrNumber: data.jrNumber });
       if (job) {
         data.division = job.division || 'BPO';
-      }
-      if (job) {
+        if (job.companyName && (!data.clientName || data.clientName === '')) {
+          data.clientName = job.companyName;
+        }
+        if (job.companyName && (!data.company || data.company === '')) {
+          data.company = job.companyName;
+        }
+        if (job.jobTitle && (!data.positionApplied || data.positionApplied === '')) {
+          data.positionApplied = job.jobTitle;
+        }
         if (job.status === 'Closed') {
           return res.status(403).json({ message: 'Position already filled / JR is closed' });
         }
@@ -634,55 +714,6 @@ if (typeof data.skills === 'string') {
     if (existing.isDuplicate && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'This candidate is flagged as a duplicate. Contact Admin.' });
     }
-    // ── Granular lock enforcement for Recruiters ──────────────────
-    if (req.user.role === 'recruiter') {
-      // Prevent modification of core fields once candidate has been allocated/assigned to them
-      if (String(existing.assignedRecruiter || '') === String(req.user._id)) {
-        const CORE_FIELDS = [
-          'name', 'email', 'phone', 'altPhone', 'skills', 'experience', 'currentCTC',
-          'expectedCTC', 'noticePeriod', 'location', 'currentLocation', 'city', 'localArea',
-          'qualification', 'university', 'yearOfGraduation', 'gender', 'dateOfBirth',
-          'joiningAvailability', 'currentCompany', 'department', 'client', 'projectedRole',
-          'resumePath', 'resumeOriginalName'
-        ];
-        CORE_FIELDS.forEach(field => {
-          if (data[field] !== undefined) {
-            const existingValue = String(existing[field] ?? '');
-            const newValue = String(data[field] ?? '');
-            if (existingValue !== newValue) {
-              delete data[field];
-            }
-          }
-        });
-      }
-
-      const FIRST_CALL_FIELDS = [
-        'firstCallStatus', 'firstCallOtherReason', 'communicationRating', 
-        'firstCallDate', 'firstCallTime', 'firstCallEmail', 
-        'firstCallInterviewType', 'eligibleRole', 'callBack', 'comments', 'firstCallSubmitted'
-      ];
-      const FINAL_DETAILS_FIELDS = [
-        'candidateAge', 'recruiterStatus', 'walkInSchedule', 
-        'tentativeDOJ', 'finalDetailsSubmitted'
-      ];
-
-      // If first call already submitted, block any changes to first call fields
-      if (existing.firstCallSubmitted) {
-        FIRST_CALL_FIELDS.forEach(field => {
-          if (data[field] !== undefined) delete data[field];
-        });
-      }
-      
-      // If final details already submitted, block any changes to final details fields
-      if (existing.finalDetailsSubmitted) {
-        FINAL_DETAILS_FIELDS.forEach(field => {
-          if (data[field] !== undefined) delete data[field];
-        });
-      }
-    }
-
-    // TL and Manager have full field update capabilities now
-
     // ── Interview Status role enforcement ────────────────────────
     // Recruiter cannot set Final Round Status or Final Interview Status
     if (req.user.role === 'recruiter') {
@@ -707,6 +738,15 @@ if (typeof data.skills === 'string') {
       const job = await Job.findOne({ jrNumber: data.jrNumber });
       if (job) {
         data.division = job.division || 'BPO';
+        if (job.companyName && (!data.clientName || data.clientName === '')) {
+          data.clientName = job.companyName;
+        }
+        if (job.companyName && (!data.company || data.company === '')) {
+          data.company = job.companyName;
+        }
+        if (job.jobTitle && (!data.positionApplied || data.positionApplied === '')) {
+          data.positionApplied = job.jobTitle;
+        }
       }
       if (data.jrNumber !== existing.jrNumber) {
         if (job) {

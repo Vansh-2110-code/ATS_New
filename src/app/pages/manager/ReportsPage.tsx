@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { Download, Filter, TrendingUp, TrendingDown, ChevronUp, ChevronDown, Briefcase, FileText, DollarSign, Users, Search, CheckCircle2, Clock, Building2, UserCheck, Layers } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -43,6 +43,9 @@ export function ReportsPage() {
   // Sub-filters for views
   const [activeJRSearch, setActiveJRSearch] = useState('');
   const [activeProfileFilter, setActiveProfileFilter] = useState<string>('All');
+  const [divisionFilter, setDivisionFilter] = useState<string>('All Divisions');
+  const [tlFilter, setTlFilter] = useState<string>('All Team Leads');
+  const [tlsList, setTlsList] = useState<string[]>([]);
   const [revenueSubView, setRevenueSubView] = useState<'customer' | 'division'>('customer');
   const [expandedJR, setExpandedJR] = useState<string | null>(null);
 
@@ -53,10 +56,14 @@ export function ReportsPage() {
     return `₹${(n / 1000).toFixed(0)} K`;
   };
 
-  const loadReports = async (from: string, to: string) => {
+  const loadReports = async (from: string, to: string, div = divisionFilter, tl = tlFilter) => {
     try {
       setLoading(true);
-      const data = await api.getManagerReports({ from, to });
+      const params: Record<string, string> = { from, to };
+      if (div && div !== 'All Divisions') params.division = div;
+      if (tl && tl !== 'All Team Leads') params.tlId = tl;
+
+      const data = await api.getManagerReports(params);
       const raw = data.reports || data.performanceData || data.recruiterPerformance || [];
       setPerformanceData(raw.map((r: any) => ({
         recruiter: r.recruiter || r.name || '',
@@ -70,17 +77,30 @@ export function ReportsPage() {
       setMonthlyData(data.monthlyData || data.monthlyOverview || []);
 
       // Fetch advanced reports data
-      const advData = await api.getAdvancedReports({ from, to });
+      const advData = await api.getAdvancedReports(params);
       setCustomerData(advData.customerReport || []);
       setDivisionData(advData.divisionReport || []);
       setAgingData(advData.aging || { avgStageAging: {}, candidates: [] });
       setConversionData(advData.conversionReport || []);
 
-      // New 4 Reports
-      setActiveJRsData(advData.activeJRsReport || []);
-      setActiveProfilesData(advData.activeProfilesReport || []);
+      // 4 New Specific Reports Datasets
+      const jrs = advData.activeJRsReport || [];
+      const profiles = advData.activeProfilesReport || [];
+      setActiveJRsData(jrs);
+      setActiveProfilesData(profiles);
       setExpectedRevenueData(advData.expectedRevenueReport || { customerRevenue: [], divisionRevenue: [], totalExpectedRevenue: 0 });
       setLeadPerformanceData(advData.leadRecruiterPerformanceReport || []);
+
+      // Populate TLs list
+      const uniqueTLs = new Set<string>();
+      jrs.forEach((j: any) => { if (j.teamLeader && j.teamLeader !== 'Unassigned') uniqueTLs.add(j.teamLeader); });
+      profiles.forEach((p: any) => { if (p.teamLeader && p.teamLeader !== 'Unassigned') uniqueTLs.add(p.teamLeader); });
+      if (advData.leadRecruiterPerformanceReport) {
+        advData.leadRecruiterPerformanceReport.forEach((l: any) => {
+          if (l.role === 'Team Lead' && l.name) uniqueTLs.add(l.name);
+        });
+      }
+      setTlsList(Array.from(uniqueTLs).sort());
 
       // Fetch additional dashboard data for department distribution
       const dashData = await api.getManagerDashboard();
@@ -93,7 +113,7 @@ export function ReportsPage() {
   };
 
   useEffect(() => {
-    loadReports(dateFrom, dateTo);
+    loadReports(dateFrom, dateTo, divisionFilter, tlFilter);
   }, []);
 
   const sorted = [...performanceData].sort((a, b) => {
@@ -121,11 +141,17 @@ export function ReportsPage() {
 
   // Filtered Active Profiles
   const filteredActiveProfiles = activeProfilesData.filter(c => {
-    if (activeProfileFilter === 'All') return true;
-    if (activeProfileFilter === 'Documentation') return ['Documentation', 'Document Pending', 'Documents Pending'].includes(c.status);
-    if (activeProfileFilter === 'Pending Customer') return ['HR Shortlist', 'SPOC Shortlisted', 'Selected for Call', 'Operations Round', 'Interview Scheduled', 'Written Test'].includes(c.status);
-    if (activeProfileFilter === 'Yet To Join') return ['Yet To Join', 'Joining Date Confirmed', 'Joining Postponed'].includes(c.status);
-    if (activeProfileFilter === 'Screening') return ['Screening', 'Contacted', 'Interested', 'Selected for Call', 'Eligible Candidates', 'Call Back'].includes(c.status);
+    if (activeProfileFilter === 'Joined') {
+      if (c.status !== 'Joined') return false;
+    } else if (activeProfileFilter === 'Documentation') {
+      if (!['Documentation', 'Document Pending', 'Documents Pending', 'Document Initialized', 'Documentation Completed', 'Documentation Incomplete'].includes(c.status)) return false;
+    } else if (activeProfileFilter === 'Pending Customer') {
+      if (!['HR Shortlist', 'SPOC Shortlisted', 'Selected for Call', 'Operations Round', 'Interview Scheduled', 'Written Test', 'Submitted to Client', 'Selected', 'Test Select', 'Final Select'].includes(c.status)) return false;
+    } else if (activeProfileFilter === 'Yet To Join') {
+      if (!['Yet To Join', 'Joining Date Confirmed', 'Joining Postponed', 'Offer Accept', 'Offer Accepted', 'Offered', 'Offer Released', 'Waiting for Offer'].includes(c.status)) return false;
+    } else if (activeProfileFilter === 'Screening') {
+      if (!['Screening', 'Contacted', 'Interested', 'Selected for Call', 'Eligible Candidates', 'Call Back', 'Eligible'].includes(c.status)) return false;
+    }
     return true;
   });
 
@@ -135,7 +161,9 @@ export function ReportsPage() {
     j.jrNumber.toLowerCase().includes(activeJRSearch.toLowerCase()) ||
     j.customerName.toLowerCase().includes(activeJRSearch.toLowerCase()) ||
     j.jobTitle.toLowerCase().includes(activeJRSearch.toLowerCase()) ||
-    j.skills.toLowerCase().includes(activeJRSearch.toLowerCase())
+    j.skills.toLowerCase().includes(activeJRSearch.toLowerCase()) ||
+    (j.division && j.division.toLowerCase().includes(activeJRSearch.toLowerCase())) ||
+    (j.teamLeader && j.teamLeader.toLowerCase().includes(activeJRSearch.toLowerCase()))
   );
 
   // Generic CSV exporter for current view
@@ -145,12 +173,12 @@ export function ReportsPage() {
 
     if (activeView === 'active-jr') {
       filename = `active_jr_report_${dateFrom}_${dateTo}.csv`;
-      csv = 'JR Number,Customer Name,Job Title,Skills,Open Positions,Active Profiles in Pipeline,Creator / Owner,Status\n' +
-        filteredActiveJRs.map(j => `"${j.jrNumber}","${j.customerName}","${j.jobTitle}","${j.skills.replace(/"/g, '""')}",${j.positions},${j.activeProfilesCount},"${j.createdBy}","${j.status}"`).join('\n');
+      csv = 'JR Number,Customer Name,Job Title,Division,Team Leader,Skills,Open Positions,Active Profiles in Pipeline,Creator / Owner,Status\n' +
+        filteredActiveJRs.map(j => `"${j.jrNumber}","${j.customerName}","${j.jobTitle}","${j.division || 'BPO'}","${j.teamLeader || 'Unassigned'}","${j.skills.replace(/"/g, '""')}",${j.positions},${j.activeProfilesCount},"${j.createdBy}","${j.status}"`).join('\n');
     } else if (activeView === 'active-profiles') {
       filename = `active_profiles_report_${dateFrom}_${dateTo}.csv`;
-      csv = 'Candidate Name,Phone,Email,Position Applied,Customer Name,Active Status,JR Number,Recruiter,Days Pending,Last Updated\n' +
-        filteredActiveProfiles.map(c => `"${c.name}","${c.phone}","${c.email}","${c.positionApplied}","${c.clientName}","${c.status}","${c.jrNumber}","${c.recruiter}",${c.daysPending},"${c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : ''}"`).join('\n');
+      csv = 'Candidate Name,Phone,Email,Position Applied,Customer Name,Division,Active Status,JR Number,Recruiter,Team Leader,Days Pending,Last Updated\n' +
+        filteredActiveProfiles.map(c => `"${c.name}","${c.phone}","${c.email}","${c.positionApplied}","${c.clientName}","${c.division || 'BPO'}","${c.status}","${c.jrNumber}","${c.recruiter}","${c.teamLeader || 'Unassigned'}",${c.daysPending},"${c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : ''}"`).join('\n');
     } else if (activeView === 'expected-revenue') {
       filename = `expected_revenue_report_${dateFrom}_${dateTo}.csv`;
       if (revenueSubView === 'customer') {
@@ -190,8 +218,8 @@ export function ReportsPage() {
         </button>
       </div>
 
-      {/* Date Filter Bar */}
-      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+      {/* Date & Filter Bar */}
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
@@ -214,8 +242,8 @@ export function ReportsPage() {
               />
             </div>
             <button
-              onClick={() => loadReports(dateFrom, dateTo)}
-              className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors font-semibold"
+              onClick={() => loadReports(dateFrom, dateTo, divisionFilter, tlFilter)}
+              className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors font-semibold shadow-sm"
             >
               Apply Filter
             </button>
@@ -231,7 +259,7 @@ export function ReportsPage() {
                 onClick={() => {
                   setDateFrom(preset.from);
                   setDateTo(preset.to);
-                  loadReports(preset.from, preset.to);
+                  loadReports(preset.from, preset.to, divisionFilter, tlFilter);
                 }}
                 className="px-3 py-1.5 border border-slate-200 text-slate-600 text-xs rounded-lg hover:bg-slate-50 font-medium transition-colors"
               >
@@ -239,6 +267,58 @@ export function ReportsPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Division & Team Leader Global Slicers */}
+        <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-600">Division:</span>
+            <select
+              value={divisionFilter}
+              onChange={e => {
+                const newDiv = e.target.value;
+                setDivisionFilter(newDiv);
+                loadReports(dateFrom, dateTo, newDiv, tlFilter);
+              }}
+              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium bg-slate-50 text-slate-700 outline-none focus:border-green-500"
+            >
+              <option value="All Divisions">All Divisions</option>
+              <option value="BPO">BPO</option>
+              <option value="IT">IT</option>
+              <option value="Lateral">Lateral</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-600">Team Leader:</span>
+            <select
+              value={tlFilter}
+              onChange={e => {
+                const newTl = e.target.value;
+                setTlFilter(newTl);
+                loadReports(dateFrom, dateTo, divisionFilter, newTl);
+              }}
+              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-medium bg-slate-50 text-slate-700 outline-none focus:border-green-500"
+            >
+              <option value="All Team Leads">All Team Leads</option>
+              {tlsList.map(tl => (
+                <option key={tl} value={tl}>{tl}</option>
+              ))}
+            </select>
+          </div>
+
+          {(divisionFilter !== 'All Divisions' || tlFilter !== 'All Team Leads') && (
+            <button
+              onClick={() => {
+                setDivisionFilter('All Divisions');
+                setTlFilter('All Team Leads');
+                loadReports(dateFrom, dateTo, 'All Divisions', 'All Team Leads');
+              }}
+              className="text-xs text-red-600 hover:text-red-700 font-semibold underline"
+            >
+              Reset Filters
+            </button>
+          )}
         </div>
       </div>
 
@@ -248,7 +328,7 @@ export function ReportsPage() {
           { label: 'Active Open JRs', value: activeJRsData.length, color: 'emerald', icon: Briefcase },
           { label: 'Active Pipeline Profiles', value: activeProfilesData.length, color: 'blue', icon: Users },
           { label: 'Total Expected Revenue', value: fmt(expectedRevenueData.totalExpectedRevenue), color: 'violet', icon: DollarSign },
-          { label: 'Avg Conv. Rate', value: performanceData.length ? (performanceData.reduce((s: number, r: any) => s + parseFloat(r.convRate || '0'), 0) / performanceData.length).toFixed(1) + '%' : 'ΓÇö', color: 'amber', icon: TrendingUp },
+          { label: 'Avg Conv. Rate', value: performanceData.length ? (performanceData.reduce((s: number, r: any) => s + parseFloat(r.convRate || '0'), 0) / performanceData.length).toFixed(1) + '%' : '—', color: 'amber', icon: TrendingUp },
         ].map((s, i) => {
           const bgMap: Record<string, string> = {
             blue: 'text-blue-600 bg-blue-50',
@@ -305,21 +385,21 @@ export function ReportsPage() {
         </div>
       </div>
 
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ──────────────────────────────────────────────────────────── */}
       {/* 1. ACTIVE JR REPORT VIEW */}
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ──────────────────────────────────────────────────────────── */}
       {activeView === 'active-jr' && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-slate-800 font-bold text-sm">Active Job Requisitions (JRs)</h3>
-              <p className="text-slate-500 text-xs mt-0.5">List of open requirement JRs, skills required, and active candidate pipelines</p>
+              <p className="text-slate-500 text-xs mt-0.5">List of open requirement JRs with Division & Team Leader mappings</p>
             </div>
             <div className="relative w-72">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Search JR #, Customer, Title, Skills..."
+                placeholder="Search JR #, Client, Title, Division, TL..."
                 value={activeJRSearch}
                 onChange={e => setActiveJRSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-green-500 bg-slate-50/50"
@@ -332,37 +412,48 @@ export function ReportsPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100 text-left text-slate-500 uppercase tracking-wide">
-                    <th className="px-4 py-3 font-semibold">JR Number</th>
-                    <th className="px-4 py-3 font-semibold">Customer / Client</th>
-                    <th className="px-4 py-3 font-semibold">Job Title</th>
-                    <th className="px-4 py-3 font-semibold">Required Skills</th>
-                    <th className="px-4 py-3 font-semibold text-center">Open Positions</th>
-                    <th className="px-4 py-3 font-semibold text-center">Active Candidates in Pipeline</th>
-                    <th className="px-4 py-3 font-semibold">Raised By / Owner</th>
-                    <th className="px-4 py-3 font-semibold text-center">Actions</th>
+                    <th className="px-3.5 py-3 font-semibold">JR Number</th>
+                    <th className="px-3.5 py-3 font-semibold">Customer / Client</th>
+                    <th className="px-3.5 py-3 font-semibold">Job Title</th>
+                    <th className="px-3.5 py-3 font-semibold">Division</th>
+                    <th className="px-3.5 py-3 font-semibold">Team Leader</th>
+                    <th className="px-3.5 py-3 font-semibold">Required Skills</th>
+                    <th className="px-3 py-3 font-semibold text-center">Open Pos.</th>
+                    <th className="px-3 py-3 font-semibold text-center">Active Pipeline</th>
+                    <th className="px-3.5 py-3 font-semibold">Created By</th>
+                    <th className="px-3 py-3 font-semibold text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   {filteredActiveJRs.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-12 text-slate-400">No active job requisitions found matching your search.</td>
+                      <td colSpan={10} className="text-center py-12 text-slate-400">No active job requisitions found matching your criteria.</td>
                     </tr>
                   ) : (
                     filteredActiveJRs.map(j => (
                       <Fragment key={j._id}>
                         <tr className="hover:bg-slate-50/60 transition-colors">
-                          <td className="px-4 py-3.5 font-mono font-bold text-blue-600">{j.jrNumber}</td>
-                          <td className="px-4 py-3.5 font-semibold text-slate-900">{j.customerName}</td>
-                          <td className="px-4 py-3.5 font-medium">{j.jobTitle}</td>
-                          <td className="px-4 py-3.5 max-w-xs truncate text-slate-600" title={j.skills}>{j.skills}</td>
-                          <td className="px-4 py-3.5 text-center font-semibold text-slate-800">{j.positions}</td>
-                          <td className="px-4 py-3.5 text-center">
+                          <td className="px-3.5 py-3.5 font-mono font-bold text-blue-600">{j.jrNumber}</td>
+                          <td className="px-3.5 py-3.5 font-semibold text-slate-900">{j.customerName}</td>
+                          <td className="px-3.5 py-3.5 font-medium">{j.jobTitle}</td>
+                          <td className="px-3.5 py-3.5">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                              j.division === 'IT' ? 'bg-cyan-100 text-cyan-800' :
+                              j.division === 'Lateral' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {j.division || 'BPO'}
+                            </span>
+                          </td>
+                          <td className="px-3.5 py-3.5 font-medium text-slate-700">{j.teamLeader || 'Unassigned'}</td>
+                          <td className="px-3.5 py-3.5 max-w-xs truncate text-slate-600" title={j.skills}>{j.skills}</td>
+                          <td className="px-3 py-3.5 text-center font-semibold text-slate-800">{j.positions}</td>
+                          <td className="px-3 py-3.5 text-center">
                             <span className={`px-2.5 py-1 rounded-full font-bold ${j.activeProfilesCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-400'}`}>
                               {j.activeProfilesCount} active
                             </span>
                           </td>
-                          <td className="px-4 py-3.5 font-medium text-slate-700">{j.createdBy}</td>
-                          <td className="px-4 py-3.5 text-center">
+                          <td className="px-3.5 py-3.5 font-medium text-slate-700">{j.createdBy}</td>
+                          <td className="px-3 py-3.5 text-center">
                             <button
                               onClick={() => setExpandedJR(expandedJR === j._id ? null : j._id)}
                               className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors"
@@ -374,11 +465,11 @@ export function ReportsPage() {
                         {/* Expanded Candidate Pipeline */}
                         {expandedJR === j._id && (
                           <tr className="bg-slate-50/80">
-                            <td colSpan={8} className="p-4">
+                            <td colSpan={10} className="p-4">
                               <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-3">
                                 <h4 className="font-semibold text-slate-800 text-xs flex items-center gap-1.5">
                                   <Users className="w-3.5 h-3.5 text-blue-600" />
-                                  Active Pipeline Candidates for {j.jrNumber} ΓÇô {j.jobTitle} ({j.activeCandidates.length})
+                                  Active Pipeline Candidates for {j.jrNumber} – {j.jobTitle} ({j.activeCandidates.length})
                                 </h4>
                                 {j.activeCandidates.length === 0 ? (
                                   <p className="text-slate-400 text-xs italic">No active candidates linked to this JR currently in progress.</p>
@@ -387,10 +478,10 @@ export function ReportsPage() {
                                     {j.activeCandidates.map((c: any) => (
                                       <div key={c._id} className="p-2.5 bg-slate-50 rounded-lg border border-slate-100 text-xs">
                                         <div className="font-bold text-slate-800">{c.name}</div>
-                                        <div className="text-slate-500">{c.phone} ┬╖ {c.email || 'No email'}</div>
+                                        <div className="text-slate-500">{c.phone} · {c.email || 'No email'}</div>
                                         <div className="mt-1 flex items-center justify-between text-[11px]">
                                           <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-semibold">{c.status}</span>
-                                          <span className="text-slate-400">{c.recruiter}</span>
+                                          <span className="text-slate-500 font-medium">{c.recruiter}</span>
                                         </div>
                                       </div>
                                     ))}
@@ -410,18 +501,18 @@ export function ReportsPage() {
         </div>
       )}
 
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ──────────────────────────────────────────────────────────── */}
       {/* 2. ACTIVE STATUS PROFILES REPORT VIEW */}
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ──────────────────────────────────────────────────────────── */}
       {activeView === 'active-profiles' && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-slate-800 font-bold text-sm">Active Pipeline Profiles Report</h3>
-              <p className="text-slate-500 text-xs mt-0.5">Filter active candidates across Documentation, Pending with Customer, Yet to Join & Screening</p>
+              <p className="text-slate-500 text-xs mt-0.5">Filter active candidates across Documentation, Pending with Customer, Yet to Join & Screening with TL mappings</p>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {['All', 'Documentation', 'Pending Customer', 'Yet To Join', 'Screening'].map(flt => (
+              {['All', 'Joined', 'Documentation', 'Pending Customer', 'Yet To Join', 'Screening'].map(flt => (
                 <button
                   key={flt}
                   onClick={() => setActiveProfileFilter(flt)}
@@ -442,36 +533,52 @@ export function ReportsPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100 text-left text-slate-500 uppercase tracking-wide">
-                    <th className="px-4 py-3 font-semibold">Candidate Name</th>
-                    <th className="px-4 py-3 font-semibold">Contact Info</th>
-                    <th className="px-4 py-3 font-semibold">Position Applied</th>
-                    <th className="px-4 py-3 font-semibold">Customer / Client</th>
-                    <th className="px-4 py-3 font-semibold">Active Status</th>
-                    <th className="px-4 py-3 font-semibold">JR Number</th>
-                    <th className="px-4 py-3 font-semibold">Recruiter</th>
-                    <th className="px-4 py-3 font-semibold text-center">Days Pending</th>
+                    <th className="px-3.5 py-3 font-semibold">Candidate Name</th>
+                    <th className="px-3.5 py-3 font-semibold">Contact Info</th>
+                    <th className="px-3.5 py-3 font-semibold">Position Applied</th>
+                    <th className="px-3.5 py-3 font-semibold">Customer / Client</th>
+                    <th className="px-3.5 py-3 font-semibold">Division</th>
+                    <th className="px-3.5 py-3 font-semibold">Active Status</th>
+                    <th className="px-3.5 py-3 font-semibold">JR Number</th>
+                    <th className="px-3.5 py-3 font-semibold">Recruiter</th>
+                    <th className="px-3.5 py-3 font-semibold">Team Leader</th>
+                    <th className="px-3.5 py-3 font-semibold text-center">Days Pending</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 text-slate-700">
                   {filteredActiveProfiles.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-12 text-slate-400">No active profiles matching the selected status filter.</td>
+                      <td colSpan={10} className="text-center py-12 text-slate-400">No active profiles matching the selected status filter.</td>
                     </tr>
                   ) : (
                     filteredActiveProfiles.map((c, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="px-4 py-3.5 font-bold text-slate-900">{c.name}</td>
-                        <td className="px-4 py-3.5 text-slate-500">{c.phone} {c.email ? `┬╖ ${c.email}` : ''}</td>
-                        <td className="px-4 py-3.5 font-medium">{c.positionApplied}</td>
-                        <td className="px-4 py-3.5 font-semibold text-blue-600">{c.clientName}</td>
-                        <td className="px-4 py-3.5">
-                          <span className="px-2.5 py-1 bg-purple-100 text-purple-700 rounded-full font-semibold">
+                        <td className="px-3.5 py-3.5 font-bold text-slate-900">{c.name}</td>
+                        <td className="px-3.5 py-3.5 text-slate-500">{c.phone} {c.email ? `· ${c.email}` : ''}</td>
+                        <td className="px-3.5 py-3.5 font-medium">{c.positionApplied}</td>
+                        <td className="px-3.5 py-3.5 font-semibold text-blue-600">{c.clientName}</td>
+                        <td className="px-3.5 py-3.5">
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                            c.division === 'IT' ? 'bg-cyan-100 text-cyan-800' :
+                            c.division === 'Lateral' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {c.division || 'BPO'}
+                          </span>
+                        </td>
+                        <td className="px-3.5 py-3.5">
+                          <span className={`px-2.5 py-1 rounded-full font-semibold ${
+                            c.status === 'Joined' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                            c.status === 'Offer Accept' ? 'bg-purple-100 text-purple-700' :
+                            c.status.includes('Document') ? 'bg-blue-100 text-blue-700' :
+                            'bg-slate-100 text-slate-700'
+                          }`}>
                             {c.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3.5 font-mono text-slate-600">{c.jrNumber}</td>
-                        <td className="px-4 py-3.5 text-slate-600">{c.recruiter}</td>
-                        <td className="px-4 py-3.5 text-center">
+                        <td className="px-3.5 py-3.5 font-mono text-slate-600">{c.jrNumber}</td>
+                        <td className="px-3.5 py-3.5 text-slate-600">{c.recruiter}</td>
+                        <td className="px-3.5 py-3.5 font-medium text-slate-700">{c.teamLeader || 'Unassigned'}</td>
+                        <td className="px-3.5 py-3.5 text-center">
                           <span className={`px-2 py-0.5 rounded font-semibold ${
                             c.daysPending > 14 ? 'bg-red-100 text-red-700' :
                             c.daysPending > 7 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'

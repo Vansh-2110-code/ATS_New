@@ -7,34 +7,16 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import { CANDIDATE_STATUS_OPTIONS, CANDIDATE_STATUS_COLORS } from '../../utils/candidateStatusUtils';
 
 const SOURCES = ['Naukri', 'LinkedIn', 'Indeed', 'Walk-In', 'Referral', 'Monster', 'Company Website', 'Social Media', 'Other'];
 
 const STATUSES = [
-  'New', 'Screening', 'Contacted', 'Interested', 'Interview Scheduled',
-  'Selected', 'Rejected', 'Eligible Candidates', 'Wrong Number',
-  'Did Not Pick', 'Call Back', 'HR Shortlist', 'Written Test',
-  'Operations Round', 'Documentation', 'Yet To Join', 'Joined',
+  ...CANDIDATE_STATUS_OPTIONS,
 ];
 
 const STATUS_COLORS: Record<string, string> = {
-  'New': 'bg-slate-100 text-slate-600',
-  'Screening': 'bg-sky-100 text-sky-700',
-  'Contacted': 'bg-blue-100 text-blue-700',
-  'Interested': 'bg-cyan-100 text-cyan-700',
-  'Interview Scheduled': 'bg-violet-100 text-violet-700',
-  'Selected': 'bg-emerald-100 text-emerald-700',
-  'Rejected': 'bg-red-100 text-red-600',
-  'Eligible Candidates': 'bg-teal-100 text-teal-700',
-  'Wrong Number': 'bg-slate-200 text-slate-500',
-  'Did Not Pick': 'bg-orange-100 text-orange-600',
-  'Call Back': 'bg-amber-100 text-amber-700',
-  'HR Shortlist': 'bg-lime-100 text-lime-700',
-  'Written Test': 'bg-indigo-100 text-indigo-700',
-  'Operations Round': 'bg-purple-100 text-purple-700',
-  'Documentation': 'bg-sky-100 text-sky-700',
-  'Yet To Join': 'bg-yellow-100 text-yellow-700',
-  'Joined': 'bg-green-100 text-green-700',
+  ...CANDIDATE_STATUS_COLORS,
 };
 
 const SOURCE_COLORS: Record<string, string> = {

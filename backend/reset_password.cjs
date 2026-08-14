@@ -9,38 +9,16 @@ async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('Connected to MongoDB...');
 
-  // Reset password for EMP008 (admin)
-  const newPassword = 'Admin@123';
-  const hashed = await bcrypt.hash(newPassword, 12);
+  const newPassword = 'Password2026!';
+  const hashed = await bcrypt.hash(newPassword, 10);
 
-  const result = await User.updateOne(
-    { employeeId: 'EMP008' },
-    { $set: { password: hashed } }
-  );
-  console.log('EMP008 updated:', result.modifiedCount, 'document(s)');
+  const ids = ['WH000001', 'WH000002', 'WH000003', 'WH000010', 'WH000035'];
+  for (const empId of ids) {
+    const res = await User.updateOne({ employeeId: empId }, { $set: { password: hashed } });
+    console.log(`Updated ${empId}:`, res.modifiedCount);
+  }
 
-  // Also reset EMP001 (recruiter)
-  const result2 = await User.updateOne(
-    { employeeId: 'EMP001' },
-    { $set: { password: hashed } }
-  );
-  console.log('EMP001 updated:', result2.modifiedCount, 'document(s)');
-
-  // Also reset EMP006 (TL)
-  const result3 = await User.updateOne(
-    { employeeId: 'EMP006' },
-    { $set: { password: hashed } }
-  );
-  console.log('EMP006 updated:', result3.modifiedCount, 'document(s)');
-
-  // Also reset EMP007 (Manager)
-  const result4 = await User.updateOne(
-    { employeeId: 'EMP007' },
-    { $set: { password: hashed } }
-  );
-  console.log('EMP007 updated:', result4.modifiedCount, 'document(s)');
-
-  console.log('\n✅ All passwords reset to: Admin@123');
+  console.log('\nAll passwords reset to: Password2026!');
   await mongoose.disconnect();
 }
 

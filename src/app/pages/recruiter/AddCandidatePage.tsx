@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { calculateAge } from '../../utils/ageCalculator';
 import { ExtractionPreviewModal } from '../../components/ExtractionPreviewModal';
 import { DepartmentDropdown } from '../../components/DepartmentDropdown';
+import { CANDIDATE_STATUS_OPTIONS } from '../../utils/candidateStatusUtils';
 
 const API_BASE = window.location.origin;
 
@@ -109,15 +110,7 @@ const INTERVIEW_TYPES = ['Virtual', 'Walk-in Company', 'Walk-in WHM', 'Video Cal
 
 const GENDERS = ['Male', 'Female', 'Non-Binary', 'Prefer not to say'];
 
-const FIRST_CALL_STATUSES = [
-  'No response', 'Not reachable', 'Call back scheduled', 'Screening in Progress',
-  'Eligible', 'SPOC Shortlisted',
-  'Rejected – Communication', 'Rejected – Experience Mismatch',
-  'Rejected – Salary Mismatch', 'Rejected – Location Constraint', 'Rejected – Notice Period',
-  'On Hold', 'Duplicate Profile', 'Not Interested',
-  'Interview Scheduled', 'Interview Completed',
-  'Selected', 'Offer Released', 'Offer Accepted', 'Offer Declined', 'Joined', 'Other',
-];
+const FIRST_CALL_STATUSES = [...CANDIDATE_STATUS_OPTIONS];
 
 const COMMUNICATION_RATINGS = ['Excellent', 'Good', 'Average', 'Poor', 'None'];
 
@@ -228,8 +221,8 @@ const EMPTY_FORM = {
   sourceDetails: '',
 
   // First Call Status
-  candidateContacted: false, // Have you spoken to the candidate?
-  firstCallStatus: 'Screening in Progress',
+  candidateContacted: true,
+  firstCallStatus: 'Eligible',
   firstCallOtherReason: '',
   communicationRating: 'Good',
   firstCallInterviewType: '',
@@ -1107,6 +1100,7 @@ export function AddCandidatePage() {
               </div>
             </div>
           </div>
+          </fieldset>
 
           <fieldset disabled={isLockedCoreFields} className="space-y-10 border-none p-0 m-0">
           {/* ══════════ Candidate Details ══════════ */}
@@ -1116,7 +1110,7 @@ export function AddCandidatePage() {
             </div>
             <div className="px-6 py-5 space-y-8">
 
-              {/* Row 1: Name + Phone + Source */}
+              {/* Row 1: Name + Phone + Department */}
               <div className="grid sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
@@ -1158,6 +1152,26 @@ export function AddCandidatePage() {
                 </div>
 
                 <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm text-slate-700" style={{ fontWeight: 500 }}>Department</label>
+                    {form.department && form.jrNumber && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full" style={{ fontWeight: 500 }}>
+                        <Zap className="w-3 h-3" /> From JR
+                      </span>
+                    )}
+                  </div>
+                  <DepartmentDropdown
+                    value={form.department}
+                    onChange={val => set('department', val)}
+                    placeholder="Select department"
+                    disabled={isTLReadOnly}
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: How did you know + Email + Alternate Phone */}
+              <div className="grid sm:grid-cols-3 gap-4">
+                <div>
                   <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
                     How did you know about Job Openings
                   </label>
@@ -1168,23 +1182,6 @@ export function AddCandidatePage() {
                   >
                     <option value="">Select source</option>
                     {JOB_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 2: Interview Type + Email + Alternate Phone */}
-              <div className="grid sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
-                    Interview Type
-                  </label>
-                  <select
-                    value={form.interviewType}
-                    onChange={e => set('interviewType', e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400"
-                  >
-                    <option value="">Select type</option>
-                    {INTERVIEW_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
 
@@ -1425,16 +1422,15 @@ export function AddCandidatePage() {
 
                 <div>
                   <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
+                    <Calendar className="inline w-3.5 h-3.5 mr-1" />
                     Joining Availability
                   </label>
-                  <select
+                  <input
+                    type="date"
                     value={form.joiningAvailability}
                     onChange={e => set('joiningAvailability', e.target.value)}
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400"
-                  >
-                    <option value="">Select availability</option>
-                    {NOTICE_PERIODS.map(n => <option key={n} value={n}>{n}</option>)}
-                  </select>
+                  />
                 </div>
               </div>
 
@@ -1530,119 +1526,18 @@ export function AddCandidatePage() {
             </div>
           </div>
 
-          {/* ══════════ Job Details ══════════ */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-blue-50 border-b border-blue-100">
-              <h2 className="text-blue-800" style={{ fontWeight: 700, fontSize: '1rem' }}>
-                <Briefcase className="inline w-4 h-4 mr-1.5" />Job Details
-              </h2>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-sm text-slate-700" style={{ fontWeight: 500 }}>Department</label>
-                    {form.department && form.jrNumber && (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full" style={{ fontWeight: 500 }}>
-                        <Zap className="w-3 h-3" /> From JR
-                      </span>
-                    )}
-                  </div>
-                  <DepartmentDropdown
-                    value={form.department}
-                    onChange={val => set('department', val)}
-                    placeholder="Select department"
-                    disabled={isTLReadOnly}
-                  />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-sm text-slate-700" style={{ fontWeight: 500 }}>Client</label>
-                    {form.client && form.jrNumber && (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full" style={{ fontWeight: 500 }}>
-                        <Zap className="w-3 h-3" /> From JR
-                      </span>
-                    )}
-                  </div>
-                  <input type="text" value={form.client} onChange={e => set('client', e.target.value)}
-                    placeholder="Client name"
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-sm text-slate-700" style={{ fontWeight: 500 }}>Projecting for Role</label>
-                    {form.projectedRole && form.jrNumber && (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full" style={{ fontWeight: 500 }}>
-                        <Zap className="w-3 h-3" /> From JR
-                      </span>
-                    )}
-                  </div>
-                  <input type="text" value={form.projectedRole} onChange={e => set('projectedRole', e.target.value)}
-                    placeholder="Role / Position"
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
-                    <Mail className="inline w-3.5 h-3.5 mr-1" />Recruiter Email
-                  </label>
-                  <input type="email" value={form.recruiterApplyEmail} readOnly={isRecruiter} onChange={isRecruiter ? undefined : e => set('recruiterApplyEmail', e.target.value)} className={`w-full px-3 py-2.5 rounded-lg border text-sm ${isRecruiter ? 'bg-slate-50 text-slate-600 border-slate-100' : 'border-slate-200 outline-none focus:border-green-400'}`} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Source Details</label>
-                <textarea value={form.sourceDetails} onChange={e => set('sourceDetails', e.target.value)} rows={2}
-                  placeholder="Describe how candidate was sourced..."
-                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400 resize-none" />
-              </div>
-            </div>
-          </div>
 
-          </fieldset>
-
-          {/* ══════════ First Call Status ══════════ */}
+          {/* ══════════ Candidate Status ══════════ */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-amber-50 border-b border-amber-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="px-6 py-4 bg-amber-50 border-b border-amber-100 flex items-center justify-between gap-4">
               <h2 className="text-amber-800" style={{ fontWeight: 700, fontSize: '1rem' }}>
-                <Phone className="inline w-4 h-4 mr-1.5" />First Call Status
+                <Phone className="inline w-4 h-4 mr-1.5" />Candidate Status
               </h2>
-
-              <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-lg border border-amber-200 shadow-sm">
-                <span className="text-sm font-semibold text-slate-700">Have you spoken to the candidate?</span>
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="candidateContacted"
-                      checked={form.candidateContacted === true}
-                      onChange={() => {
-                        setForm(prev => {
-                          const update = { ...prev, candidateContacted: true };
-                          if (!prev.firstCallDate) update.firstCallDate = new Date().toISOString().split('T')[0];
-                          if (!prev.firstCallTime) update.firstCallTime = new Date().toTimeString().slice(0, 5);
-                          return update;
-                        });
-                      }}
-                      className="text-amber-600 focus:ring-amber-500 w-4 h-4"
-                    />
-                    <span className="text-sm font-medium text-slate-700">Yes</span>
-                  </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="candidateContacted"
-                      checked={form.candidateContacted === false}
-                      onChange={() => setForm(prev => ({ ...prev, candidateContacted: false }))}
-                      className="text-slate-400 focus:ring-slate-400 w-4 h-4"
-                    />
-                    <span className="text-sm font-medium text-slate-700">No</span>
-                  </label>
-                </div>
-              </div>
             </div>
-            <fieldset disabled={!form.candidateContacted} className={`px-6 py-5 space-y-8 transition-opacity duration-200 ${!form.candidateContacted ? 'opacity-40 select-none' : ''}`}>
+            <fieldset disabled={false} className="px-6 py-5 space-y-8">
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>First Call Status</label>
+                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Candidate Status *</label>
                   <select value={form.firstCallStatus} onChange={e => set('firstCallStatus', e.target.value)}
                     className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${errors.firstCallStatus ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-slate-200 focus:border-green-400'
                       }`}>
@@ -1663,7 +1558,7 @@ export function AddCandidatePage() {
                   </select>
                 </div>
               </div>
-              <div className="grid sm:grid-cols-3 gap-4">
+              <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
                     <Calendar className="inline w-3.5 h-3.5 mr-1" />First Call Date
@@ -1674,30 +1569,6 @@ export function AddCandidatePage() {
                 <div>
                   <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>First Call Time</label>
                   <input type="time" value={form.firstCallTime} onChange={e => set('firstCallTime', e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
-                    <Mail className="inline w-3.5 h-3.5 mr-1" />Candidate Email (First Call)
-                  </label>
-                  <input type="email" value={form.firstCallEmail} onChange={e => set('firstCallEmail', e.target.value)}
-                    placeholder="candidate@email.com"
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
-                </div>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Interview Type</label>
-                  <select value={form.firstCallInterviewType} onChange={e => set('firstCallInterviewType', e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed">
-                    <option value="">Select type</option>
-                    {INTERVIEW_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Eligible Role</label>
-                  <input type="text" value={form.eligibleRole} onChange={e => set('eligibleRole', e.target.value)}
-                    placeholder="Role / Designation"
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400 disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" />
                 </div>
               </div>
@@ -1723,223 +1594,7 @@ export function AddCandidatePage() {
             </fieldset>
           </div>
 
-          {/* ══════════ Candidate Final Details ══════════ */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-green-50 border-b border-green-100">
-              <h2 className="text-green-800" style={{ fontWeight: 700, fontSize: '1rem' }}>
-                <Award className="inline w-4 h-4 mr-1.5" />Candidate Final Details
-              </h2>
-            </div>
-            <fieldset disabled={!form.candidateContacted} className={`px-6 py-5 space-y-8 transition-opacity duration-200 ${!form.candidateContacted ? 'opacity-40 select-none' : ''}`}>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-sm text-slate-700" style={{ fontWeight: 500 }}>Age</label>
-                    {form.candidateAge && form.dateOfBirth && (
-                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full" style={{ fontWeight: 500 }}>
-                        <Zap className="w-3 h-3" /> Auto-calculated
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    value={form.candidateAge}
-                    disabled
-                    placeholder="Auto-calculated from DOB"
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm bg-slate-50 text-slate-700 cursor-not-allowed"
-                    title="Age is automatically calculated from Date of Birth"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Recruiter Status</label>
-                  <input type="text" value={form.recruiterStatus} onChange={e => set('recruiterStatus', e.target.value)}
-                    placeholder="Status / Note"
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400" />
-                </div>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Walk-in Schedule</label>
-                  <input type="datetime-local" value={form.walkInSchedule} onChange={e => set('walkInSchedule', e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400" />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Tentative DOJ</label>
-                  <input type="date" value={form.tentativeDOJ} onChange={e => set('tentativeDOJ', e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400" />
-                </div>
-              </div>
-            </fieldset>
-          </div>
-
           </fieldset>
-          {/* ────────── END RECRUITER SECTIONS ────────── */}
-
-          {/* ══════════ Interview Status ══════════ */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mt-10">
-            <div className="px-6 py-4 bg-violet-50 border-b border-violet-100">
-              <h2 className="text-violet-800" style={{ fontWeight: 700, fontSize: '1rem' }}>
-                <Calendar className="inline w-4 h-4 mr-1.5" />Interview Status
-              </h2>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Interview Status</label>
-                  <select value={form.interviewStatus} onChange={e => set('interviewStatus', e.target.value)}
-                    disabled={!canEditInterviewStatus || isLockedByFinalInterview}
-                    className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${!canEditInterviewStatus ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-green-400'}`}>
-                    <option value="">Select status</option>
-                    {INTERVIEW_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5 flex items-center gap-1.5" style={{ fontWeight: 500 }}>
-                    <Shield className="w-3.5 h-3.5 text-violet-500" />
-                    Final Round Status <span className="text-xs text-violet-500">(TL / Admin only)</span>
-                  </label>
-                  <select value={form.finalInterviewSlotStatus} onChange={e => set('finalInterviewSlotStatus', e.target.value)}
-                    disabled={!isTLOrAdmin || isLockedByFinalInterview}
-                    className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${!isTLOrAdmin ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-violet-400'}`}>
-                    <option value="">Select</option>
-                    <option value="Final Round Scheduled">Final Round Scheduled</option>
-                  </select>
-                  {!isTLOrAdmin && <p className="mt-1 text-xs text-slate-400 flex items-center gap-1"><Lock className="w-3 h-3" /> TL or Admin only</p>}
-                </div>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Scheduled Date</label>
-                  <input type="date" value={form.scheduledDate} onChange={e => set('scheduledDate', e.target.value)}
-                    disabled={!canEditInterviewStatus || isLockedByFinalInterview}
-                    className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${!canEditInterviewStatus ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-green-400'}`} />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Final Select Date</label>
-                  <input type="date" value={form.finalSelectDate} onChange={e => set('finalSelectDate', e.target.value)}
-                    disabled={!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected'}
-                    className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${(!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected') ? 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-green-400'}`} />
-                </div>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Candidate Status Post Offer</label>
-                  <select value={form.candidateStatusPostOffer} onChange={e => set('candidateStatusPostOffer', e.target.value)}
-                    disabled={!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected'}
-                    className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${(!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected') ? 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-green-400'}`}>
-                    <option value="">Select status</option>
-                    {POST_OFFER_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Offered Date</label>
-                  <input type="date" value={form.offeredDate} onChange={e => set('offeredDate', e.target.value)}
-                    disabled={!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected'}
-                    className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${(!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected') ? 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-green-400'}`} />
-                </div>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Designation Offered</label>
-                  <input type="text" value={form.designationOffered} onChange={e => set('designationOffered', e.target.value)}
-                    disabled={!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected'}
-                    placeholder="Job title / Designation"
-                    className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${(!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected') ? 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-green-400'}`} />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Joining Salary (₹)</label>
-                  <input type="text" value={form.joiningSalary} onChange={e => set('joiningSalary', e.target.value)}
-                    disabled={!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected'}
-                    placeholder="e.g. 6,00,000"
-                    className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${(!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected') ? 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-green-400'}`} />
-                </div>
-                  {(user?.role === 'admin' || user?.role === 'manager' || user?.role === 'tl') && (
-                    <div>
-                      <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Placement Percentage (%)</label>
-                      <input type="number" step="0.01" value={form.placementPercentage || ''} onChange={e => set('placementPercentage', e.target.value)}
-                        disabled={!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected'}
-                        placeholder="e.g. 8.33"
-                        className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${(!canEditInterviewStatus || form.finalInterviewStatus !== 'Selected') ? 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-green-400'}`} />
-                    </div>
-                  )}
-              </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Date of Joining</label>
-                  <input type="date" value={form.dateOfJoining} onChange={e => set('dateOfJoining', e.target.value)}
-                    disabled={!canEditInterviewStatus || isLockedByFinalInterview}
-                    className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${!canEditInterviewStatus ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-green-400'}`} />
-                </div>
-                <div>
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Employee ID</label>
-                  <input type="text" value={form.candidateEmployeeId || ''} onChange={e => set('candidateEmployeeId', e.target.value)}
-                    placeholder="e.g. C18589032"
-                    disabled={!canEditInterviewStatus || isLockedByFinalInterview}
-                    className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${!canEditInterviewStatus ? 'bg-slate-50 border-slate-200 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-green-400'}`} />
-                </div>
-              </div>
-              <div className={`rounded-xl border p-4 ${isTLOrAdmin ? 'border-violet-200 bg-violet-50/40' : 'border-slate-200 bg-slate-50'}`}>
-                <p className="text-sm mb-1 flex items-center gap-1.5" style={{ fontWeight: 600, color: isTLOrAdmin ? '#4c1d95' : '#475569' }}>
-                  <Lock className="w-4 h-4" />Final Interview Status
-                  {isTLOrAdmin
-                    ? <span className="text-xs text-violet-600 font-normal ml-1">(TL / Admin)</span>
-                    : <span className="text-xs text-slate-400 font-normal ml-1">(TL / Admin only)</span>}
-                </p>
-                <p className="text-xs text-slate-400 mb-3">Once set, this locks — only Admin can change it later.</p>
-                <select value={form.finalInterviewStatus} onChange={e => set('finalInterviewStatus', e.target.value)}
-                  disabled={!isTLOrAdmin || isLockedByFinalInterview}
-                  className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${!isTLOrAdmin ? 'bg-white border-slate-200 text-slate-400 cursor-not-allowed' : 'border-violet-300 focus:border-violet-500 bg-white'}`}>
-                  <option value="">Select final status</option>
-                  {['Selected', 'Rejected', 'On Hold'].map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-                {!isTLOrAdmin && <p className="mt-1 text-xs text-slate-400 flex items-center gap-1"><Lock className="w-3 h-3" /> TL or Admin only</p>}
-              </div>
-            </div>
-          </div>
-
-          {/* ══════════ Candidate Flags ══════════ */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mt-10">
-            <div className="px-6 py-4 bg-red-50 border-b border-red-100">
-              <h2 className="text-red-800" style={{ fontWeight: 700, fontSize: '1rem' }}>
-                <AlertCircle className="inline w-4 h-4 mr-1.5" />Candidate Flags
-              </h2>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              {form.isDuplicate && (
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <p className="text-orange-700 text-sm"><strong>Duplicate Detected:</strong> A candidate with the same phone or email already exists.</p>
-                </div>
-              )}
-              <div className="grid sm:grid-cols-2 gap-3">
-                {([
-                  { key: 'isDuplicate', label: 'Mark as Duplicate', desc: 'Toggle if this is a duplicate entry', color: 'bg-orange-500' },
-                  { key: 'isBlacklisted', label: 'Blacklisted', desc: 'Flag as blacklisted', color: 'bg-red-500' },
-                  { key: 'rehireEligible', label: 'Rehire Eligible', desc: 'Can be rehired?', color: 'bg-green-500' },
-                  { key: 'isPriority', label: 'Priority Candidate', desc: 'High priority candidate', color: 'bg-yellow-400' },
-                ] as const).map(({ key, label, desc, color }) => (
-                  <div key={key} className="flex items-center justify-between px-4 py-3 rounded-lg border border-slate-200 bg-slate-50">
-                    <div>
-                      <p className="text-sm text-slate-700" style={{ fontWeight: 500 }}>{label}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
-                    </div>
-                    <button type="button" onClick={() => set(key, !(form as any)[key])}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${(form as any)[key] ? color : 'bg-slate-200'}`}>
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${(form as any)[key] ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Candidate Active Status</label>
-                <select value={form.candidateActiveStatus} onChange={e => set('candidateActiveStatus', e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400">
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-              </div>
-            </div>
-          </div>
 
           {/* Bottom Submit */}
           <div className="flex justify-end gap-3 pb-6">

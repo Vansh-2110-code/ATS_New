@@ -510,7 +510,7 @@ exports.adminDashboard = async (req, res, next) => {
       ...dateMatch,
       status: {
         $in: [
-          'Selected', 'Final Select', 'Client Select', 'Waiting for Offer', 'Offered', 'Offer Released',
+          'Selected', 'Final Select', 'Client Select', 'Test Select', 'Selected for Call', 'Waiting for Offer', 'Offered', 'Offer Released',
           'Offer Accept', 'Offer Accepted', 'Document Initialized', 'Documennt Initialted',
           'Documentation Completed', 'Documentation Incomplete', 'Document Pending', 'Documentation'
         ]
@@ -526,9 +526,11 @@ exports.adminDashboard = async (req, res, next) => {
     // Rejected count
     const rejectedCount = await Candidate.countDocuments({ ...dateMatch, status: 'Rejected' });
 
-    // Open Jobs count
-    const jobMatch = selectedRange === 'all' ? { status: 'Open' } : { status: 'Open', createdAt: { $gte: start, $lt: end } };
-    const openJobsCount = await Job.countDocuments(jobMatch);
+    // Open Jobs count and Total Open Positions
+    const jobMatch = selectedRange === 'all' ? { status: { $regex: /^open$/i } } : { status: { $regex: /^open$/i }, createdAt: { $gte: start, $lt: end } };
+    const openJobs = await Job.find(jobMatch).select('positions openPositions noOfPositions');
+    const openJobsCount = openJobs.length;
+    const openPositionsCount = openJobs.reduce((sum, j) => sum + (parseInt(j.positions || j.openPositions || j.noOfPositions) || 1), 0);
 
     // Revenue this month (from Revenue model if it exists)
     let currentMonthRevenue = 0;
@@ -587,6 +589,7 @@ exports.adminDashboard = async (req, res, next) => {
         joined: joinedCount,
         rejectedCount,
         openJobsCount,
+        openPositionsCount,
         currentMonthRevenue,
       },
       sourceChart: sourceChart.map(s => ({ source: s._id || 'Unknown', count: s.count })),
@@ -977,7 +980,7 @@ exports.divisionDashboard = async (req, res, next) => {
 // GET /api/dashboard/reports/advanced
 exports.advancedReports = async (req, res, next) => {
   try {
-    const { dateRange, range, startDate, endDate, from, to } = req.query;
+    const { dateRange, range, startDate, endDate, from, to, division, tlId } = req.query;
     const customStart = (startDate && String(startDate).trim()) || (from && String(from).trim()) || null;
     const customEnd = (endDate && String(endDate).trim()) || (to && String(to).trim()) || null;
     const selectedRange = (customStart || customEnd) ? 'custom' : (dateRange || range || 'all');
@@ -985,10 +988,33 @@ exports.advancedReports = async (req, res, next) => {
     
     const Job = require('../models/Job');
     const Candidate = require('../models/Candidate');
+    const User = require('../models/User');
+    const TeamMember = require('../models/TeamMember');
+
+    // Build comprehensive Recruiter -> TL lookup maps (by both ObjectId and Name)
+    const allAssignments = await TeamMember.find({ removedAt: null }).populate('teamLeaderId', 'name _id').populate('memberId', 'name _id').lean();
+    const recruiterToTlMap = {};
+    const recruiterNameToTlMap = {};
+    const tlUsers = await User.find({ role: 'tl' }).select('_id name').lean();
+    tlUsers.forEach(t => {
+      recruiterToTlMap[t._id.toString()] = t.name;
+      recruiterNameToTlMap[t.name] = t.name;
+    });
+    allAssignments.forEach(ta => {
+      if (ta.memberId && ta.teamLeaderId) {
+        const memId = ta.memberId._id ? ta.memberId._id.toString() : ta.memberId.toString();
+        recruiterToTlMap[memId] = ta.teamLeaderId.name;
+        if (ta.memberId.name) {
+          recruiterNameToTlMap[ta.memberId.name] = ta.teamLeaderId.name;
+        }
+      }
+    });
+
+    const divisionMatch = (division && division !== 'All' && division !== 'All Divisions') ? { division } : {};
 
     // 1. Recruiter performance
     const recruiterReport = await Candidate.aggregate([
-      { $match: { createdAt: { $gte: start, $lt: end } } },
+      { $match: { createdAt: { $gte: start, $lt: end }, ...divisionMatch } },
       {
         $group: {
           _id: '$assignedRecruiterName',
@@ -1015,7 +1041,7 @@ exports.advancedReports = async (req, res, next) => {
 
     // 2. Customer performance
     const customerReport = await Candidate.aggregate([
-      { $match: { createdAt: { $gte: start, $lt: end }, clientName: { $ne: null, $ne: '' } } },
+      { $match: { createdAt: { $gte: start, $lt: end }, clientName: { $ne: null, $ne: '' }, ...divisionMatch } },
       {
         $group: {
           _id: '$clientName',
@@ -1069,18 +1095,10 @@ exports.advancedReports = async (req, res, next) => {
 
     // 4. Aging Report
     const activePipelineCandidates = await Candidate.find({
-      status: { $nin: ['Joined', 'Rejected', 'Exited'] }
-    }).select('name currentStage status updatedAt createdAt assignedRecruiterName assignedRecruiter')
+      status: { $nin: ['Joined', 'Rejected', 'Exited'] },
+      ...divisionMatch,
+    }).select('name currentStage status updatedAt createdAt assignedRecruiterName assignedRecruiter division')
       .populate('assignedRecruiter', 'name');
-
-    // Fetch TL mappings
-    const allAssignments = await TeamMember.find({ removedAt: null }).populate('teamLeaderId', 'name');
-    const recruiterToTlMap = {};
-    allAssignments.forEach(ta => {
-      if (ta.memberId && ta.teamLeaderId) {
-        recruiterToTlMap[ta.memberId.toString()] = ta.teamLeaderId.name;
-      }
-    });
 
     const agingCandidates = activePipelineCandidates.map(cand => {
       const lastChangeDate = cand.updatedAt || cand.createdAt;
@@ -1090,17 +1108,21 @@ exports.advancedReports = async (req, res, next) => {
       if (cand.assignedRecruiter && cand.assignedRecruiter._id) {
         tlName = recruiterToTlMap[cand.assignedRecruiter._id.toString()] || 'Unassigned';
       }
+      if (tlName === 'Unassigned' && cand.assignedRecruiterName) {
+        tlName = recruiterNameToTlMap[cand.assignedRecruiterName] || 'Unassigned';
+      }
 
       return {
         _id: cand._id,
         name: cand.name,
         stage: cand.currentStage,
         status: cand.status,
+        division: cand.division || 'BPO',
         daysPending,
         pendingSince: cand.createdAt,
         recruiter: cand.assignedRecruiterName || 'Unassigned',
         teamLead: tlName,
-        manager: 'Admin' // Currently Managers manage the whole branch, no strict TL-Manager map exists.
+        manager: 'Admin'
       };
     }).sort((a, b) => b.daysPending - a.daysPending);
 
@@ -1128,12 +1150,16 @@ exports.advancedReports = async (req, res, next) => {
       };
     });
 
-    // 6. Active JR Report (JR Nos, Customer Name, Skills, Active profiles in Pipeline)
-    const openJobs = await Job.find({ status: { $ne: 'Closed' } })
+    // 6. Active JR Report (JR Nos, Customer Name, Skills, Active profiles in Pipeline, Division & TL Mappings)
+    const openJobQuery = { status: { $ne: 'Closed' } };
+    if (division && division !== 'All' && division !== 'All Divisions') {
+      openJobQuery.division = division;
+    }
+    const openJobs = await Job.find(openJobQuery)
       .populate('createdBy', 'name email employeeId role')
       .lean();
 
-    const activeJRsReport = await Promise.all(openJobs.map(async (j) => {
+    let activeJRsReport = await Promise.all(openJobs.map(async (j) => {
       const escapedTitle = (j.jobTitle || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const activeCandidates = await Candidate.find({
         $or: [
@@ -1141,7 +1167,7 @@ exports.advancedReports = async (req, res, next) => {
           { positionApplied: { $regex: `^${escapedTitle}$`, $options: 'i' } }
         ],
         status: { $nin: ['Rejected', 'Exited'] }
-      }).select('name phone email status currentStage assignedRecruiterName createdAt updatedAt').lean();
+      }).select('name phone email status currentStage assignedRecruiterName createdAt updatedAt division').lean();
 
       const isInterview = (s) => ['Interview Scheduled', 'Interview Completed', 'Shortlisted', 'HR Round Scheduled', 'Written Test', 'Test Select', 'Test Reject', 'Operations Round', 'HR Shortlist', 'L1/Final', 'Submitted to Client', 'Selected', 'Final Select', 'No Show', 'Final Round Scheduled', 'Final Round Completed'].includes(s);
       const isOffered = (s) => ['Offered', 'Offer Released', 'Offer Accept', 'Offer Accepted', 'Documentation', 'Documentation Completed', 'Candidate Drop Post L2 Select'].includes(s);
@@ -1163,11 +1189,22 @@ exports.advancedReports = async (req, res, next) => {
         else screeningCount++;
       });
 
+      let tlName = 'Unassigned';
+      if (j.createdBy?._id && recruiterToTlMap[j.createdBy._id.toString()]) {
+        tlName = recruiterToTlMap[j.createdBy._id.toString()];
+      } else if (j.createdBy?.name && recruiterNameToTlMap[j.createdBy.name]) {
+        tlName = recruiterNameToTlMap[j.createdBy.name];
+      } else if (j.recruiterName && recruiterNameToTlMap[j.recruiterName]) {
+        tlName = recruiterNameToTlMap[j.recruiterName];
+      }
+
       return {
         _id: j._id,
         jrNumber: j.jrNumber || '—',
         customerName: j.companyName || j.client || '—',
         jobTitle: j.jobTitle || '—',
+        division: j.division || 'BPO',
+        teamLeader: tlName,
         skills: Array.isArray(j.skills) ? j.skills.join(', ') : (j.skills || '—'),
         location: j.location || '—',
         positions: j.positions || 1,
@@ -1186,28 +1223,26 @@ exports.advancedReports = async (req, res, next) => {
           email: c.email,
           status: c.status,
           stage: c.currentStage,
+          division: c.division || j.division || 'BPO',
           recruiter: c.assignedRecruiterName || 'Unassigned',
           updatedAt: c.updatedAt || c.createdAt
         }))
       };
     }));
 
-    // 7. Active Status Profiles (Documentation process, Pending with Customer, etc.)
-    const activeProfilesCandidates = await Candidate.find({
-      status: { $nin: ['Rejected', 'Exited', 'Joined'] }
-    }).select('name phone email positionApplied clientName status jrNumber assignedRecruiter assignedRecruiterName updatedAt createdAt division').lean();
+    if (tlId && tlId !== 'All' && tlId !== 'All Team Leaders') {
+      activeJRsReport = activeJRsReport.filter(j => j.teamLeader === tlId);
+    }
 
-    const recruiterIds = [...new Set(activeProfilesCandidates.map(c => c.assignedRecruiter?.toString()).filter(Boolean))];
-    const teamMembers = await TeamMember.find({ memberId: { $in: recruiterIds }, removedAt: null })
-      .populate('teamLeaderId', 'name')
+    // 7. Active Status Profiles (Documentation process, Pending with Customer, Joined, etc.)
+    const activeProfilesQuery = {
+      status: { $nin: ['Rejected', 'Exited'] },
+      ...divisionMatch,
+    };
+
+    const activeProfilesCandidates = await Candidate.find(activeProfilesQuery)
+      .select('name phone email positionApplied clientName status jrNumber assignedRecruiter assignedRecruiterName updatedAt createdAt division')
       .lean();
-    
-    const recruiterToTLMap = {};
-    teamMembers.forEach(tm => {
-      if (tm.teamLeaderId) {
-        recruiterToTLMap[tm.memberId.toString()] = tm.teamLeaderId.name;
-      }
-    });
 
     const masterStatusesSet = new Set([
       'Eligible', 'Not Eligible', 'Not Interested', 'No Response', 'Duplicate-Client', 'Call Back',
@@ -1219,7 +1254,7 @@ exports.advancedReports = async (req, res, next) => {
       'Joined and Abort'
     ]);
 
-    const activeProfilesReport = activeProfilesCandidates.map(c => {
+    let activeProfilesReport = activeProfilesCandidates.map(c => {
       const daysPending = Math.ceil((new Date() - new Date(c.updatedAt || c.createdAt)) / (1000 * 60 * 60 * 24));
       let rawStatus = c.status || 'Eligible';
       let displayStatus = masterStatusesSet.has(rawStatus) ? rawStatus : 'Eligible';
@@ -1229,6 +1264,10 @@ exports.advancedReports = async (req, res, next) => {
       else if (rawStatus === 'Submitted To Client' || rawStatus === 'Sublitted To Client' || rawStatus === 'Walk-in Submitted') displayStatus = 'Submitted to Client';
       else if (rawStatus === 'HR Shortlist' || rawStatus === 'SPOC Shortlisted' || rawStatus === 'HR Round Scheduled') displayStatus = 'Eligible';
       else if (rawStatus === 'Selected' || rawStatus === 'L1/Final') displayStatus = 'Final Select';
+
+      const tlName = (c.assignedRecruiter && recruiterToTlMap[c.assignedRecruiter.toString()]) || 
+                     (c.assignedRecruiterName && recruiterNameToTlMap[c.assignedRecruiterName]) || 
+                     'Unassigned';
 
       return {
         _id: c._id,
@@ -1240,12 +1279,16 @@ exports.advancedReports = async (req, res, next) => {
         status: displayStatus,
         jrNumber: c.jrNumber || '—',
         recruiter: c.assignedRecruiterName || 'Unassigned',
-        teamLeader: (c.assignedRecruiter && recruiterToTLMap[c.assignedRecruiter.toString()]) ? recruiterToTLMap[c.assignedRecruiter.toString()] : 'Unassigned',
+        teamLeader: tlName,
         division: c.division || 'BPO',
         daysPending,
         updatedAt: c.updatedAt || c.createdAt
       };
     }).sort((a, b) => b.daysPending - a.daysPending);
+
+    if (tlId && tlId !== 'All' && tlId !== 'All Team Leaders') {
+      activeProfilesReport = activeProfilesReport.filter(p => p.teamLeader === tlId);
+    }
 
     // 8. Revenue Report (ONLY Joined Candidates with CTC, Date of Joining & Customer/Division Breakdown)
     const joinedCandidatesRaw = await Candidate.find({

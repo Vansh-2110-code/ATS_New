@@ -27,7 +27,7 @@ export function JobsListPage() {
   const companyFilter = (location.state as any)?.company as string | undefined;
 
   const canCreate = ['tl', 'admin', 'manager'].includes(user?.role || '');
-  const canEdit = ['admin', 'manager'].includes(user?.role || '');
+  const canEdit = ['admin', 'manager', 'tl'].includes(user?.role || '');
   const canDelete = user?.role === 'admin';
 
   const [jobs, setJobs] = useState<any[]>([]);

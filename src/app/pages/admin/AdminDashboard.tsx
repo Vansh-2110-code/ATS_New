@@ -764,7 +764,7 @@ export function AdminDashboard() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
                 { label: 'Open Positions', value: adminMetrics.openPositionsCount ?? adminMetrics.openJobsCount ?? '0', sub: 'Active Vacancies', icon: Briefcase, color: 'blue', href: '/admin/jobs?status=Open' },
-                { label: 'Selected', value: adminMetrics.selectedCount ?? '0', sub: 'Offered Candidates', icon: BadgeCheck, color: 'emerald', href: '/admin/candidates?statusFilter=Selected' },
+                { label: 'Offer Selected', value: adminMetrics.selectedCount ?? '0', sub: 'Offered / Selected', icon: BadgeCheck, color: 'emerald', href: '/admin/candidates?statusFilter=Selected' },
                 { label: 'Operations Round', value: adminMetrics.opsRoundCount ?? adminMetrics.operationsRoundCount ?? '0', sub: 'In Ops Round', icon: Building2, color: 'violet', href: '/admin/candidates?statusFilter=Operations%20Round' },
                 { label: 'HR Round', value: adminMetrics.hrRoundCount ?? '0', sub: 'In HR Round', icon: ClipboardList, color: 'amber', href: '/admin/candidates?statusFilter=HR%20Shortlist' },
                 { label: 'Yet to Join', value: adminMetrics.yetToJoinCount ?? adminMetrics.followToJoinCount ?? '0', sub: 'Offer Accepted', icon: UserCheck, color: 'purple', href: '/admin/candidates?statusFilter=Yet%20To%20Join' },
