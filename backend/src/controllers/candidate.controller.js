@@ -79,7 +79,7 @@ exports.list = async (req, res, next) => {
       if (statuses.length > 0) query.status = { $in: statuses };
     } else if (status) {
       const reverseMap = {
-        'Eligible': ['Eligible', 'Eligible Candidates', 'New', 'Screening', 'Contacted', 'Interested', 'Selected for Call', 'SPOC Shortlisted', 'Other', 'Screening in Progress'],
+        'Eligible': ['Eligible', 'Eligible Candidates'],
         'No Response': ['No Response', 'No response', 'Did Not Pick', 'Not reachable'],
         'Not Eligible': ['Not Eligible', 'Rejected', 'Rejected – Communication', 'Rejected – Experience Mismatch', 'Rejected – Salary Mismatch', 'Rejected – Location Constraint', 'Rejected – Notice Period'],
         'Final Select': ['Final Select', 'Selected', 'Final Round Scheduled'],
@@ -152,8 +152,12 @@ exports.list = async (req, res, next) => {
     }
 
     // Team Leader / Recruiter Filter
+    let effectiveTlId = tlId;
+    if (!effectiveTlId && req.user.role === 'tl') {
+      effectiveTlId = req.user._id;
+    }
     const isAllRecruiters = !recruiter || recruiter === 'All Recruiters' || recruiter === 'All';
-    const isAllTls = !tlId || tlId === 'All Team Leaders' || tlId === 'All';
+    const isAllTls = !effectiveTlId || effectiveTlId === 'All Team Leaders' || effectiveTlId === 'All';
 
     if (!isAllTls && isAllRecruiters) {
       const TeamMember = require('../models/TeamMember');
@@ -163,17 +167,17 @@ exports.list = async (req, res, next) => {
       let targetTlId = null;
       let targetTlName = null;
 
-      if (mongoose.Types.ObjectId.isValid(tlId)) {
-        targetTlId = tlId;
-        const u = await User.findById(tlId).select('name');
+      if (mongoose.Types.ObjectId.isValid(effectiveTlId)) {
+        targetTlId = effectiveTlId;
+        const u = await User.findById(effectiveTlId).select('name');
         if (u) targetTlName = u.name;
       } else {
-        const u = await User.findOne({ name: tlId }).select('_id name');
+        const u = await User.findOne({ name: effectiveTlId }).select('_id name');
         if (u) {
           targetTlId = u._id;
           targetTlName = u.name;
         } else {
-          targetTlName = tlId;
+          targetTlName = effectiveTlId;
         }
       }
 
@@ -193,7 +197,11 @@ exports.list = async (req, res, next) => {
 
       const tlUserCond = [];
       if (userIds.length > 0) tlUserCond.push({ assignedRecruiter: { $in: userIds } });
-      if (userNames.length > 0) tlUserCond.push({ assignedRecruiterName: { $in: userNames } });
+      if (userNames.length > 0) {
+        tlUserCond.push({ assignedRecruiterName: { $in: userNames } });
+        tlUserCond.push({ sourcedBy: { $in: userNames } });
+        tlUserCond.push({ recruiterName: { $in: userNames } });
+      }
 
       if (tlUserCond.length > 0) {
         if (query.$or) {
@@ -210,9 +218,15 @@ exports.list = async (req, res, next) => {
       if (mongoose.Types.ObjectId.isValid(recruiter)) {
         cond.push({ assignedRecruiter: recruiter });
         const recUser = await User.findById(recruiter).select('_id name');
-        if (recUser) cond.push({ assignedRecruiterName: recUser.name });
+        if (recUser) {
+          cond.push({ assignedRecruiterName: recUser.name });
+          cond.push({ sourcedBy: recUser.name });
+          cond.push({ recruiterName: recUser.name });
+        }
       } else {
         cond.push({ assignedRecruiterName: recruiter });
+        cond.push({ sourcedBy: recruiter });
+        cond.push({ recruiterName: recruiter });
         const recUser = await User.findOne({ name: recruiter }).select('_id name');
         if (recUser) cond.push({ assignedRecruiter: recUser._id });
       }
@@ -227,7 +241,9 @@ exports.list = async (req, res, next) => {
     } else if (req.user.role === 'recruiter') {
       const recCond = [
         { assignedRecruiter: req.user._id },
-        { assignedRecruiterName: req.user.name }
+        { assignedRecruiterName: req.user.name },
+        { sourcedBy: req.user.name },
+        { recruiterName: req.user.name }
       ];
       if (query.$or) {
         query.$and = [{ $or: query.$or }, { $or: recCond }];

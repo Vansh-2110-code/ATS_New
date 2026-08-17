@@ -29,6 +29,7 @@ async function deploy() {
       { local: 'src/app/pages/recruiter/CandidateProfilePage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/CandidateProfilePage.tsx` },
       { local: 'src/app/pages/recruiter/ResumeListPage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/ResumeListPage.tsx` },
       { local: 'src/app/pages/recruiter/WalkInManagementPage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/WalkInManagementPage.tsx` },
+      { local: 'src/app/pages/tl/TLDashboard.tsx', remote: `${remoteBase}/src/app/pages/tl/TLDashboard.tsx` },
       { local: 'src/app/pages/tl/TLCandidateViewModal.tsx', remote: `${remoteBase}/src/app/pages/tl/TLCandidateViewModal.tsx` }
     ];
 

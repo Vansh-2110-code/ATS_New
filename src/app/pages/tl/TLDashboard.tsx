@@ -216,12 +216,12 @@ export function TLDashboard() {
   };
 
   // Metric aggregates for TL Overview
-  const totalCallsDone = summary.totalCalls || team.reduce((s, r) => s + r.totalCalls, 0);
-  const totalEligible = summary.eligible || team.reduce((s, r) => s + r.eligible, 0);
-  const totalFinalSelect = summary.finalSelect || team.reduce((s, r) => s + r.finalSelect, 0);
-  const totalDocCompleted = summary.docCompleted || team.reduce((s, r) => s + r.docCompleted, 0);
-  const totalOfferAccept = summary.offerAccept || team.reduce((s, r) => s + r.offerAccept, 0);
-  const totalJoined = summary.joined || team.reduce((s, r) => s + r.joined, 0);
+  const totalCallsDone = summary.totalCalls ?? team.reduce((s, r) => s + (r.totalCalls || 0), 0);
+  const totalEligible = summary.eligible ?? team.reduce((s, r) => s + (r.eligible || 0), 0);
+  const totalFinalSelect = summary.finalSelect ?? team.reduce((s, r) => s + (r.finalSelect || 0), 0);
+  const totalDocCompleted = summary.docCompleted ?? team.reduce((s, r) => s + (r.docCompleted || 0), 0);
+  const totalOfferAccept = summary.offerAccept ?? team.reduce((s, r) => s + (r.offerAccept || 0), 0);
+  const totalJoined = summary.joined ?? team.reduce((s, r) => s + (r.joined || 0), 0);
 
   const STATUS_CARDS = CANDIDATE_STATUS_OPTIONS.map((label, i) => ({
     label,
