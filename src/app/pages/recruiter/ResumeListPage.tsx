@@ -294,17 +294,14 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
     return p;
   };
 
-  const handleExcelDownload = () => {
-    const token = localStorage.getItem('ats_token');
-    const url = api.getExportUrl(buildExportParams('excel'));
-    // Open in hidden iframe to trigger download with auth header
-    const a = document.createElement('a');
-    a.href = url + (token ? `&token=${token}` : '');
-    a.download = 'candidates.xlsx';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setShowExportMenu(false);
+  const handleExcelDownload = async () => {
+    try {
+      await api.exportCandidatesExcel(buildExportParams('excel'));
+    } catch (err: any) {
+      alert(err.message || 'Failed to download Excel');
+    } finally {
+      setShowExportMenu(false);
+    }
   };
 
   const handleCsvDownload = () => {

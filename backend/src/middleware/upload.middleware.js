@@ -91,6 +91,9 @@ const uploadJoining = multer({
 }).fields([
   { name: 'photo', maxCount: 1 },
   { name: 'resume', maxCount: 1 },
+  { name: 'panCard', maxCount: 1 },
+  { name: 'aadhaarCard', maxCount: 1 },
+  { name: 'highestDocument', maxCount: 1 },
   { name: 'marksheet', maxCount: 1 },
   { name: 'degreeCertificate', maxCount: 1 },
   { name: 'relievingLetter0', maxCount: 1 },

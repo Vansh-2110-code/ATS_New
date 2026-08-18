@@ -66,6 +66,8 @@ import { AnalyticsPage } from './pages/analytics/AnalyticsPage';
 import { SalaryPage } from './pages/finance/SalaryPage';
 import { SalarySlipPage } from './pages/employee/SalarySlipPage';
 import { SalaryAccessManagementPage } from './pages/employee/SalaryAccessManagementPage';
+import { MyLeavesPage } from './pages/employee/MyLeavesPage';
+import { LeaveManagementPage } from './pages/admin/LeaveManagementPage';
 import { RevenueDashboard } from './pages/finance/RevenueDashboard';
 import { RevenueEntryPage } from './pages/finance/RevenueEntryPage';
 import { CreateInvoicePage } from './pages/finance/CreateInvoicePage';
@@ -164,9 +166,16 @@ export const router = createBrowserRouter([
       // Analytics
       { path: '/analytics', Component: AnalyticsPage },
 
-      // Finance
+      // Finance & Employee Self-Service
+      { path: '/leaves', Component: MyLeavesPage },
+      { path: '/employee/leaves', Component: MyLeavesPage },
+      { path: '/admin/leaves', Component: LeaveManagementPage },
+      { path: '/tl/leaves', Component: LeaveManagementPage },
+      { path: '/manager/leaves', Component: LeaveManagementPage },
       { path: '/salary', Component: SalaryPage },
       { path: '/salary/slip', Component: SalarySlipPage },
+      { path: '/salary-slip', Component: SalarySlipPage },
+      { path: '/employee/salary-slips', Component: SalarySlipPage },
       { path: '/salary/access-requests', Component: SalaryAccessManagementPage },
       { path: '/revenue', Component: RevenueDashboard },
       { path: '/revenue/add', Component: RevenueEntryPage },

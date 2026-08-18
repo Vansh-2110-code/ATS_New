@@ -37,6 +37,9 @@ const employeeSchema = new mongoose.Schema({
   resumePath: { type: String },
   marksheetPath: { type: String },
   degreeCertificatePath: { type: String },
+  highestDocumentPath: { type: String },
+  panCardPath: { type: String },
+  aadhaarCardPath: { type: String },
 
   expYears: { type: Number, default: 0 },
   expMonths: { type: Number, default: 0 },

@@ -20,6 +20,8 @@ export function SalarySlipPage() {
   const [accessRequestModal, setAccessRequestModal] = useState(false);
   const [hasAccess, setHasAccess] = useState(true);
   const [requestPending, setRequestPending] = useState(false);
+  const [isDownloadLocked, setIsDownloadLocked] = useState(false);
+  const [firstDownloadedAt, setFirstDownloadedAt] = useState<string | null>(null);
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -39,6 +41,15 @@ export function SalarySlipPage() {
       try {
         setLoading(true);
         setError('');
+
+        // Check download lock status
+        try {
+          const dlRes = await api.checkSalarySlipDownload(selectedMonth, currentYear);
+          setIsDownloadLocked(!!dlRes?.downloadLocked);
+          setFirstDownloadedAt(dlRes?.firstDownloadedAt || null);
+        } catch {
+          setIsDownloadLocked(false);
+        }
 
         // Check access permissions for recruiters
         if (user.role === 'recruiter') {
@@ -345,6 +356,24 @@ export function SalarySlipPage() {
                 attendance={attendance || undefined}
                 presentDays={attendance?.presentDays || 22}
                 workingDays={22}
+                isDownloadLocked={isDownloadLocked}
+                firstDownloadedAt={firstDownloadedAt}
+                onDownload={async () => {
+                  try {
+                    await api.recordSalarySlipDownload(selectedMonth, currentYear);
+                    setIsDownloadLocked(true);
+                    setFirstDownloadedAt(new Date().toISOString());
+                    const element = document.getElementById('salary-slip-printable');
+                    if (element) {
+                      window.print();
+                    }
+                  } catch (err) {
+                    const element = document.getElementById('salary-slip-printable');
+                    if (element) {
+                      window.print();
+                    }
+                  }
+                }}
               />
             ) : (
               // Summary View

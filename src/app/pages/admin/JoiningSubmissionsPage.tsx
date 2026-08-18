@@ -29,6 +29,13 @@ interface Employee {
   bloodGroup?: string;
   panNumber?: string;
   aadhaarNumber?: string;
+  panCardPath?: string;
+  aadhaarCardPath?: string;
+  highestDocumentPath?: string;
+  marksheetPath?: string;
+  degreeCertificatePath?: string;
+  resumePath?: string;
+  photoPath?: string;
   createdBy?: { name?: string; employeeId?: string };
   candidateRef?: { name?: string; status?: string };
   isApproved?: boolean;
@@ -314,7 +321,77 @@ function DetailPanel({ emp, onClose, isAdmin }: { emp: Employee; onClose: () => 
               <PanelSection icon={<CreditCard className="w-4 h-4 text-green-600" />} title="KYC / Documents">
                 <PRow label="Blood Group" value={emp.bloodGroup} />
                 <PRow label="PAN Number" value={emp.panNumber} />
+                {emp.panCardPath && (
+                  <div className="flex items-center justify-between px-4 py-2 text-xs">
+                    <span className="text-slate-400 font-medium">PAN Card File</span>
+                    <a
+                      href={emp.panCardPath.startsWith('http') ? emp.panCardPath : `https://ats.whitehorsemanpower.in${emp.panCardPath}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      <ExternalLink className="w-3 h-3" /> View PAN Card
+                    </a>
+                  </div>
+                )}
                 <PRow label="Aadhaar" value={emp.aadhaarNumber} />
+                {emp.aadhaarCardPath && (
+                  <div className="flex items-center justify-between px-4 py-2 text-xs">
+                    <span className="text-slate-400 font-medium">Aadhaar File</span>
+                    <a
+                      href={emp.aadhaarCardPath.startsWith('http') ? emp.aadhaarCardPath : `https://ats.whitehorsemanpower.in${emp.aadhaarCardPath}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      <ExternalLink className="w-3 h-3" /> View Aadhaar Card
+                    </a>
+                  </div>
+                )}
+                {(emp.highestDocumentPath || emp.marksheetPath || emp.degreeCertificatePath) && (
+                  <div className="flex flex-col gap-1.5 px-4 py-2 border-t border-slate-50 text-xs">
+                    <span className="text-slate-400 font-medium mb-0.5">Education Documents:</span>
+                    {emp.highestDocumentPath && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">Highest Qualification Doc</span>
+                        <a
+                          href={emp.highestDocumentPath.startsWith('http') ? emp.highestDocumentPath : `https://ats.whitehorsemanpower.in${emp.highestDocumentPath}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                        >
+                          <ExternalLink className="w-3 h-3" /> View Doc
+                        </a>
+                      </div>
+                    )}
+                    {emp.marksheetPath && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">Marksheet</span>
+                        <a
+                          href={emp.marksheetPath.startsWith('http') ? emp.marksheetPath : `https://ats.whitehorsemanpower.in${emp.marksheetPath}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                        >
+                          <ExternalLink className="w-3 h-3" /> View Marksheet
+                        </a>
+                      </div>
+                    )}
+                    {emp.degreeCertificatePath && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600">Degree Certificate</span>
+                        <a
+                          href={emp.degreeCertificatePath.startsWith('http') ? emp.degreeCertificatePath : `https://ats.whitehorsemanpower.in${emp.degreeCertificatePath}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                        >
+                          <ExternalLink className="w-3 h-3" /> View Degree
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
               </PanelSection>
 
               <PanelSection icon={<Clock className="w-4 h-4 text-slate-400" />} title="Submission Info">

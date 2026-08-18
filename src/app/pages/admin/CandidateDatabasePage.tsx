@@ -178,14 +178,17 @@ export function CandidateDatabasePage() {
   useEffect(() => {
     Promise.all([
       api.getCandidates({ limit: '1' }),
-      api.getCandidates({ status: 'Selected', limit: '1' }),
+      api.getCandidates({ status: 'Final Select', limit: '1' }),
       api.getCandidates({ status: 'Joined', limit: '1' }),
       api.getCandidates({ limit: '1', reassignRequested: 'true' }).catch(() => ({ pagination: { total: 0 } })),
     ]).then(([all, sel, joined, reassign]) => {
+      const counts = all.statusCounts || {};
+      const selectedCount = sel.pagination?.total ?? (counts['Final Select'] || counts['Selected'] || 0);
+      const joinedCount = joined.pagination?.total ?? (counts['Joined'] || 0);
       setStats({
-        total: all.pagination?.total || 0,
-        selected: sel.pagination?.total || 0,
-        joined: joined.pagination?.total || 0,
+        total: all.pagination?.totalCandidates || all.totalCount || all.pagination?.total || 0,
+        selected: selectedCount,
+        joined: joinedCount,
         reassignPending: (reassign as any).pagination?.total || 0,
       });
     }).catch(() => {});

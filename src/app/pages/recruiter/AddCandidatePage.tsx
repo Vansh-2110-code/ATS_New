@@ -199,7 +199,7 @@ const EMPTY_FORM = {
   qualification: '',
   university: '',
   yearOfGraduation: '',
-  experienceYears: '0',
+  experienceYears: '',
   currentCompany: '',
   gender: '',
 
@@ -715,17 +715,12 @@ export function AddCandidatePage() {
           fd.append('finalDetailsSubmitted', 'true');
         }
         if (form.candidateAge) fd.append('candidateAge', form.candidateAge);
-        if (form.recruiterStatus) {
-          fd.append('status', form.recruiterStatus);
-        } else {
-          fd.append('status', 'Eligible');
-        }
+        
+        const chosenStatus = form.firstCallStatus || form.recruiterStatus || 'Eligible';
+        fd.append('status', chosenStatus);
       } else {
-        if (form.recruiterStatus) {
-          fd.append('status', form.recruiterStatus);
-        } else {
-          fd.append('status', 'Eligible');
-        }
+        const chosenStatus = form.firstCallStatus || form.recruiterStatus || 'Eligible';
+        fd.append('status', chosenStatus);
       }
 
       // Interview Status
@@ -1318,17 +1313,15 @@ export function AddCandidatePage() {
               <div className="grid sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>
-                    Total Experience (Years)
+                    Total Experience
                   </label>
-                  <select
+                  <input
+                    type="text"
                     value={form.experienceYears}
                     onChange={e => set('experienceYears', e.target.value)}
+                    placeholder="e.g. 2 Years, 6 Months, Fresher"
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400"
-                  >
-                    {EXPERIENCE_OPTIONS.map(y => (
-                      <option key={y} value={y}>{y === '30+' ? '30+ Years' : `${y} Year${y === '1' ? '' : 's'}`}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 <div>

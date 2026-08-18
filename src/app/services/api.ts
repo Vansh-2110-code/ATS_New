@@ -476,7 +476,53 @@ class ApiService {
 
   async getLeaveBalance(userId?: string) {
     const query = userId ? `?userId=${userId}` : '';
-    return this.request<any>(`/attendance/leave-balance${query}`);
+    return this.request<any>(`/leaves/balance${query}`);
+  }
+
+  async applyLeave(data: { leaveType: string; fromDate: string; toDate: string; daysCount: number; reason: string }) {
+    return this.request<any>('/leaves/apply', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getMyLeaveRequests() {
+    return this.request<any[]>('/leaves/my');
+  }
+
+  async getPendingLeaveRequests() {
+    return this.request<any[]>('/leaves/pending');
+  }
+
+  async reviewLeaveRequest(id: string, action: 'Approve' | 'Reject', reviewRemarks?: string) {
+    return this.request<any>(`/leaves/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ action, reviewRemarks }),
+    });
+  }
+
+  async getAllLeaveRequests(params: Record<string, string> = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request<any[]>(`/leaves/all${query ? `?${query}` : ''}`);
+  }
+
+  async checkSalarySlipDownload(month: number, year: number, userId?: string) {
+    const query = new URLSearchParams({ month: String(month), year: String(year), ...(userId ? { userId } : {}) }).toString();
+    return this.request<any>(`/finance/salary/download-status?${query}`);
+  }
+
+  async recordSalarySlipDownload(month: number, year: number, userId?: string) {
+    return this.request<any>('/finance/salary/download-record', {
+      method: 'POST',
+      body: JSON.stringify({ month, year, userId }),
+    });
+  }
+
+  async resetSalarySlipDownload(month: number, year: number, userId: string) {
+    return this.request<any>('/finance/salary/download-reset', {
+      method: 'POST',
+      body: JSON.stringify({ month, year, userId }),
+    });
   }
 
   async exportAttendanceExcel(params: Record<string, string> = {}) {

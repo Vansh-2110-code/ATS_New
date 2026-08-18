@@ -278,37 +278,43 @@ exports.tlDashboard = async (req, res, next) => {
         }
       ];
 
-      if (division && division !== 'All') {
-        andConditions.push({ division });
-      }
-      if (selectedRange !== 'all') {
-        andConditions.push({ createdAt: dateFilter });
-      }
-      if (clientFilter && clientFilter !== 'All Companies') {
-        const companyRegex = new RegExp(`^${clientFilter.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
-        andConditions.push({
-          $or: [
-            { clientName: companyRegex },
-            { company: companyRegex },
-            { client: companyRegex },
-          ]
-        });
-      }
+      const recruiterBaseNoDate = { $and: andConditions };
 
-      const recruiterBaseMatch = { $and: andConditions };
+      const recruiterBaseMatch = selectedRange === 'all'
+        ? recruiterBaseNoDate
+        : { $and: [...andConditions, { createdAt: dateFilter }] };
 
-      const candMatch = (extraStatus) => {
+      const stageMatch = (statuses) => {
+        if (selectedRange === 'all') {
+          return { ...recruiterBaseNoDate, status: { $in: statuses } };
+        }
         return {
-          ...recruiterBaseMatch,
-          ...extraStatus
+          ...recruiterBaseNoDate,
+          status: { $in: statuses },
+          $or: [
+            { updatedAt: dateFilter },
+            { createdAt: dateFilter }
+          ]
         };
       };
 
-      const eligible = await Candidate.countDocuments(candMatch({ status: { $in: ['Eligible', 'Eligible Candidates'] } }));
-      const finalSelect = await Candidate.countDocuments(candMatch({ status: { $in: ['Final Select', 'Final Round Scheduled', 'Final Round Completed', 'L1 Select', 'Client Select', 'Selected'] } }));
-      const docCompleted = await Candidate.countDocuments(candMatch({ status: { $in: ['Documentation Completed', 'Documentation Incomplete', 'Document Initialized', 'Documennt Initialted', 'Documentation'] } }));
-      const offerAccept = await Candidate.countDocuments(candMatch({ status: { $in: ['Offer Accept', 'Offer Accepted', 'Offered', 'Offer Released', 'Yet To Join'] } }));
-      const joined = await Candidate.countDocuments(candMatch({ status: 'Joined' }));
+      const eligible = await Candidate.countDocuments(stageMatch(['Eligible', 'Eligible Candidates', 'Call Back']));
+      const finalSelect = await Candidate.countDocuments(stageMatch(['Final Select', 'Final Round Scheduled', 'Final Round Completed', 'L1 Select', 'L2 Select', 'Client Select', 'Selected']));
+      const docCompleted = await Candidate.countDocuments(stageMatch(['Documentation Completed', 'Documentation Incomplete', 'Document Initialized', 'Documennt Initialted', 'Documentation', 'Document Pending', 'Documents Pending']));
+      const offerAccept = await Candidate.countDocuments(stageMatch(['Offer Accept', 'Offer Accepted', 'Offered', 'Offer Released', 'Yet To Join', 'Waiting for Offer']));
+      
+      const joinedMatch = selectedRange === 'all'
+        ? { ...recruiterBaseNoDate, status: 'Joined' }
+        : {
+            ...recruiterBaseNoDate,
+            status: 'Joined',
+            $or: [
+              { dateOfJoining: dateFilter },
+              { updatedAt: dateFilter },
+              { createdAt: dateFilter }
+            ]
+          };
+      const joined = await Candidate.countDocuments(joinedMatch);
 
       const totalCalls = await Candidate.countDocuments({
         ...recruiterBaseMatch,
@@ -389,12 +395,11 @@ exports.tlDashboard = async (req, res, next) => {
     };
 
     if ((currentUser.role === 'admin' || currentUser.role === 'manager') && !tlId && (!recruiter || recruiter === 'All Recruiters' || recruiter === 'All')) {
-      const summaryAnd = [];
-      if (division && division !== 'All') summaryAnd.push({ division });
-      if (selectedRange !== 'all') summaryAnd.push({ createdAt: dateFilter });
+      const summaryNoDate = [];
+      if (division && division !== 'All') summaryNoDate.push({ division });
       if (clientFilter && clientFilter !== 'All Companies') {
         const companyRegex = new RegExp(`^${clientFilter.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
-        summaryAnd.push({
+        summaryNoDate.push({
           $or: [
             { clientName: companyRegex },
             { company: companyRegex },
@@ -402,15 +407,41 @@ exports.tlDashboard = async (req, res, next) => {
           ]
         });
       }
-      const summaryMatch = summaryAnd.length > 0 ? { $and: summaryAnd } : {};
+      const baseSummaryMatch = summaryNoDate.length > 0 ? { $and: summaryNoDate } : {};
 
-      summary.eligible = await Candidate.countDocuments({ ...summaryMatch, status: { $in: ['Eligible', 'Eligible Candidates'] } });
-      summary.finalSelect = await Candidate.countDocuments({ ...summaryMatch, status: { $in: ['Final Select', 'Final Round Scheduled', 'Final Round Completed', 'L1 Select', 'Client Select', 'Selected'] } });
-      summary.docCompleted = await Candidate.countDocuments({ ...summaryMatch, status: { $in: ['Documentation Completed', 'Documentation Incomplete', 'Document Initialized', 'Documennt Initialted', 'Documentation'] } });
-      summary.offerAccept = await Candidate.countDocuments({ ...summaryMatch, status: { $in: ['Offer Accept', 'Offer Accepted', 'Offered', 'Offer Released', 'Yet To Join'] } });
-      summary.joined = await Candidate.countDocuments({ ...summaryMatch, status: 'Joined' });
+      const summaryStageMatch = (statuses) => {
+        if (selectedRange === 'all') {
+          return { ...baseSummaryMatch, status: { $in: statuses } };
+        }
+        return {
+          ...baseSummaryMatch,
+          status: { $in: statuses },
+          $or: [
+            { updatedAt: dateFilter },
+            { createdAt: dateFilter }
+          ]
+        };
+      };
+
+      summary.eligible = await Candidate.countDocuments(summaryStageMatch(['Eligible', 'Eligible Candidates', 'Call Back']));
+      summary.finalSelect = await Candidate.countDocuments(summaryStageMatch(['Final Select', 'Final Round Scheduled', 'Final Round Completed', 'L1 Select', 'L2 Select', 'Client Select', 'Selected']));
+      summary.docCompleted = await Candidate.countDocuments(summaryStageMatch(['Documentation Completed', 'Documentation Incomplete', 'Document Initialized', 'Documennt Initialted', 'Documentation', 'Document Pending', 'Documents Pending']));
+      summary.offerAccept = await Candidate.countDocuments(summaryStageMatch(['Offer Accept', 'Offer Accepted', 'Offered', 'Offer Released', 'Yet To Join', 'Waiting for Offer']));
+      summary.joined = await Candidate.countDocuments(
+        selectedRange === 'all'
+          ? { ...baseSummaryMatch, status: 'Joined' }
+          : {
+              ...baseSummaryMatch,
+              status: 'Joined',
+              $or: [
+                { dateOfJoining: dateFilter },
+                { updatedAt: dateFilter },
+                { createdAt: dateFilter }
+              ]
+            }
+      );
       summary.totalCalls = await Candidate.countDocuments({
-        ...summaryMatch,
+        ...baseSummaryMatch,
         $or: [
           { firstCallDate: { $ne: null, $ne: '' } },
           { firstCallStatus: { $ne: null, $ne: '' } },
@@ -1100,7 +1131,13 @@ exports.advancedReports = async (req, res, next) => {
 
     // 1. Recruiter performance
     const recruiterReport = await Candidate.aggregate([
-      { $match: { createdAt: { $gte: start, $lt: end }, ...divisionMatch } },
+      { 
+        $match: { 
+          createdAt: { $gte: start, $lt: end }, 
+          ...divisionMatch,
+          assignedRecruiterName: { $nin: [null, '', 'General Pool', 'Unassigned'] }
+        } 
+      },
       {
         $group: {
           _id: '$assignedRecruiterName',
@@ -1407,7 +1444,11 @@ exports.advancedReports = async (req, res, next) => {
         rawDoj: doj,
         revenue: rev,
         recruiter: c.assignedRecruiterName || 'Unassigned',
-        joinedDate: dojStr
+        teamLeader: (c.assignedRecruiter && recruiterToTlMap[c.assignedRecruiter.toString()]) || 
+                    (c.assignedRecruiterName && recruiterNameToTlMap[c.assignedRecruiterName]) || 
+                    'Unassigned',
+        joinedDate: dojStr,
+        status: c.status || 'Joined'
       };
     });
 

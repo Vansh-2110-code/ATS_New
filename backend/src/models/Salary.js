@@ -25,6 +25,17 @@ const salarySchema = new mongoose.Schema({
     addedAt: { type: Date, default: Date.now },
   }],
 
+  // Download tracking (Single download restriction)
+  downloadCount: { type: Number, default: 0 },
+  firstDownloadedAt: Date,
+  downloadLocked: { type: Boolean, default: false },
+
+  // Attendance breakdown
+  lateLoginsCount: { type: Number, default: 0 },
+  lateDeductionsDays: { type: Number, default: 0 },
+  leavesApprovedDays: { type: Number, default: 0 },
+  unpaidLeavesDays: { type: Number, default: 0 },
+
   // Override fields
   isOverridden: { type: Boolean, default: false },
   overriddenBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

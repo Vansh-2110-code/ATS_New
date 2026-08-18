@@ -587,19 +587,26 @@ export function CandidateProfilePage() {
 
   const handleSaveJoiningDetails = async () => {
     if (!candidate?._id) return;
+    const salaryNum = parseInt(String(joiningSalary).replace(/[^0-9]/g, ''), 10);
+    const ctcNum = (offeredCTC && offeredCTC >= 10000) ? offeredCTC : salaryNum;
+    if (isNaN(salaryNum) || salaryNum < 10000) {
+      alert('Please enter the full annual CTC figure in rupees (e.g. 550000 and not 5.5).');
+      return;
+    }
     setSavingJoining(true);
     try {
       const updated = await api.updateCandidate(candidate._id, {
         clientName: joiningClientName,
         status: 'Joined',
+        joiningSalary: String(salaryNum),
         offerDetails: {
           ...(candidate.offerDetails || {}),
           dateOfJoining: joiningDate,
-          joiningSalary,
+          joiningSalary: String(salaryNum),
           designationOffered: joiningDesignation,
-          offeredCTC,
+          offeredCTC: ctcNum,
           placementPercentage,
-          revenueGenerated
+          revenueGenerated: Math.round(ctcNum * (placementPercentage / 100))
         }
       });
       setCandidate(updated.candidate || updated);
@@ -828,7 +835,7 @@ export function CandidateProfilePage() {
               <div><p className="text-slate-400 text-xs mb-1">Division</p><p className="text-slate-700 font-semibold">{candidate.division || 'BPO'}</p></div>
               <div><p className="text-slate-400 text-xs mb-1">Source</p><p className="text-slate-700" style={{ fontWeight: 500 }}>{candidate.source || 'N/A'}</p></div>
               <div><p className="text-slate-400 text-xs mb-1">Added On</p><p className="text-slate-700" style={{ fontWeight: 500 }}>{candidate.createdAt ? new Date(candidate.createdAt).toLocaleDateString() : 'N/A'}</p></div>
-              <div><p className="text-slate-400 text-xs mb-1">Assigned To</p><p className="text-slate-700" style={{ fontWeight: 500 }}>{candidate.assignedRecruiterName || candidate.assignedRecruiter?.name || 'Unassigned'}</p></div>
+              <div><p className="text-slate-400 text-xs mb-1">Assigned To</p><p className="text-slate-700" style={{ fontWeight: 500 }}>{candidate.assignedRecruiterName && candidate.assignedRecruiterName !== 'General Pool' ? candidate.assignedRecruiterName : (candidate.assignedRecruiter?.name || 'Unassigned')}</p></div>
               {candidate.candidateAge && (
                 <div>
                   <p className="text-slate-400 text-xs mb-1 flex items-center gap-1">
@@ -1945,12 +1952,15 @@ export function CandidateProfilePage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Salary *</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Monthly In-Hand / Salary (₹) *</label>
                     <input
                       type="text"
                       value={joiningSalary}
-                      onChange={e => setJoiningSalary(e.target.value)}
-                      placeholder="₹45,000"
+                      onChange={e => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        setJoiningSalary(raw);
+                      }}
+                      placeholder="e.g. 45000"
                       className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-400 shadow-sm"
                     />
                   </div>
@@ -1969,17 +1979,22 @@ export function CandidateProfilePage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Offered CTC (₹) *</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Offered Annual CTC (₹) *</label>
                     <input
-                      type="number"
-                      value={offeredCTC}
+                      type="text"
+                      value={offeredCTC ? String(offeredCTC) : ''}
                       onChange={e => {
-                        const val = parseInt(e.target.value) || 0;
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        const val = parseInt(raw, 10) || 0;
                         setOfferedCTC(val);
                         setRevenueGenerated(Math.round(val * (placementPercentage / 100)));
                       }}
+                      placeholder="e.g. 550000"
                       className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-400 shadow-sm"
                     />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Enter full figure (e.g. <strong>550000</strong>, not 5.5).
+                    </p>
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Placement % *</label>

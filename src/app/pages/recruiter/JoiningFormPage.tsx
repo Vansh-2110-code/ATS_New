@@ -120,10 +120,16 @@ interface JoiningFormData {
   references: ReferenceEntry[];
   isApproved?: boolean;
 
-  // KYC
+  // KYC & Documents
   bloodGroup: string;
   panNumber: string;
   aadhaarNumber: string;
+  panCardFile: File | null;
+  panCardPath?: string;
+  aadhaarCardFile: File | null;
+  aadhaarCardPath?: string;
+  highestDocumentFile: File | null;
+  highestDocumentPath?: string;
 }
 
 // Helper function to calculate age from DOB
@@ -190,6 +196,9 @@ export function JoiningFormPage() {
     bloodGroup: '',
     panNumber: '',
     aadhaarNumber: '',
+    panCardFile: null,
+    aadhaarCardFile: null,
+    highestDocumentFile: null,
     educationQualifications: {
       sslc: { institution: '', yearOfPassing: '', gradePercentage: '' },
       hsc: { institution: '', yearOfPassing: '', gradePercentage: '' },
@@ -346,15 +355,29 @@ export function JoiningFormPage() {
   const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(file.type)) {
-        setErrors(prev => ({ ...prev, [field]: 'Only PDF and DOC files allowed' }));
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'image/jpeg',
+        'image/png',
+        'image/jpg'
+      ];
+      if (!allowedTypes.includes(file.type)) {
+        setErrors(prev => ({ ...prev, [field]: 'Only PDF, DOCX, JPG, and PNG files allowed' }));
         return;
       }
       if (file.size > 10 * 1024 * 1024) {
         setErrors(prev => ({ ...prev, [field]: 'File size should be less than 10MB' }));
         return;
       }
-      if (field === 'marksheet') {
+      if (field === 'panCard') {
+        set('panCardFile', file);
+      } else if (field === 'aadhaarCard') {
+        set('aadhaarCardFile', file);
+      } else if (field === 'highestDocument') {
+        set('highestDocumentFile', file);
+      } else if (field === 'marksheet') {
         set('highestQualification', { ...form.highestQualification, marksheetFile: file });
       } else if (field === 'degreeCertificate') {
         set('highestQualification', { ...form.highestQualification, degreeCertificateFile: file });
@@ -496,11 +519,37 @@ export function JoiningFormPage() {
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // Required fields
+    // Required personal & contact fields
     if (!form.fullName) newErrors.fullName = 'Name required';
     if (!form.dateOfBirth) newErrors.dateOfBirth = 'DOB required';
     if (!form.phone || form.phone.replace(/\D/g, '').length < 10) newErrors.phone = 'Valid 10-digit phone required';
     if (!form.permanentAddress) newErrors.permanentAddress = 'Permanent address required';
+
+    // ── Mandatory KYC & Document Validations ──
+    // 1. PAN Card & Number
+    if (!form.panNumber || form.panNumber.trim().length !== 10) {
+      newErrors.panNumber = 'Valid 10-character PAN number required (e.g. ABCDE1234F)';
+    }
+    if (!form.panCardFile && !form.panCardPath) {
+      newErrors.panCard = 'PAN card document upload is mandatory';
+    }
+
+    // 2. Aadhaar Card & Number
+    if (!form.aadhaarNumber || form.aadhaarNumber.replace(/\D/g, '').length !== 12) {
+      newErrors.aadhaarNumber = 'Valid 12-digit Aadhaar number required';
+    }
+    if (!form.aadhaarCardFile && !form.aadhaarCardPath) {
+      newErrors.aadhaarCard = 'Aadhaar card document upload is mandatory';
+    }
+
+    // 3. Highest Qualification Document (Marksheet or Degree or Highest Doc)
+    const hasHighestDoc = form.highestDocumentFile || form.highestDocumentPath ||
+      form.highestQualification?.marksheetFile || form.highestQualification?.marksheetPath || (form as any).marksheetPath ||
+      form.highestQualification?.degreeCertificateFile || form.highestQualification?.degreeCertificatePath || (form as any).degreeCertificatePath;
+
+    if (!hasHighestDoc) {
+      newErrors.highestDocument = 'Highest qualification document (Marksheet / Degree Certificate) is mandatory';
+    }
 
     // Employment history (only required for non-freshers)
     if (!form.isFresher) {
@@ -525,6 +574,26 @@ export function JoiningFormPage() {
     // Letter of Undertaking
     if (!form.undertakingAccepted) newErrors.undertaking = 'Must accept Letter of Undertaking';
 
+    // Automatically expand sections with validation errors
+    if (newErrors.panNumber || newErrors.panCard || newErrors.aadhaarNumber || newErrors.aadhaarCard) {
+      setExpandedSections(s => ({ ...s, kyc: true }));
+    }
+    if (newErrors.highestDocument || newErrors.marksheet || newErrors.degreeCertificate) {
+      setExpandedSections(s => ({ ...s, education: true }));
+    }
+    if (newErrors.permanentAddress || newErrors.phone) {
+      setExpandedSections(s => ({ ...s, address: true }));
+    }
+    if (newErrors.fullName || newErrors.dateOfBirth) {
+      setExpandedSections(s => ({ ...s, personal: true }));
+    }
+    if (newErrors.references) {
+      setExpandedSections(s => ({ ...s, references: true }));
+    }
+    if (newErrors.undertaking) {
+      setExpandedSections(s => ({ ...s, undertaking: true }));
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -544,10 +613,18 @@ export function JoiningFormPage() {
       Object.entries(form).forEach(([key, value]) => {
         if (key === 'photo' && form.photo) {
           fd.append('photo', form.photo);
+        } else if (key === 'resume' && form.resume) {
+          fd.append('resume', form.resume);
+        } else if (key === 'panCardFile' && form.panCardFile) {
+          fd.append('panCard', form.panCardFile);
+        } else if (key === 'aadhaarCardFile' && form.aadhaarCardFile) {
+          fd.append('aadhaarCard', form.aadhaarCardFile);
+        } else if (key === 'highestDocumentFile' && form.highestDocumentFile) {
+          fd.append('highestDocument', form.highestDocumentFile);
         } else if (key === 'educationQualifications') {
           fd.append(key, JSON.stringify(value));
         } else if (key === 'highestQualification') {
-          const { marksheetFile, degreeCertificateFile, ...rest } = value;
+          const { marksheetFile, degreeCertificateFile, highestDocumentFile, ...rest } = value;
           fd.append(key, JSON.stringify(rest));
           if (marksheetFile) fd.append('marksheet', marksheetFile);
           if (degreeCertificateFile) fd.append('degreeCertificate', degreeCertificateFile);
@@ -559,8 +636,11 @@ export function JoiningFormPage() {
           });
         } else if (key === 'references') {
           fd.append(key, JSON.stringify(value));
-        } else if (typeof value !== 'object' || value === null) {
-          fd.append(key, String(value));
+        } else if (
+          !['_id', '__v', 'createdAt', 'updatedAt', 'photo', 'resume', 'panCardFile', 'aadhaarCardFile', 'highestDocumentFile'].includes(key) &&
+          (typeof value !== 'object' || value === null)
+        ) {
+          fd.append(key, String(value ?? ''));
         }
       });
 
@@ -850,7 +930,7 @@ export function JoiningFormPage() {
 
         {/* ── SECTION 2.5: KYC & Documents ── */}
         <CollapsibleSection
-          title="KYC & Document Details"
+          title="KYC & Document Details (Mandatory)"
           isOpen={expandedSections.kyc}
           onToggle={() => setExpandedSections(s => ({ ...s, kyc: !s.kyc }))}
         >
@@ -862,15 +942,39 @@ export function JoiningFormPage() {
                   placeholder="e.g. O+, A+" className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-green-400 bg-white" />
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 600 }}>PAN Number</label>
+                <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 600 }}>PAN Number *</label>
                 <input type="text" value={form.panNumber || ''} onChange={e => set('panNumber', e.target.value.toUpperCase())}
-                  placeholder="10-digit PAN" maxLength={10} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-green-400 bg-white" />
+                  placeholder="10-character PAN (e.g. ABCDE1234F)" maxLength={10} className={`w-full px-3 py-2 border rounded-lg text-sm outline-none bg-white ${errors.panNumber ? 'border-red-400' : 'border-slate-200 focus:border-green-400'}`} />
+                {errors.panNumber && <p className="text-xs text-red-600 mt-1">{errors.panNumber}</p>}
               </div>
               <div>
-                <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 600 }}>Aadhaar Number</label>
+                <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 600 }}>Aadhaar Number *</label>
                 <input type="tel" value={form.aadhaarNumber || ''} onChange={e => set('aadhaarNumber', e.target.value.replace(/\D/g, '').slice(0, 12))}
-                  placeholder="12-digit Aadhaar" maxLength={12} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-green-400 bg-white" />
+                  placeholder="12-digit Aadhaar" maxLength={12} className={`w-full px-3 py-2 border rounded-lg text-sm outline-none bg-white ${errors.aadhaarNumber ? 'border-red-400' : 'border-slate-200 focus:border-green-400'}`} />
+                {errors.aadhaarNumber && <p className="text-xs text-red-600 mt-1">{errors.aadhaarNumber}</p>}
               </div>
+            </div>
+
+            {/* Mandatory KYC Document Uploads */}
+            <div className="grid sm:grid-cols-2 gap-4 pt-4 border-t border-slate-200">
+              <FileUploadField
+                label="PAN Card Document / Image *"
+                file={form.panCardFile}
+                existingPath={form.panCardPath}
+                onUpload={(e: any) => handleDocumentUpload(e, 'panCard')}
+                error={errors.panCard}
+                onRemove={() => set('panCardFile', null)}
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+              />
+              <FileUploadField
+                label="Aadhaar Card Document / Image *"
+                file={form.aadhaarCardFile}
+                existingPath={form.aadhaarCardPath}
+                onUpload={(e: any) => handleDocumentUpload(e, 'aadhaarCard')}
+                error={errors.aadhaarCard}
+                onRemove={() => set('aadhaarCardFile', null)}
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+              />
             </div>
           </fieldset>
         </CollapsibleSection>
@@ -970,22 +1074,41 @@ export function JoiningFormPage() {
                   className="px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-green-400" />
               </div>
 
-              {/* Document Uploads for Education */}
-              <div className="grid sm:grid-cols-2 gap-4 mt-4 pt-4 border-t border-slate-200">
-                <FileUploadField
-                  label="Marksheet *"
-                  file={form.highestQualification.marksheetFile}
-                  onUpload={(e) => handleDocumentUpload(e, 'marksheet')}
-                  error={errors.marksheet}
-                  onRemove={() => set('highestQualification', { ...form.highestQualification, marksheetFile: null })}
-                />
-                <FileUploadField
-                  label="Degree Certificate *"
-                  file={form.highestQualification.degreeCertificateFile}
-                  onUpload={(e) => handleDocumentUpload(e, 'degreeCertificate')}
-                  error={errors.degreeCertificate}
-                  onRemove={() => set('highestQualification', { ...form.highestQualification, degreeCertificateFile: null })}
-                />
+              {/* Document Uploads for Education / Highest Qualification */}
+              <div className="space-y-3 mt-4 pt-4 border-t border-slate-200">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Highest Qualification Document *</h4>
+                  <span className="text-[11px] text-slate-400">Upload Marksheet, Degree Certificate, or Highest Document</span>
+                </div>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <FileUploadField
+                    label="Highest Qualification Document *"
+                    file={form.highestDocumentFile}
+                    existingPath={form.highestDocumentPath}
+                    onUpload={(e: any) => handleDocumentUpload(e, 'highestDocument')}
+                    error={errors.highestDocument}
+                    onRemove={() => set('highestDocumentFile', null)}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  />
+                  <FileUploadField
+                    label="Marksheet (Optional if doc above)"
+                    file={form.highestQualification.marksheetFile}
+                    existingPath={form.highestQualification.marksheetPath || (form as any).marksheetPath}
+                    onUpload={(e: any) => handleDocumentUpload(e, 'marksheet')}
+                    error={errors.marksheet}
+                    onRemove={() => set('highestQualification', { ...form.highestQualification, marksheetFile: null })}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  />
+                  <FileUploadField
+                    label="Degree Certificate (Optional)"
+                    file={form.highestQualification.degreeCertificateFile}
+                    existingPath={form.highestQualification.degreeCertificatePath || (form as any).degreeCertificatePath}
+                    onUpload={(e: any) => handleDocumentUpload(e, 'degreeCertificate')}
+                    error={errors.degreeCertificate}
+                    onRemove={() => set('highestQualification', { ...form.highestQualification, degreeCertificateFile: null })}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  />
+                </div>
               </div>
             </div>
 
@@ -1225,28 +1348,38 @@ function CollapsibleSection({ title, isOpen, onToggle, children }: any) {
   );
 }
 
-function FileUploadField({ label, file, onUpload, error, onRemove }: any) {
+function FileUploadField({ label, file, existingPath, onUpload, error, onRemove, accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png' }: any) {
   const inputRef = useRef<HTMLInputElement>(null);
   return (
     <div>
       <label className="block text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>{label}</label>
-      <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center cursor-pointer hover:border-green-400 transition-colors"
-        onClick={() => inputRef.current?.click()}>
+      <div
+        className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
+          error ? 'border-red-300 bg-red-50/30' : 'border-slate-300 hover:border-green-400'
+        }`}
+        onClick={() => inputRef.current?.click()}
+      >
         {file ? (
           <div className="space-y-1">
             <FileText className="w-6 h-6 text-green-600 mx-auto" />
             <p className="text-xs text-slate-600 font-semibold">{file.name}</p>
             <p className="text-xs text-slate-400">{(file.size / 1024).toFixed(1)} KB</p>
           </div>
+        ) : existingPath ? (
+          <div className="space-y-1">
+            <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto" />
+            <p className="text-xs text-emerald-700 font-semibold">Document on File</p>
+            <p className="text-[11px] text-slate-400">Click to replace file</p>
+          </div>
         ) : (
           <div className="space-y-1">
             <Upload className="w-6 h-6 text-slate-400 mx-auto" />
             <p className="text-xs text-slate-600">Click to upload</p>
-            <p className="text-xs text-slate-400">PDF, DOCX (Max 10MB)</p>
+            <p className="text-xs text-slate-400">PDF, JPG, PNG, DOCX (Max 10MB)</p>
           </div>
         )}
       </div>
-      <input ref={inputRef} type="file" accept=".pdf,.doc,.docx" onChange={onUpload} className="hidden" />
+      <input ref={inputRef} type="file" accept={accept} onChange={onUpload} className="hidden" />
       {file && (
         <button
           type="button"
@@ -1256,7 +1389,19 @@ function FileUploadField({ label, file, onUpload, error, onRemove }: any) {
           <X className="w-3 h-3" /> Remove
         </button>
       )}
-      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+      {existingPath && !file && (
+        <div className="mt-1.5 flex items-center justify-start">
+          <a
+            href={existingPath.startsWith('http') ? existingPath : `https://ats.whitehorsemanpower.in${existingPath}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium"
+          >
+            <Eye className="w-3.5 h-3.5" /> View Uploaded Document
+          </a>
+        </div>
+      )}
+      {error && <p className="text-xs text-red-600 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3 flex-shrink-0" /> {error}</p>}
     </div>
   );
 }

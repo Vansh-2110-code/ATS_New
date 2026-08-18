@@ -35,4 +35,9 @@ router.get('/salary-access/check', authorize('recruiter', 'tl', 'manager', 'admi
 router.put('/salary-access/requests/:id/approve', authorize('manager', 'admin'), ctrl.approveSalaryAccess);
 router.put('/salary-access/requests/:id/reject', authorize('manager', 'admin'), ctrl.rejectSalaryAccess);
 
+// Salary Download Tracking (Single Download Policy)
+router.post('/salary/download-record', authorize('recruiter', 'tl', 'manager', 'admin'), ctrl.recordSalarySlipDownload);
+router.get('/salary/download-status', authorize('recruiter', 'tl', 'manager', 'admin'), ctrl.checkSalarySlipDownload);
+router.post('/salary/download-reset', authorize('admin', 'manager'), ctrl.resetSalarySlipDownload);
+
 module.exports = router;

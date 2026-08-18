@@ -34,10 +34,12 @@ export function ReportsPage() {
   const [activeJRsData, setActiveJRsData] = useState<any[]>([]);
   const [activeProfilesData, setActiveProfilesData] = useState<any[]>([]);
   const [expectedRevenueData, setExpectedRevenueData] = useState<{
+    joinedCandidates?: any[];
     customerRevenue: any[];
     divisionRevenue: any[];
     totalExpectedRevenue: number;
-  }>({ customerRevenue: [], divisionRevenue: [], totalExpectedRevenue: 0 });
+    totalJoinedRevenue?: number;
+  }>({ joinedCandidates: [], customerRevenue: [], divisionRevenue: [], totalExpectedRevenue: 0 });
   const [leadPerformanceData, setLeadPerformanceData] = useState<any[]>([]);
 
   // Sub-filters for views
@@ -46,7 +48,7 @@ export function ReportsPage() {
   const [divisionFilter, setDivisionFilter] = useState<string>('All Divisions');
   const [tlFilter, setTlFilter] = useState<string>('All Team Leads');
   const [tlsList, setTlsList] = useState<string[]>([]);
-  const [revenueSubView, setRevenueSubView] = useState<'customer' | 'division'>('customer');
+  const [revenueSubView, setRevenueSubView] = useState<'customer' | 'division' | 'candidate'>('customer');
   const [expandedJR, setExpandedJR] = useState<string | null>(null);
 
   const fmt = (n: number) => {
@@ -139,9 +141,39 @@ export function ReportsPage() {
     return sortDir === 'asc' ? <ChevronUp className="w-3 h-3 text-green-500" /> : <ChevronDown className="w-3 h-3 text-green-500" />;
   };
 
+  const getActiveInactiveGroup = (status: string) => {
+    if (!status) return 'Active';
+    const s = String(status).trim().toLowerCase();
+    const inactiveExact = [
+      'candidate drop post l2 select', 'no show', 'test reject', 'not eligible', 'final reject',
+      'l1 reject', 'l2 reject', 'offer reject', 'duplicate-client', 'duplicate client',
+      'not interested', 'no response', 'not reachable', 'candidate drop post l1 select',
+      'candidate drop during final stage', 'vna reject', 'joined and abort', 'black list', 'blacklist',
+      'exited', 'rejected', 'wrong number', 'unreachable', 'did not pick', 'unanswered calls',
+      'offer declined', 'rejected – communication', 'rejected – experience mismatch',
+      'rejected – salary mismatch', 'rejected – location constraint', 'rejected – notice period',
+      'rejected – second round', 'rejected – interview round', 'background verification failed',
+      'duplicate profile'
+    ];
+    if (inactiveExact.includes(s)) return 'Inactive';
+    if (
+      s.includes('reject') || s.includes('drop') || s.includes('no show') ||
+      s.includes('not eligible') || s.includes('duplicate') || s.includes('abort') ||
+      s.includes('black') || s.includes('no response') || s.includes('not interested') ||
+      s.includes('did not pick') || s.includes('unreachable') || s.includes('wrong number')
+    ) {
+      return 'Inactive';
+    }
+    return 'Active';
+  };
+
   // Filtered Active Profiles
   const filteredActiveProfiles = activeProfilesData.filter(c => {
-    if (activeProfileFilter === 'Joined') {
+    if (activeProfileFilter === 'Active') {
+      if (getActiveInactiveGroup(c.status) !== 'Active') return false;
+    } else if (activeProfileFilter === 'Inactive') {
+      if (getActiveInactiveGroup(c.status) !== 'Inactive') return false;
+    } else if (activeProfileFilter === 'Joined') {
       if (c.status !== 'Joined') return false;
     } else if (activeProfileFilter === 'Documentation') {
       if (!['Documentation', 'Document Pending', 'Documents Pending', 'Document Initialized', 'Documentation Completed', 'Documentation Incomplete'].includes(c.status)) return false;
@@ -177,11 +209,14 @@ export function ReportsPage() {
         filteredActiveJRs.map(j => `"${j.jrNumber}","${j.customerName}","${j.jobTitle}","${j.division || 'BPO'}","${j.teamLeader || 'Unassigned'}","${j.skills.replace(/"/g, '""')}",${j.positions},${j.activeProfilesCount},"${j.createdBy}","${j.status}"`).join('\n');
     } else if (activeView === 'active-profiles') {
       filename = `active_profiles_report_${dateFrom}_${dateTo}.csv`;
-      csv = 'Candidate Name,Phone,Email,Position Applied,Customer Name,Division,Active Status,JR Number,Recruiter,Team Leader,Days Pending,Last Updated\n' +
-        filteredActiveProfiles.map(c => `"${c.name}","${c.phone}","${c.email}","${c.positionApplied}","${c.clientName}","${c.division || 'BPO'}","${c.status}","${c.jrNumber}","${c.recruiter}","${c.teamLeader || 'Unassigned'}",${c.daysPending},"${c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : ''}"`).join('\n');
+      csv = 'Candidate Name,Phone,Email,Position Applied,Customer Name,Division,Active Status,Active/Inactive,JR Number,Recruiter,Team Leader,Days Pending,Last Updated\n' +
+        filteredActiveProfiles.map(c => `"${c.name}","${c.phone}","${c.email}","${c.positionApplied}","${c.clientName}","${c.division || 'BPO'}","${c.status}","${getActiveInactiveGroup(c.status)}","${c.jrNumber}","${c.recruiter}","${c.teamLeader || 'Unassigned'}",${c.daysPending},"${c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : ''}"`).join('\n');
     } else if (activeView === 'expected-revenue') {
-      filename = `expected_revenue_report_${dateFrom}_${dateTo}.csv`;
-      if (revenueSubView === 'customer') {
+      filename = `expected_revenue_report_${revenueSubView}_${dateFrom}_${dateTo}.csv`;
+      if (revenueSubView === 'candidate') {
+        csv = 'Candidate Name,Customer / Client Name,Date of Joining,Offered CTC,Recruiter,Team Leader,Revenue Generated\n' +
+          (expectedRevenueData.joinedCandidates || []).map(c => `"${c.name}","${c.customerName}","${c.doj || c.joinedDate || '—'}",${c.ctc || 0},"${c.recruiter}","${c.teamLeader || 'Unassigned'}",${c.revenue || 0}`).join('\n');
+      } else if (revenueSubView === 'customer') {
         csv = 'Customer Name,Yet To Join Count,Joined Count,Expected Revenue,Actual Joined Revenue\n' +
           expectedRevenueData.customerRevenue.map(c => `"${c.customerName}",${c.yetToJoinCount},${c.joinedCount},${c.expectedRevenue},${c.actualJoinedRevenue}`).join('\n');
       } else {
@@ -512,7 +547,7 @@ export function ReportsPage() {
               <p className="text-slate-500 text-xs mt-0.5">Filter active candidates across Documentation, Pending with Customer, Yet to Join & Screening with TL mappings</p>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {['All', 'Joined', 'Documentation', 'Pending Customer', 'Yet To Join', 'Screening'].map(flt => (
+              {['All', 'Active', 'Inactive', 'Joined', 'Documentation', 'Pending Customer', 'Yet To Join', 'Screening'].map(flt => (
                 <button
                   key={flt}
                   onClick={() => setActiveProfileFilter(flt)}
@@ -539,6 +574,7 @@ export function ReportsPage() {
                     <th className="px-3.5 py-3 font-semibold">Customer / Client</th>
                     <th className="px-3.5 py-3 font-semibold">Division</th>
                     <th className="px-3.5 py-3 font-semibold">Active Status</th>
+                    <th className="px-3.5 py-3 font-semibold">Active/Inactive</th>
                     <th className="px-3.5 py-3 font-semibold">JR Number</th>
                     <th className="px-3.5 py-3 font-semibold">Recruiter</th>
                     <th className="px-3.5 py-3 font-semibold">Team Leader</th>
@@ -548,7 +584,7 @@ export function ReportsPage() {
                 <tbody className="divide-y divide-slate-50 text-slate-700">
                   {filteredActiveProfiles.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="text-center py-12 text-slate-400">No active profiles matching the selected status filter.</td>
+                      <td colSpan={11} className="text-center py-12 text-slate-400">No active profiles matching the selected status filter.</td>
                     </tr>
                   ) : (
                     filteredActiveProfiles.map((c, idx) => (
@@ -573,6 +609,15 @@ export function ReportsPage() {
                             'bg-slate-100 text-slate-700'
                           }`}>
                             {c.status}
+                          </span>
+                        </td>
+                        <td className="px-3.5 py-3.5">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            getActiveInactiveGroup(c.status) === 'Active'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : 'bg-red-100 text-red-800 border border-red-300'
+                          }`}>
+                            {getActiveInactiveGroup(c.status)}
                           </span>
                         </td>
                         <td className="px-3.5 py-3.5 font-mono text-slate-600">{c.jrNumber}</td>
@@ -606,11 +651,11 @@ export function ReportsPage() {
               <h3 className="text-slate-800 font-bold text-sm">Expected Placement Revenue Report</h3>
               <p className="text-slate-500 text-xs mt-0.5">Projected revenue based on offered CTC and Yet to Join pipeline</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setRevenueSubView('customer')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  revenueSubView === 'customer' ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600'
+                  revenueSubView === 'customer' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
                 Customer Wise Revenue
@@ -618,33 +663,75 @@ export function ReportsPage() {
               <button
                 onClick={() => setRevenueSubView('division')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  revenueSubView === 'division' ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600'
+                  revenueSubView === 'division' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
                 Division Wise Revenue
+              </button>
+              <button
+                onClick={() => setRevenueSubView('candidate')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  revenueSubView === 'candidate' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Candidate Wise Report
               </button>
             </div>
           </div>
 
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-4 bg-violet-50/50 border-b border-violet-100 flex items-center justify-between">
-              <span className="text-slate-700 font-semibold text-xs">Total Projected Revenue:</span>
-              <span className="text-violet-700 font-extrabold text-base">{fmt(expectedRevenueData.totalExpectedRevenue)}</span>
+            <div className="p-4 bg-violet-50/50 border-b border-violet-100 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-slate-700 font-semibold text-xs">
+                {revenueSubView === 'candidate' ? 'Total Joined Candidates:' : 'Total Projected Revenue:'}
+              </span>
+              <span className="text-violet-700 font-extrabold text-base">
+                {revenueSubView === 'candidate'
+                  ? `${(expectedRevenueData.joinedCandidates || []).length} Joinees (${fmt(expectedRevenueData.totalJoinedRevenue || (expectedRevenueData.joinedCandidates || []).reduce((s, c) => s + (c.revenue || 0), 0))})`
+                  : fmt(expectedRevenueData.totalExpectedRevenue)}
+              </span>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-left text-slate-500 uppercase tracking-wide">
-                    <th className="px-5 py-3 font-semibold">{revenueSubView === 'customer' ? 'Customer / Client Name' : 'Division'}</th>
-                    <th className="px-5 py-3 font-semibold text-center">Yet To Join Candidates</th>
-                    <th className="px-5 py-3 font-semibold text-center">Joined Candidates</th>
-                    <th className="px-5 py-3 font-semibold text-right text-violet-700">Expected Revenue (Projected)</th>
-                    <th className="px-5 py-3 font-semibold text-right text-emerald-700">Actual Joined Revenue</th>
-                  </tr>
+                  {revenueSubView === 'candidate' ? (
+                    <tr className="bg-slate-50 border-b border-slate-100 text-left text-slate-500 uppercase tracking-wide">
+                      <th className="px-4 py-3 font-semibold">Candidate Name</th>
+                      <th className="px-4 py-3 font-semibold">Customer / Client Name</th>
+                      <th className="px-4 py-3 font-semibold">Date of Joining (DOJ)</th>
+                      <th className="px-4 py-3 font-semibold">CTC Offered</th>
+                      <th className="px-4 py-3 font-semibold">Recruiter</th>
+                      <th className="px-4 py-3 font-semibold">Team Leader</th>
+                      <th className="px-4 py-3 font-semibold text-right text-emerald-700">Revenue Generated</th>
+                    </tr>
+                  ) : (
+                    <tr className="bg-slate-50 border-b border-slate-100 text-left text-slate-500 uppercase tracking-wide">
+                      <th className="px-5 py-3 font-semibold">{revenueSubView === 'customer' ? 'Customer / Client Name' : 'Division'}</th>
+                      <th className="px-5 py-3 font-semibold text-center">Yet To Join Candidates</th>
+                      <th className="px-5 py-3 font-semibold text-center">Joined Candidates</th>
+                      <th className="px-5 py-3 font-semibold text-right text-violet-700">Expected Revenue (Projected)</th>
+                      <th className="px-5 py-3 font-semibold text-right text-emerald-700">Actual Joined Revenue</th>
+                    </tr>
+                  )}
                 </thead>
                 <tbody className="divide-y divide-slate-50 text-slate-700">
-                  {revenueSubView === 'customer' ? (
+                  {revenueSubView === 'candidate' ? (
+                    (expectedRevenueData.joinedCandidates || []).length === 0 ? (
+                      <tr><td colSpan={7} className="text-center py-10 text-slate-400">No joined candidates available for the selected period.</td></tr>
+                    ) : (
+                      (expectedRevenueData.joinedCandidates || []).map((c, i) => (
+                        <tr key={i} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="px-4 py-3.5 font-bold text-slate-900">{c.name}</td>
+                          <td className="px-4 py-3.5 font-semibold text-blue-600">{c.customerName}</td>
+                          <td className="px-4 py-3.5 text-slate-600">{c.doj || c.joinedDate || '—'}</td>
+                          <td className="px-4 py-3.5 font-semibold text-slate-800">{c.ctc ? `₹${Number(c.ctc).toLocaleString('en-IN')}` : '—'}</td>
+                          <td className="px-4 py-3.5 text-slate-600">{c.recruiter}</td>
+                          <td className="px-4 py-3.5 font-medium text-slate-700">{c.teamLeader || 'Unassigned'}</td>
+                          <td className="px-4 py-3.5 text-right font-bold text-emerald-700">{fmt(c.revenue)}</td>
+                        </tr>
+                      ))
+                    )
+                  ) : revenueSubView === 'customer' ? (
                     expectedRevenueData.customerRevenue.length === 0 ? (
                       <tr><td colSpan={5} className="text-center py-10 text-slate-400">No customer revenue data available.</td></tr>
                     ) : (

@@ -5,7 +5,7 @@ const { uploadResume, uploadDoc, uploadImport, uploadJoining } = require('../mid
 
 router.use(auth);
 
-router.get('/export', authorize('admin'), ctrl.exportCandidates);
+router.get('/export', authorize('admin', 'manager', 'tl', 'recruiter'), ctrl.exportCandidates);
 router.post('/import', authorize('recruiter', 'tl', 'admin'), uploadImport.single('file'), ctrl.importCandidates);
 router.post('/bulk-email', authorize('recruiter', 'tl', 'admin'), ctrl.bulkEmail);
 router.get('/clients', ctrl.listClientNames);  // Distinct clientName values for filters

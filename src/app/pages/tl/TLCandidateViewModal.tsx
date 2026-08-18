@@ -64,8 +64,15 @@ export function TLCandidateViewModal({ candidate, onClose, onSaved }: Props) {
   const [error, setError] = useState('');
 
   const handleSave = async () => {
-    setSaving(true);
     setError('');
+    if (joiningSalary) {
+      const numVal = parseInt(String(joiningSalary).replace(/[^0-9]/g, ''), 10);
+      if (isNaN(numVal) || numVal < 10000) {
+        setError('Please enter the full annual CTC figure in rupees (e.g. 550000 and not 5.5).');
+        return;
+      }
+    }
+    setSaving(true);
     try {
       const payload: Record<string, any> = {
         interviewStatus,
@@ -75,7 +82,7 @@ export function TLCandidateViewModal({ candidate, onClose, onSaved }: Props) {
         candidateStatusPostOffer,
         offeredDate,
         designationOffered,
-        joiningSalary,
+        joiningSalary: joiningSalary ? String(parseInt(String(joiningSalary).replace(/[^0-9]/g, ''), 10)) : '',
         dateOfJoining,
         finalInterviewStatus,
       };
@@ -290,15 +297,23 @@ export function TLCandidateViewModal({ candidate, onClose, onSaved }: Props) {
                 </div>
               </div>
               <div>
-                <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Joining Salary (₹)</label>
+                <label className="block text-sm text-slate-700 mb-1" style={{ fontWeight: 500 }}>
+                  Offered CTC / Joining Salary (₹)
+                </label>
                 <input
                   type="text"
                   value={joiningSalary}
-                  onChange={e => setJoiningSalary(e.target.value)}
+                  onChange={e => {
+                    const raw = e.target.value.replace(/[^0-9]/g, '');
+                    setJoiningSalary(raw);
+                  }}
                   disabled={!isSelected}
-                  placeholder="e.g. 6,00,000"
+                  placeholder="e.g. 550000"
                   className={`w-full px-3 py-2.5 rounded-lg border text-sm outline-none transition-colors ${!isSelected ? 'bg-slate-50 border-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-violet-400'}`}
                 />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Please enter full figure in rupees (e.g. <strong>550000</strong>, not 5.5).
+                </p>
               </div>
 
               {/* Final Interview Status */}

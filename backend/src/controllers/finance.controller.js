@@ -956,3 +956,87 @@ exports.checkSalarySlipAccess = async (req, res, next) => {
     next(err);
   }
 };
+
+// POST /api/finance/salary/download-record - Record a salary slip download
+exports.recordSalarySlipDownload = async (req, res, next) => {
+  try {
+    const { month, year, userId } = req.body;
+    const targetUserId = userId && ['admin', 'manager'].includes(req.user.role) ? userId : req.user._id;
+    const m = parseInt(month) || (new Date().getMonth() + 1);
+    const y = parseInt(year) || new Date().getFullYear();
+
+    let salary = await Salary.findOne({ user: targetUserId, month: m, year: y });
+    if (!salary) {
+      salary = await Salary.create({
+        user: targetUserId,
+        name: req.user.name,
+        role: req.user.role,
+        month: m,
+        year: y,
+        baseSalary: 18000,
+        workingDays: 22,
+        presentDays: 22,
+        netSalary: 18000,
+      });
+    }
+
+    salary.downloadCount = (salary.downloadCount || 0) + 1;
+    salary.firstDownloadedAt = salary.firstDownloadedAt || new Date();
+    salary.downloadLocked = true;
+    await salary.save();
+
+    res.json({
+      success: true,
+      downloadCount: salary.downloadCount,
+      firstDownloadedAt: salary.firstDownloadedAt,
+      downloadLocked: salary.downloadLocked,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/finance/salary/download-status - Check download status
+exports.checkSalarySlipDownload = async (req, res, next) => {
+  try {
+    const { month, year, userId } = req.query;
+    const targetUserId = userId && ['admin', 'manager'].includes(req.user.role) ? userId : req.user._id;
+    const m = parseInt(month) || (new Date().getMonth() + 1);
+    const y = parseInt(year) || new Date().getFullYear();
+
+    const salary = await Salary.findOne({ user: targetUserId, month: m, year: y });
+    if (!salary) {
+      return res.json({ downloadCount: 0, downloadLocked: false, firstDownloadedAt: null });
+    }
+
+    res.json({
+      downloadCount: salary.downloadCount || 0,
+      downloadLocked: !!salary.downloadLocked,
+      firstDownloadedAt: salary.firstDownloadedAt || null,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/finance/salary/download-reset - Admin unlock download
+exports.resetSalarySlipDownload = async (req, res, next) => {
+  try {
+    const { month, year, userId } = req.body;
+    const m = parseInt(month) || (new Date().getMonth() + 1);
+    const y = parseInt(year) || new Date().getFullYear();
+
+    const salary = await Salary.findOne({ user: userId, month: m, year: y });
+    if (!salary) {
+      return res.status(404).json({ message: 'Salary record not found' });
+    }
+
+    salary.downloadCount = 0;
+    salary.downloadLocked = false;
+    await salary.save();
+
+    res.json({ success: true, message: 'Download lock reset successfully' });
+  } catch (err) {
+    next(err);
+  }
+};

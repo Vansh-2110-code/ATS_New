@@ -19,6 +19,8 @@ interface SalarySlipProps {
   attendance?: AttendanceSummary;
   presentDays?: number;
   workingDays?: number;
+  isDownloadLocked?: boolean;
+  firstDownloadedAt?: string | Date | null;
   onDownload?: () => void;
 }
 
@@ -35,6 +37,8 @@ export function SalarySlip({
   attendance,
   presentDays = 22,
   workingDays = 22,
+  isDownloadLocked = false,
+  firstDownloadedAt = null,
   onDownload,
 }: SalarySlipProps) {
   const monthNames = [
@@ -51,6 +55,7 @@ export function SalarySlip({
   );
 
   const handleDownload = () => {
+    if (isDownloadLocked) return;
     if (onDownload) {
       onDownload();
     } else {
@@ -64,15 +69,30 @@ export function SalarySlip({
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      {/* Header Action */}
-      <div className="flex justify-end gap-2">
+      {/* Header Action & Single Download Policy Banner */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {isDownloadLocked ? (
+          <div className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+            <span>⚠️ Downloaded on {firstDownloadedAt ? new Date(firstDownloadedAt).toLocaleDateString('en-IN') : 'previous date'} (One-time download policy)</span>
+          </div>
+        ) : (
+          <div className="text-xs text-slate-500 flex items-center gap-1.5">
+            <span>ℹ️ Note: Salary slips can be downloaded once per month.</span>
+          </div>
+        )}
+
         <button
           onClick={handleDownload}
-          className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition-colors"
-          title="Print or download as PDF"
+          disabled={isDownloadLocked}
+          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm ${
+            isDownloadLocked
+              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              : 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-md'
+          }`}
+          title={isDownloadLocked ? 'Already downloaded' : 'Print or download as PDF'}
         >
           <Download className="w-4 h-4" />
-          Download Slip
+          {isDownloadLocked ? 'Already Downloaded' : 'Download Salary Slip'}
         </button>
       </div>
 

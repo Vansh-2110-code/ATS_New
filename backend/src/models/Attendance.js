@@ -10,6 +10,9 @@ const attendanceSchema = new mongoose.Schema({
   logoutTime: { type: Date },
   isWFH: { type: Boolean, default: false },
   status: { type: String, enum: ['Present', 'Absent', 'WFH', 'Half Day', 'Leave'], default: 'Present' },
+  isLate: { type: Boolean, default: false },
+  lateMinutes: { type: Number, default: 0 },
+  leaveRequestId: { type: mongoose.Schema.Types.ObjectId, ref: 'LeaveRequest' },
   breakMinutes: { type: Number, default: 0 },
   totalHours: { type: Number, default: 0 },
 }, { timestamps: true });

@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const CANDIDATE_STATUSES = [
   // Official Statuses
   'Eligible', 'Not Eligible', 'Not Interested', 'No Response', 'Duplicate-Client', 'Call Back',
-  'Hold', 'Submitted To Client', 'Submitted to Client', 'Sublitted To Client', 'Walkin Company', 'Walkin WHM',
+  'Hold', 'Hotlist', 'Hot List', 'Submitted To Client', 'Submitted to Client', 'Sublitted To Client', 'Walkin Company', 'Walkin WHM',
   'No Show', 'VNA Select', 'VNA Reject', 'Test Select', 'Test Reject',
   'Candidate Drop Post L1 Select', 'Candidate Drop Post L2 Select',
   'Candidate Drop During Final Stage', 'L1 Select', 'L1 Reject', 'L2 Select',

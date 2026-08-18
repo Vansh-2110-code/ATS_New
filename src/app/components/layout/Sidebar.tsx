@@ -34,10 +34,13 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Recruiter Portals', href: '/recruiter-portals',       icon: Globe,           roles: ['admin', 'recruiter', 'tl', 'spoc', 'manager'], category: 'Recruiter' },
   { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['recruiter', 'spoc', 'tl', 'manager', 'admin'], category: 'Recruiter' },
   { label: 'Email Center',     href: '/email',                   icon: Mail,            roles: ['recruiter'], category: 'Recruiter' },
+  { label: 'My Leaves',        href: '/employee/leaves',         icon: CalendarCheck,   roles: ['recruiter', 'spoc', 'tl', 'manager', 'admin'], category: 'Recruiter' },
+  { label: 'My Salary Slip',   href: '/salary-slip',             icon: DollarSign,      roles: ['recruiter', 'spoc', 'tl'], category: 'Recruiter' },
 
   // Team Lead
   { label: 'Overview',         href: '/tl',                      icon: LayoutDashboard, roles: ['tl'], category: 'Team Lead' },
   { label: 'My Team',          href: '/tl/my-team',              icon: Users,           roles: ['tl'], category: 'Team Lead' },
+  { label: 'Leave Approvals',  href: '/tl/leaves',               icon: CalendarCheck,   roles: ['tl'], category: 'Team Lead' },
   { label: 'Candidate Management', href: '/recruiter/resumes',   icon: Users,           roles: ['tl', 'manager', 'admin'], category: 'Team Lead' },
   { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['tl'], category: 'Team Lead' },
   { label: 'Create Job (JR)',  href: '/recruiter/jobs/new',      icon: FileText,         roles: ['tl', 'manager'], category: 'Team Lead' },
@@ -47,6 +50,7 @@ const NAV_ITEMS: NavItem[] = [
 
   // Manager
   { label: 'Overview',         href: '/manager',                 icon: LayoutDashboard, roles: ['manager'], category: 'Manager' },
+  { label: 'Leave Approvals',  href: '/manager/leaves',          icon: CalendarCheck,   roles: ['manager'], category: 'Manager' },
   { label: 'Candidate DB',     href: '/admin/candidates',        icon: Database,         roles: ['manager'], category: 'Manager' },
   { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['manager'], category: 'Manager' },
   { label: 'Bulk Job Post',    href: '/recruiter/jobs/bulk',     icon: LayoutGrid,       roles: ['manager'], category: 'Manager' },
@@ -60,6 +64,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard',        href: '/admin',                   icon: LayoutDashboard, roles: ['admin'], category: 'Admin' },
   { label: 'User Management',  href: '/admin/users',             icon: UserCog,          roles: ['admin'], category: 'Admin' },
   { label: 'Attendance',       href: '/admin/attendance',        icon: Clock,            roles: ['admin'], category: 'Admin' },
+  { label: 'Leave Approvals',  href: '/admin/leaves',            icon: CalendarCheck,   roles: ['admin'], category: 'Admin' },
   { label: 'Access Control',   href: '/admin/access',            icon: Shield,           roles: ['admin'], category: 'Admin' },
   { label: 'Candidate DB',     href: '/admin/candidates',        icon: Database,         roles: ['admin'], category: 'Admin' },
   { label: 'ATS Scan Database',href: '/admin/ats-records',       icon: ScanLine,         roles: ['admin'], category: 'Admin' },

@@ -35,13 +35,21 @@ exports.mark = async (req, res, next) => {
     const localNow = getKolkataDate(now);
     const today = new Date(Date.UTC(localNow.getFullYear(), localNow.getMonth(), localNow.getDate(), 0, 0, 0, 0));
 
+    const localMarkNow = getKolkataDate(now);
+    const markHour = localMarkNow.getHours();
+    const markMin = localMarkNow.getMinutes();
+    const isLate = (markHour > 9) || (markHour === 9 && markMin > 15);
+    const lateMinutes = isLate ? ((markHour - 9) * 60 + markMin) : 0;
+
     let record = await Attendance.findOne({ user: req.user._id, date: today });
 
     if (record) {
       // Already exists — update markedAt to confirm, but don't overwrite loginTime
       record.markedAt = record.markedAt || now;
       record.isWFH = isWFH;
-      record.status = isWFH ? 'WFH' : record.status || 'Present';
+      record.status = isWFH ? 'WFH' : (record.status && record.status !== 'Absent' ? record.status : 'Present');
+      record.isLate = record.isLate || isLate;
+      record.lateMinutes = record.lateMinutes || lateMinutes;
       await record.save();
     } else {
       record = await Attendance.create({
@@ -53,18 +61,19 @@ exports.mark = async (req, res, next) => {
         markedAt: now,
         status: isWFH ? 'WFH' : 'Present',
         isWFH,
+        isLate,
+        lateMinutes,
       });
     }
 
-    const localMarkNow = getKolkataDate(now);
     const hhmm = `${String(localMarkNow.getHours()).padStart(2,'0')}:${String(localMarkNow.getMinutes()).padStart(2,'0')}`;
     await createLog({
       type: 'attendance',
       user: req.user._id,
       userName: req.user.name,
       role: req.user.role,
-      action: `Attendance marked (${hhmm})${isWFH ? ' — WFH' : ''}`,
-      details: { markedAt: hhmm, isWFH },
+      action: `Attendance marked (${hhmm})${isWFH ? ' — WFH' : ''}${isLate ? ` [Late: +${lateMinutes}m]` : ''}`,
+      details: { markedAt: hhmm, isWFH, isLate, lateMinutes },
     });
 
     res.json({
@@ -73,6 +82,8 @@ exports.mark = async (req, res, next) => {
       loginTime: record.loginTime,
       status: record.status,
       isWFH: record.isWFH,
+      isLate: record.isLate,
+      lateMinutes: record.lateMinutes,
     });
   } catch (err) {
     next(err);
@@ -168,32 +179,54 @@ exports.getLeaveBalance = async (req, res, next) => {
   try {
     const { userId } = req.query;
     const targetUserId = userId || req.user._id;
+    const LeaveBalance = require('../models/LeaveBalance');
+    const { getKolkataDate } = require('../utils/helpers');
     
-    const currentYear = new Date().getFullYear();
-    const yearStart = new Date(currentYear, 0, 1);
-    const yearEnd = new Date(currentYear + 1, 0, 1);
+    const localNow = getKolkataDate();
+    const year = localNow.getFullYear();
+    const currentMonthIdx = localNow.getMonth(); // 0-indexed
 
-    const attendanceCount = await Attendance.countDocuments({
-      user: targetUserId,
-      date: { $gte: yearStart, $lt: yearEnd },
-      status: { $in: ['Present', 'WFH'] },
-    });
+    let balance = await LeaveBalance.findOne({ user: targetUserId, year });
+    const targetAccrued = (currentMonthIdx + 1) * 1.5;
 
-    // Earned leave: 1 per 20 working days
-    const earnedLeave = Math.floor(attendanceCount / 20);
-    const totalLeave = 12; // Annual quota
-    const usedLeave = await Attendance.countDocuments({
-      user: targetUserId,
-      date: { $gte: yearStart, $lt: yearEnd },
-      status: 'Leave',
-    });
+    if (!balance) {
+      balance = await LeaveBalance.create({
+        user: targetUserId,
+        year,
+        accruedLeaves: targetAccrued,
+        usedLeaves: 0,
+        pendingLeaves: 0,
+        currentBalance: targetAccrued,
+        lastAccruedMonth: `${year}-${String(currentMonthIdx + 1).padStart(2, '0')}`,
+        history: [{
+          month: `${year}-${String(currentMonthIdx + 1).padStart(2, '0')}`,
+          credited: targetAccrued,
+          used: 0,
+          description: 'Monthly leave accrual (+1.5 days/month)',
+          date: new Date(),
+        }],
+      });
+    } else if (balance.accruedLeaves < targetAccrued) {
+      const diff = targetAccrued - balance.accruedLeaves;
+      balance.accruedLeaves = targetAccrued;
+      balance.currentBalance = Math.max(0, balance.accruedLeaves - balance.usedLeaves);
+      balance.lastAccruedMonth = `${year}-${String(currentMonthIdx + 1).padStart(2, '0')}`;
+      balance.history.push({
+        month: `${year}-${String(currentMonthIdx + 1).padStart(2, '0')}`,
+        credited: diff,
+        used: 0,
+        description: 'Monthly leave accrual (+1.5 days/month)',
+        date: new Date(),
+      });
+      await balance.save();
+    }
 
     res.json({
-      totalLeave,
-      earnedLeave,
-      usedLeave,
-      remainingLeave: totalLeave - usedLeave + earnedLeave,
-      presentDays: attendanceCount,
+      totalLeave: balance.accruedLeaves,
+      earnedLeave: balance.accruedLeaves,
+      usedLeave: balance.usedLeaves,
+      pendingLeave: balance.pendingLeaves,
+      remainingLeave: balance.currentBalance,
     });
   } catch (err) {
     next(err);

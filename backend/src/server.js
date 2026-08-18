@@ -38,6 +38,7 @@ const recruiterPortalRoutes = require('./routes/recruiterPortal.routes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const supportRoutes = require('./routes/support.routes');
 const businessDevelopmentRoutes = require('./routes/businessDevelopment.routes');
+const leaveRoutes = require('./routes/leave.routes');
 
 const { errorHandler } = require('./middleware/error.middleware');
 
@@ -103,6 +104,7 @@ app.use('/api/recruiter-portals', recruiterPortalRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/business-development', businessDevelopmentRoutes);
+app.use('/api/leaves', leaveRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

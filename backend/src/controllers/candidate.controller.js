@@ -46,7 +46,7 @@ exports.listClientNames = async (req, res, next) => {
 // GET /api/candidates
 exports.list = async (req, res, next) => {
   try {
-    const { search, source, status, city, localArea, recruiter, page = 1, limit = 20, sort = '-createdAt', fromDate, toDate, division, statusIn, activeOnly, createdToday, company, clientName, tlId } = req.query;
+    const { search, source, status, activeGroup, city, localArea, recruiter, page = 1, limit = 20, sort = '-createdAt', fromDate, toDate, division, statusIn, activeOnly, createdToday, company, clientName, tlId } = req.query;
     const query = {};
 
     if (search) {
@@ -61,6 +61,13 @@ exports.list = async (req, res, next) => {
       ];
     }
     if (source) query.source = source;
+
+    // Active / Inactive Group filter
+    if (activeGroup === 'Active') {
+      query.status = { $in: ACTIVE_STATUS_LIST };
+    } else if (activeGroup === 'Inactive') {
+      query.status = { $in: INACTIVE_STATUS_LIST };
+    }
 
     // Company / Client filtering
     const companyParam = company || clientName;
@@ -335,8 +342,9 @@ exports.list = async (req, res, next) => {
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: totalCandidatesCount || total,
+        total: total,
         filteredTotal: total,
+        totalCandidates: totalCandidatesCount || total,
         pages: Math.ceil(total / parseInt(limit)),
       },
     });
@@ -362,7 +370,7 @@ exports.getById = async (req, res, next) => {
     if (daysSinceAssignment >= 30 && candidate.ownershipStatus !== 'General Data') {
       candidate.ownershipStatus = 'General Data';
       candidate.assignedRecruiter = undefined;
-      candidate.assignedRecruiterName = 'General Pool';
+      candidate.assignedRecruiterName = 'Unassigned';
       await candidate.save();
     }
 
@@ -378,14 +386,6 @@ const mapSubStatusToGlobalStatus = (subStatus) => {
   const statusMap = {
     'Eligible': 'Eligible',
     'Eligible Candidates': 'Eligible',
-    'New': 'Eligible',
-    'Screening': 'Eligible',
-    'Contacted': 'Eligible',
-    'Interested': 'Eligible',
-    'Selected for Call': 'Eligible',
-    'SPOC Shortlisted': 'Eligible',
-    'Interview Scheduled': 'Interview Scheduled',
-    'Interview Completed': 'Interview Scheduled',
     'Selected': 'Final Select',
     'Joined': 'Joined',
     'Rejected – Communication': 'Not Eligible',
@@ -401,11 +401,8 @@ const mapSubStatusToGlobalStatus = (subStatus) => {
     'No response': 'No Response',
     'Not reachable': 'No Response',
     'Call back scheduled': 'Call Back',
-    'Screening in Progress': 'Eligible',
     'On Hold': 'Hold',
     'Duplicate Profile': 'Duplicate-Client',
-    'Not Interested': 'Not Interested',
-    'Other': 'Eligible',
     'Interview Rescheduled': 'Interview Scheduled',
     'Interview Feedback Pending': 'Hold',
     'Shortlisted': 'Submitted to Client',
@@ -423,18 +420,9 @@ const mapSubStatusToGlobalStatus = (subStatus) => {
   };
   if (statusMap[subStatus]) return statusMap[subStatus];
   
-  const CANDIDATE_STATUSES = [
-    'New', 'Contacted', 'Interested', 'Selected for Call',
-    'Interview Scheduled', 'Selected', 'Rejected',
-    'Eligible Candidates', 'Wrong Number', 'Unreachable',
-    'Did Not Pick', 'Unanswered Calls', 'Call Back',
-    'HR Shortlist', 'Written Test', 'Operations Round',
-    'Document Pending', 'Documentation', 'Yet To Join', 'Joined',
-    'Walk-in Submitted', 'Exited'
-  ];
-  if (CANDIDATE_STATUSES.includes(subStatus)) return subStatus;
+  if (Candidate.STATUSES && Candidate.STATUSES.includes(subStatus)) return subStatus;
   
-  return null;
+  return subStatus;
 };
 
 // POST /api/candidates
@@ -467,13 +455,15 @@ exports.create = async (req, res, next) => {
       data.finalInterviewLocked = true;
     }
 
-    // Auto-sync global status with latest sub-status updates
-    let mappedStatus = null;
-    if (data.candidateStatusPostOffer) mappedStatus = mapSubStatusToGlobalStatus(data.candidateStatusPostOffer);
-    else if (data.finalInterviewStatus) mappedStatus = mapSubStatusToGlobalStatus(data.finalInterviewStatus);
-    else if (data.interviewStatus) mappedStatus = mapSubStatusToGlobalStatus(data.interviewStatus);
-    else if (data.firstCallStatus) mappedStatus = mapSubStatusToGlobalStatus(data.firstCallStatus);
-    if (mappedStatus) data.status = mappedStatus;
+    // Auto-sync global status with latest sub-status updates only if status is not explicitly specified
+    if (!data.status) {
+      let mappedStatus = null;
+      if (data.candidateStatusPostOffer) mappedStatus = mapSubStatusToGlobalStatus(data.candidateStatusPostOffer);
+      else if (data.finalInterviewStatus) mappedStatus = mapSubStatusToGlobalStatus(data.finalInterviewStatus);
+      else if (data.interviewStatus) mappedStatus = mapSubStatusToGlobalStatus(data.interviewStatus);
+      else if (data.firstCallStatus) mappedStatus = mapSubStatusToGlobalStatus(data.firstCallStatus);
+      if (mappedStatus) data.status = mappedStatus;
+    }
 
     const orClauses = [];
     if (data.phone) orClauses.push({ phone: data.phone });
@@ -670,13 +660,15 @@ if (typeof data.skills === 'string') {
       data.resumeOriginalName = req.file.originalname;
     }
 
-    // Auto-sync global status with latest sub-status updates
-    let mappedStatus = null;
-    if (data.candidateStatusPostOffer) mappedStatus = mapSubStatusToGlobalStatus(data.candidateStatusPostOffer);
-    else if (data.finalInterviewStatus) mappedStatus = mapSubStatusToGlobalStatus(data.finalInterviewStatus);
-    else if (data.interviewStatus) mappedStatus = mapSubStatusToGlobalStatus(data.interviewStatus);
-    else if (data.firstCallStatus) mappedStatus = mapSubStatusToGlobalStatus(data.firstCallStatus);
-    if (mappedStatus) data.status = mappedStatus;
+    // Auto-sync global status with latest sub-status updates only if status is not explicitly provided in payload
+    if (!data.status) {
+      let mappedStatus = null;
+      if (data.candidateStatusPostOffer) mappedStatus = mapSubStatusToGlobalStatus(data.candidateStatusPostOffer);
+      else if (data.finalInterviewStatus) mappedStatus = mapSubStatusToGlobalStatus(data.finalInterviewStatus);
+      else if (data.interviewStatus) mappedStatus = mapSubStatusToGlobalStatus(data.interviewStatus);
+      else if (data.firstCallStatus) mappedStatus = mapSubStatusToGlobalStatus(data.firstCallStatus);
+      if (mappedStatus) data.status = mappedStatus;
+    }
 
     // ── Submission lock enforcement ──────────────────────────
     const existing = await Candidate.findById(req.params.id);
@@ -1440,15 +1432,102 @@ exports.deleteDocument = async (req, res, next) => {
   }
 };
 
-// GET /api/candidates/export?format=excel&search=&status=&source=&city=
+const ACTIVE_STATUS_LIST = [
+  'Call Back', 'Eligible', 'Eligible Candidates', 'Hold', 'On Hold', 'Hotlist', 'Hot List',
+  'Offer Accept', 'Submitted to Client', 'Submitted To Client', 'Sublitted To Client', 'Walkin Company',
+  'Walkin WHM', 'Test Select', 'Document Initialized', 'Documennt Initialted', 'Documentation Completed',
+  'Joined', 'Waiting for Offer', 'Documentation Incomplete', 'Final Select',
+  'L1 Select', 'L2 Select', 'VNA Select', 'New', 'Contacted', 'Interested', 'Selected for Call',
+  'Screening', 'Interview Scheduled', 'Interview Completed', 'Interview Rescheduled',
+  'HR Shortlist', 'Written Test', 'Operations Round', 'Document Pending', 'Documentation',
+  'Yet To Join', 'Walk-in Submitted', 'SPOC Shortlisted', 'Offer Released', 'Offer Accepted',
+  'Salary Negotiation in Progress', 'Documents Pending', 'Background Verification Initiated',
+  'Background Verification Cleared', 'Joining Date Confirmed', 'Joining Postponed'
+];
+
+const INACTIVE_STATUS_LIST = [
+  'Candidate Drop Post L2 Select', 'No Show', 'Test Reject', 'Not Eligible', 'Final Reject',
+  'L1 Reject', 'L2 Reject', 'Offer Reject', 'Duplicate-Client', 'Duplicate Client',
+  'Not Interested', 'No Response', 'No response', 'Not reachable', 'Candidate Drop Post L1 Select',
+  'Candidate Drop During Final Stage', 'VNA Reject', 'Joined and Abort', 'Black List', 'Blacklist',
+  'Exited', 'Rejected', 'Wrong Number', 'Unreachable', 'Did Not Pick', 'Unanswered Calls',
+  'Offer Declined', 'Rejected – Communication', 'Rejected – Experience Mismatch',
+  'Rejected – Salary Mismatch', 'Rejected – Location Constraint', 'Rejected – Notice Period',
+  'Rejected – Second Round', 'Rejected – Interview Round', 'Background Verification Failed',
+  'Duplicate Profile'
+];
+
+const getActiveInactiveGroup = (status) => {
+  if (!status) return 'Active';
+  const s = String(status).trim();
+  const lower = s.toLowerCase();
+
+  const inactiveExact = [
+    'candidate drop post l2 select',
+    'no show',
+    'test reject',
+    'not eligible',
+    'final reject',
+    'l1 reject',
+    'l2 reject',
+    'offer reject',
+    'duplicate-client',
+    'duplicate client',
+    'not interested',
+    'no response',
+    'not reachable',
+    'candidate drop post l1 select',
+    'candidate drop during final stage',
+    'vna reject',
+    'joined and abort',
+    'black list',
+    'blacklist',
+    'exited',
+    'rejected',
+    'wrong number',
+    'unreachable',
+    'did not pick',
+    'unanswered calls',
+    'offer declined',
+    'rejected – communication',
+    'rejected – experience mismatch',
+    'rejected – salary mismatch',
+    'rejected – location constraint',
+    'rejected – notice period',
+    'rejected – second round',
+    'rejected – interview round',
+    'background verification failed',
+    'duplicate profile'
+  ];
+
+  if (inactiveExact.includes(lower)) {
+    return 'Inactive';
+  }
+
+  if (
+    lower.includes('reject') ||
+    lower.includes('drop') ||
+    lower.includes('no show') ||
+    lower.includes('not eligible') ||
+    lower.includes('duplicate') ||
+    lower.includes('abort') ||
+    lower.includes('black') ||
+    lower.includes('no response') ||
+    lower.includes('not interested') ||
+    lower.includes('did not pick') ||
+    lower.includes('unreachable') ||
+    lower.includes('wrong number')
+  ) {
+    return 'Inactive';
+  }
+
+  return 'Active';
+};
+
+// GET /api/candidates/export?format=excel&search=&status=&source=&city=&activeGroup=
 exports.exportCandidates = async (req, res, next) => {
   try {
-    // Strict Admin check as per requirements
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Only Admin can access the export feature.' });
-    }
-
-    const { search, status, source, city, fromDate, toDate } = req.query;
+    const { search, status, activeGroup, source, city, fromDate, toDate } = req.query;
 
     const query = {};
     if (search) {
@@ -1464,6 +1543,12 @@ exports.exportCandidates = async (req, res, next) => {
     if (status) query.status = status;
     if (city) query.city = { $regex: city, $options: 'i' };
 
+    if (activeGroup === 'Active') {
+      query.status = { $in: ACTIVE_STATUS_LIST };
+    } else if (activeGroup === 'Inactive') {
+      query.status = { $in: INACTIVE_STATUS_LIST };
+    }
+
     if (fromDate || toDate) {
       query.createdAt = {};
       if (fromDate) {
@@ -1476,6 +1561,16 @@ exports.exportCandidates = async (req, res, next) => {
       }
     }
 
+    if (req.user.role === 'recruiter') {
+      query.assignedRecruiter = req.user._id;
+    } else if (req.user.role === 'tl') {
+      const TeamMember = require('../models/TeamMember');
+      const members = await TeamMember.find({ teamLeaderId: req.user._id, removedAt: null }).select('memberId');
+      const memberIds = members.map(m => m.memberId);
+      memberIds.push(req.user._id);
+      query.assignedRecruiter = { $in: memberIds };
+    }
+
     // Fetch ALL candidates as requested
     const candidates = await Candidate.find(query).sort('-createdAt');
 
@@ -1483,6 +1578,8 @@ exports.exportCandidates = async (req, res, next) => {
     const worksheet = workbook.addWorksheet('Candidates');
 
     const columns = [
+      { header: 'Active Status', key: 'activeStatus', width: 25 },
+      { header: 'Active/Inactive', key: 'activeInactive', width: 18 },
       { header: 'Job Title', key: 'jobTitle', width: 25 },
       { header: 'Date of application', key: 'dateOfApplication', width: 20 },
       { header: 'Name', key: 'name', width: 25 },
@@ -1551,7 +1648,10 @@ exports.exportCandidates = async (req, res, next) => {
         phoneVal = `Invalid Phone Format: ${phoneVal}`;
       }
 
+      const rawStatus = c.status || 'Eligible';
       worksheet.addRow({
+        activeStatus: rawStatus,
+        activeInactive: getActiveInactiveGroup(rawStatus),
         jobTitle: c.positionApplied || 'N/A',
         dateOfApplication: formatDate(c.createdAt),
         name: c.name || 'N/A',
@@ -1591,6 +1691,12 @@ exports.exportCandidates = async (req, res, next) => {
         address: c.permanentAddress || 'N/A',
       });
     });
+
+    // Enable Excel native auto-filter dropdown on the top header row across all columns
+    worksheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: columns.length }
+    };
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="Candidate_Database_Export_${Date.now()}.xlsx"`);
@@ -2066,10 +2172,15 @@ exports.createOrUpdateJoiningForm = async (req, res, next) => {
     const b = req.body;
 
     let employee;
-    if (employeeId) {
-      employee = await Employee.findOne({ employeeId });
-      if (!employee) return res.status(404).json({ message: 'Employee record not found' });
-      
+    const targetEmpId = employeeId || b.employeeId || req.user.employeeId;
+    if (targetEmpId) {
+      employee = await Employee.findOne({ employeeId: targetEmpId });
+    }
+    if (!employee && req.user._id) {
+      employee = await Employee.findOne({ createdBy: req.user._id });
+    }
+
+    if (employee) {
       // If approved, only admin can edit!
       if (employee.isApproved && req.user.role !== 'admin') {
         return res.status(403).json({ message: 'This joining record has already been approved and locked. Only administrators can make edits.' });
@@ -2083,6 +2194,11 @@ exports.createOrUpdateJoiningForm = async (req, res, next) => {
     }
 
     const updateData = { ...b };
+    // Strip MongoDB internal fields to prevent duplicate key error on _id
+    delete updateData._id;
+    delete updateData.__v;
+    delete updateData.createdAt;
+    delete updateData.updatedAt;
 
     // Clean empty string values for dates and numbers to prevent Mongoose CastErrors
     if (!updateData.joiningDate || updateData.joiningDate === '') {
@@ -2103,10 +2219,13 @@ exports.createOrUpdateJoiningForm = async (req, res, next) => {
     if (b.employmentHistory) try { updateData.employmentHistory = JSON.parse(b.employmentHistory); } catch (e) { }
     if (b.references) try { updateData.references = JSON.parse(b.references); } catch (e) { }
 
-    // Handle File Uploads (Photo, Resume, Education Docs)
+    // Handle File Uploads (Photo, Resume, KYC, Education Docs)
     if (req.files) {
       if (req.files.photo) updateData.photoPath = `/uploads/docs/${req.files.photo[0].filename}`;
       if (req.files.resume) updateData.resumePath = `/uploads/resumes/${req.files.resume[0].filename}`;
+      if (req.files.panCard) updateData.panCardPath = `/uploads/docs/${req.files.panCard[0].filename}`;
+      if (req.files.aadhaarCard) updateData.aadhaarCardPath = `/uploads/docs/${req.files.aadhaarCard[0].filename}`;
+      if (req.files.highestDocument) updateData.highestDocumentPath = `/uploads/docs/${req.files.highestDocument[0].filename}`;
       if (req.files.marksheet) updateData.marksheetPath = `/uploads/docs/${req.files.marksheet[0].filename}`;
       if (req.files.degreeCertificate) updateData.degreeCertificatePath = `/uploads/docs/${req.files.degreeCertificate[0].filename}`;
 
