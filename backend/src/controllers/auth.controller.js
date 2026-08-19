@@ -39,12 +39,13 @@ exports.login = async (req, res, next) => {
       const currentHHMM = `${String(currentHour).padStart(2, '0')}:${String(currentMin).padStart(2, '0')}`;
 
       const startTime = user.loginStartTime || '09:00';
-      const endTime = user.loginEndTime || '18:00';
+      const endTime = user.role === 'recruiter' ? (user.loginEndTime || '19:00') : (user.loginEndTime || '19:00');
 
       if (!isTimeInWindow(currentHHMM, startTime, endTime)) {
-        return res.status(403).json({
-          message: `Access denied: Your allowed login window is between ${startTime} and ${endTime}. Current local time is ${currentHHMM}.`
-        });
+        const errorMsg = user.role === 'recruiter'
+          ? `Access denied: Recruiters cannot log in to ATS post 7:00 PM IST. Allowed login window is ${startTime} to ${endTime} IST. Current local time is ${currentHHMM} IST.`
+          : `Access denied: Your allowed login window is between ${startTime} and ${endTime} IST. Current local time is ${currentHHMM} IST.`;
+        return res.status(403).json({ message: errorMsg });
       }
 
       if (loginIsWFH && (user.isWFH === false || user.allowHomeLogin === false)) {

@@ -272,7 +272,7 @@ export function JobCreatePage() {
           <div className="sm:col-span-2">
             <label className="block text-xs text-slate-500 mb-1.5 uppercase tracking-wide" style={{ fontWeight: 600 }}>
               <Users className="inline w-3.5 h-3.5 mr-1" />
-              Assign Recruiters (Multi-select)
+              Assign Team Leads & Recruiters (Multi-select)
             </label>
             <div className="relative">
               <button
@@ -282,25 +282,34 @@ export function JobCreatePage() {
               >
                 <span className="text-slate-600">
                   {assignedRecruiters.length === 0
-                    ? 'Select recruiters…'
-                    : `${assignedRecruiters.length} recruiter${assignedRecruiters.length > 1 ? 's' : ''} selected`}
+                    ? 'Select recruiters or team leads…'
+                    : `${assignedRecruiters.length} member${assignedRecruiters.length > 1 ? 's' : ''} assigned`}
                 </span>
                 {recruiterDropOpen ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
               </button>
               {recruiterDropOpen && (
-                <div className="absolute z-20 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                <div className="absolute z-20 top-full mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
                   {recruitersList.length === 0 ? (
-                    <p className="px-4 py-3 text-slate-400 text-sm">No recruiters found</p>
+                    <p className="px-4 py-3 text-slate-400 text-sm">No recruiters or team leads found</p>
                   ) : recruitersList.map((rec: any) => (
-                    <label key={rec._id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-green-50 cursor-pointer transition-colors">
+                    <label key={rec._id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-green-50 cursor-pointer transition-colors border-b border-slate-50 last:border-0">
                       <input
                         type="checkbox"
                         checked={assignedRecruiters.some(r => r._id === rec._id)}
                         onChange={() => toggleRecruiter(rec)}
-                        className="rounded border-slate-300 text-green-600"
+                        className="rounded border-slate-300 text-green-600 focus:ring-green-500"
                       />
-                      <span className="text-sm text-slate-700">{rec.name}</span>
-                      {rec.email && <span className="text-xs text-slate-400 ml-auto">{rec.email}</span>}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-medium text-slate-700">{rec.name}</span>
+                        <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                          rec.role === 'tl'
+                            ? 'bg-violet-100 text-violet-700 border border-violet-200'
+                            : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                        }`}>
+                          {rec.role === 'tl' ? 'Team Lead' : 'Recruiter'}
+                        </span>
+                      </div>
+                      {rec.email && <span className="text-xs text-slate-400 ml-auto truncate max-w-[180px]">{rec.email}</span>}
                     </label>
                   ))}
                 </div>
@@ -309,9 +318,14 @@ export function JobCreatePage() {
             {assignedRecruiters.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {assignedRecruiters.map(r => (
-                  <span key={r._id} className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 text-xs rounded-full border border-green-100" style={{ fontWeight: 500 }}>
-                    {r.name}
-                    <button type="button" onClick={() => toggleRecruiter(r)} className="text-green-400 hover:text-green-600">
+                  <span key={r._id} className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border ${
+                    r.role === 'tl'
+                      ? 'bg-violet-50 text-violet-700 border-violet-200'
+                      : 'bg-green-50 text-green-700 border-green-200'
+                  }`} style={{ fontWeight: 500 }}>
+                    <span className="font-semibold">{r.name}</span>
+                    <span className="text-[10px] opacity-75">({r.role === 'tl' ? 'TL' : 'Recruiter'})</span>
+                    <button type="button" onClick={() => toggleRecruiter(r)} className="text-slate-400 hover:text-red-500 transition-colors ml-0.5">
                       <X className="w-3 h-3" />
                     </button>
                   </span>

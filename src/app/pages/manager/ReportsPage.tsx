@@ -214,8 +214,8 @@ export function ReportsPage() {
     } else if (activeView === 'expected-revenue') {
       filename = `expected_revenue_report_${revenueSubView}_${dateFrom}_${dateTo}.csv`;
       if (revenueSubView === 'candidate') {
-        csv = 'Candidate Name,Customer / Client Name,Date of Joining,Offered CTC,Recruiter,Team Leader,Revenue Generated\n' +
-          (expectedRevenueData.joinedCandidates || []).map(c => `"${c.name}","${c.customerName}","${c.doj || c.joinedDate || '—'}",${c.ctc || 0},"${c.recruiter}","${c.teamLeader || 'Unassigned'}",${c.revenue || 0}`).join('\n');
+        csv = 'Candidate Name,Phone Number,Email ID,Customer / Client Name,Date of Joining,Offered CTC,Recruiter,Team Leader,Revenue Generated\n' +
+          (expectedRevenueData.joinedCandidates || []).map(c => `"${c.name}","${c.phone || '—'}","${c.email || '—'}","${c.customerName}","${c.doj || c.joinedDate || '—'}",${c.ctc || 0},"${c.recruiter}","${c.teamLeader || 'Unassigned'}",${c.revenue || 0}`).join('\n');
       } else if (revenueSubView === 'customer') {
         csv = 'Customer Name,Yet To Join Count,Joined Count,Expected Revenue,Actual Joined Revenue\n' +
           expectedRevenueData.customerRevenue.map(c => `"${c.customerName}",${c.yetToJoinCount},${c.joinedCount},${c.expectedRevenue},${c.actualJoinedRevenue}`).join('\n');
@@ -697,6 +697,8 @@ export function ReportsPage() {
                   {revenueSubView === 'candidate' ? (
                     <tr className="bg-slate-50 border-b border-slate-100 text-left text-slate-500 uppercase tracking-wide">
                       <th className="px-4 py-3 font-semibold">Candidate Name</th>
+                      <th className="px-4 py-3 font-semibold">Phone Number</th>
+                      <th className="px-4 py-3 font-semibold">Email ID</th>
                       <th className="px-4 py-3 font-semibold">Customer / Client Name</th>
                       <th className="px-4 py-3 font-semibold">Date of Joining (DOJ)</th>
                       <th className="px-4 py-3 font-semibold">CTC Offered</th>
@@ -717,11 +719,13 @@ export function ReportsPage() {
                 <tbody className="divide-y divide-slate-50 text-slate-700">
                   {revenueSubView === 'candidate' ? (
                     (expectedRevenueData.joinedCandidates || []).length === 0 ? (
-                      <tr><td colSpan={7} className="text-center py-10 text-slate-400">No joined candidates available for the selected period.</td></tr>
+                      <tr><td colSpan={9} className="text-center py-10 text-slate-400">No joined candidates available for the selected period.</td></tr>
                     ) : (
                       (expectedRevenueData.joinedCandidates || []).map((c, i) => (
                         <tr key={i} className="hover:bg-slate-50/60 transition-colors">
                           <td className="px-4 py-3.5 font-bold text-slate-900">{c.name}</td>
+                          <td className="px-4 py-3.5 font-mono text-slate-600">{c.phone || '—'}</td>
+                          <td className="px-4 py-3.5 text-slate-600 truncate max-w-[160px]" title={c.email}>{c.email || '—'}</td>
                           <td className="px-4 py-3.5 font-semibold text-blue-600">{c.customerName}</td>
                           <td className="px-4 py-3.5 text-slate-600">{c.doj || c.joinedDate || '—'}</td>
                           <td className="px-4 py-3.5 font-semibold text-slate-800">{c.ctc ? `₹${Number(c.ctc).toLocaleString('en-IN')}` : '—'}</td>

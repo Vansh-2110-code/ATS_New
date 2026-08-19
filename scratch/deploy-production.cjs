@@ -19,12 +19,15 @@ async function deploy() {
     const setupEnv = 'export PATH=$PATH:/home/whitehorsemanpower/.nvm/versions/node/v22.23.1/bin:~/.npm-global/bin';
 
     const filesToUpload = [
+      { local: 'backend/src/models/User.js', remote: `${remoteBase}/backend/src/models/User.js` },
       { local: 'backend/src/models/LeaveRequest.js', remote: `${remoteBase}/backend/src/models/LeaveRequest.js` },
       { local: 'backend/src/models/LeaveBalance.js', remote: `${remoteBase}/backend/src/models/LeaveBalance.js` },
       { local: 'backend/src/models/Attendance.js', remote: `${remoteBase}/backend/src/models/Attendance.js` },
       { local: 'backend/src/models/Salary.js', remote: `${remoteBase}/backend/src/models/Salary.js` },
       { local: 'backend/src/models/Employee.js', remote: `${remoteBase}/backend/src/models/Employee.js` },
       { local: 'backend/src/models/Candidate.js', remote: `${remoteBase}/backend/src/models/Candidate.js` },
+      { local: 'backend/src/controllers/user.controller.js', remote: `${remoteBase}/backend/src/controllers/user.controller.js` },
+      { local: 'backend/src/controllers/auth.controller.js', remote: `${remoteBase}/backend/src/controllers/auth.controller.js` },
       { local: 'backend/src/controllers/leave.controller.js', remote: `${remoteBase}/backend/src/controllers/leave.controller.js` },
       { local: 'backend/src/controllers/attendance.controller.js', remote: `${remoteBase}/backend/src/controllers/attendance.controller.js` },
       { local: 'backend/src/controllers/finance.controller.js', remote: `${remoteBase}/backend/src/controllers/finance.controller.js` },
@@ -40,6 +43,7 @@ async function deploy() {
       { local: 'src/app/components/SalarySlip.tsx', remote: `${remoteBase}/src/app/components/SalarySlip.tsx` },
       { local: 'src/app/pages/employee/MyLeavesPage.tsx', remote: `${remoteBase}/src/app/pages/employee/MyLeavesPage.tsx` },
       { local: 'src/app/pages/admin/LeaveManagementPage.tsx', remote: `${remoteBase}/src/app/pages/admin/LeaveManagementPage.tsx` },
+      { local: 'src/app/pages/admin/UserManagementPage.tsx', remote: `${remoteBase}/src/app/pages/admin/UserManagementPage.tsx` },
       { local: 'src/app/pages/employee/SalarySlipPage.tsx', remote: `${remoteBase}/src/app/pages/employee/SalarySlipPage.tsx` },
       { local: 'src/app/pages/admin/AttendancePage.tsx', remote: `${remoteBase}/src/app/pages/admin/AttendancePage.tsx` },
       { local: 'src/app/utils/candidateStatusUtils.ts', remote: `${remoteBase}/src/app/utils/candidateStatusUtils.ts` },
@@ -50,9 +54,11 @@ async function deploy() {
       { local: 'src/app/pages/manager/ReportsPage.tsx', remote: `${remoteBase}/src/app/pages/manager/ReportsPage.tsx` },
       { local: 'src/app/pages/recruiter/AddCandidatePage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/AddCandidatePage.tsx` },
       { local: 'src/app/pages/recruiter/CandidateProfilePage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/CandidateProfilePage.tsx` },
+      { local: 'src/app/pages/recruiter/JobCreatePage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/JobCreatePage.tsx` },
       { local: 'src/app/pages/recruiter/JoiningFormPage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/JoiningFormPage.tsx` },
       { local: 'src/app/pages/recruiter/ResumeListPage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/ResumeListPage.tsx` },
       { local: 'src/app/pages/recruiter/WalkInManagementPage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/WalkInManagementPage.tsx` },
+      { local: 'src/app/pages/shared/RecruiterPortalsPage.tsx', remote: `${remoteBase}/src/app/pages/shared/RecruiterPortalsPage.tsx` },
       { local: 'src/app/pages/tl/TLDashboard.tsx', remote: `${remoteBase}/src/app/pages/tl/TLDashboard.tsx` },
       { local: 'src/app/pages/tl/TLCandidateViewModal.tsx', remote: `${remoteBase}/src/app/pages/tl/TLCandidateViewModal.tsx` }
     ];

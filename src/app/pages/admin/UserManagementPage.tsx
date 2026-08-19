@@ -72,7 +72,7 @@ interface AddUserForm {
 
 const EMPTY_FORM: AddUserForm = {
   name: '', email: '', role: 'recruiter', roles: ['recruiter'], isWFH: false, password: '', pseudoName: '', eid: '',
-  loginStartTime: '09:00', loginEndTime: '18:00', allowHomeLogin: true, disableBiometric: false,
+  loginStartTime: '09:00', loginEndTime: '19:00', allowHomeLogin: true, disableBiometric: false,
 };
 
 // EID Generator - Auto-generates Employee ID based on Full Name and Role
@@ -118,7 +118,7 @@ export function UserManagementPage() {
           joinedDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
           pseudoName: u.pseudoName || u.aliasName || '',
           loginStartTime: u.loginStartTime || '09:00',
-          loginEndTime: u.loginEndTime || '18:00',
+          loginEndTime: u.loginEndTime || '19:00',
           allowHomeLogin: u.allowHomeLogin ?? true,
           disableBiometric: u.disableBiometric ?? false,
         }));
@@ -256,7 +256,7 @@ const getHighestRole = (roles: Role[]): Role => {
       pseudoName: user.pseudoName || '',
       eid: user.id,
       loginStartTime: user.loginStartTime || '09:00',
-      loginEndTime: user.loginEndTime || '18:00',
+      loginEndTime: user.loginEndTime || '19:00',
       allowHomeLogin: user.allowHomeLogin ?? true,
       disableBiometric: user.disableBiometric ?? false,
     });
@@ -716,7 +716,7 @@ const getHighestRole = (roles: Role[]): Role => {
                   <label className="block text-xs text-slate-500 uppercase tracking-wide mb-1.5" style={{ fontWeight: 600 }}>Login Cut-off Time</label>
                   <input
                     type="time"
-                    value={form.loginEndTime || '18:00'}
+                    value={form.loginEndTime || '19:00'}
                     onChange={e => setForm(f => ({ ...f, loginEndTime: e.target.value }))}
                     className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm outline-none focus:border-green-400 bg-white"
                   />

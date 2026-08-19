@@ -158,12 +158,28 @@ export function CandidateProfilePage() {
 
   // ── Lock state ───────────────────────────────────────────────
   const isBlockedAsDuplicate = candidate?.isDuplicate && !isAdmin;
-  const isLockedForRecruiter = false; // Recruiters can update candidate status
   const isLockedForTL = false; // TL can edit now
   const isLockedForAll = false; // TL and Recruiters can edit now
   const isLockedForManager = false; // Managers can edit now
   const isInactive = candidate?.candidateActiveStatus === 'Inactive';
   const isFinalInterviewLocked = candidate?.finalInterviewLocked && !isAdmin;
+
+  // Recruiter Ownership Lock: If candidate is assigned to another recruiter within 30 days & NOT in an unlocked status
+  const UNLOCKED_REASSIGN_STATUSES = [
+    'Not Eligible', 'No Response', 'Call Back', 'Hold', 'No Show',
+    'VNA Reject', 'Test Reject', 'Candidate Drop Post L1 Select',
+    'Candidate Drop Post L2 Select', 'Candidate Drop During Final Stage',
+    'L1 Reject', 'L2 Reject', 'Final Reject', 'Offer Reject'
+  ];
+  const isUnlockedStatus = UNLOCKED_REASSIGN_STATUSES.some(
+    s => s.toLowerCase() === (candidate?.status || '').trim().toLowerCase()
+  );
+  const assignedId = String(candidate?.assignedRecruiter?._id || candidate?.assignedRecruiter || '');
+  const currentUserId = String(user?._id || '');
+  const isOwner = isRecruiter && (assignedId === currentUserId);
+  const isAssignedToOther = isRecruiter && Boolean(assignedId) && !isOwner;
+  const isLockedForOtherRecruiter = isAssignedToOther && !isUnlockedStatus && !isAdmin && !isTL && !isManager;
+  const isLockedForRecruiter = isLockedForOtherRecruiter;
 
   // ── Interview Status state ────────────────────────────────────
   const [interviewStatusOpen, setInterviewStatusOpen] = useState(false);
@@ -279,7 +295,7 @@ export function CandidateProfilePage() {
   }, [id]);
 
   const handleStatusUpdate = async (newStatus: string) => {
-    if (isBlockedAsDuplicate) return;
+    if (isBlockedAsDuplicate || isLockedForOtherRecruiter) return;
     
     if (newStatus === 'Joined') {
       setShowJoiningModal(true);
@@ -674,7 +690,7 @@ export function CandidateProfilePage() {
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-slate-700 text-sm transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Resumes
         </button>
-        {(isAdmin || isTL || isManager || isRecruiter) && (
+        {(isAdmin || isTL || isManager || (isRecruiter && !isLockedForOtherRecruiter)) && (
           <button
             onClick={() => navigate(`/recruiter/add?id=${id}`)}
             className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-xl transition-all shadow-sm font-semibold"
@@ -685,7 +701,17 @@ export function CandidateProfilePage() {
       </div>
 
       {/* ── Lock Banners ────────────────────────────────────────── */}
-      {/* Manager Read-Only Lock Banner Removed */}
+      {isLockedForOtherRecruiter && (
+        <div className="flex items-center gap-3 px-4 py-3.5 bg-amber-50 border-2 border-amber-300 rounded-xl text-amber-900 text-sm shadow-sm">
+          <Lock className="w-5 h-5 flex-shrink-0 text-amber-600" />
+          <div>
+            <p className="font-bold">Candidate Assigned to {candidate.assignedRecruiterName || 'another recruiter'}</p>
+            <p className="text-xs text-amber-800 mt-0.5">
+              This candidate is under active 30-day validity with status <strong>"{candidate.status}"</strong>. This profile is view-only for other recruiters. Only the assigned recruiter, Team Leader, or Admin can edit or update status.
+            </p>
+          </div>
+        </div>
+      )}
       {candidate.tlCallSubmitted && !isAdmin && (
         <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
           <Shield className="w-4 h-4 flex-shrink-0" />
@@ -941,7 +967,7 @@ export function CandidateProfilePage() {
 
             {firstCallOpen && (
               <div className="px-6 pb-6 border-t border-slate-100 pt-4 space-y-4">
-                <fieldset disabled={false} className="space-y-4">
+                <fieldset disabled={isLockedForOtherRecruiter} className={`space-y-4 ${isLockedForOtherRecruiter ? 'opacity-70 cursor-not-allowed select-none' : ''}`}>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 500 }}>Candidate Status *</label>
@@ -1021,7 +1047,7 @@ export function CandidateProfilePage() {
 
             {finalDetailsOpen && (
               <div className="px-6 pb-6 border-t border-slate-100 pt-4 space-y-4">
-                <fieldset disabled={(candidate.finalDetailsSubmitted && !isAdmin) || !fcContacted} className={`space-y-4 ${((candidate.finalDetailsSubmitted && !isAdmin) || !fcContacted) ? 'opacity-70 cursor-not-allowed select-none' : ''}`}>
+                <fieldset disabled={(candidate.finalDetailsSubmitted && !isAdmin) || !fcContacted || isLockedForOtherRecruiter} className={`space-y-4 ${((candidate.finalDetailsSubmitted && !isAdmin) || !fcContacted || isLockedForOtherRecruiter) ? 'opacity-70 cursor-not-allowed select-none' : ''}`}>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 500 }}>Age</label>

@@ -1413,11 +1413,23 @@ exports.advancedReports = async (req, res, next) => {
       activeProfilesReport = activeProfilesReport.filter(p => p.teamLeader === tlId);
     }
 
-    // 8. Revenue Report (ONLY Joined Candidates with CTC, Date of Joining & Customer/Division Breakdown)
+    // 8. Revenue Report (Joined Candidates with CTC, Date of Joining & Customer/Division Breakdown)
+    const joinedCandidatesDateFilter = (selectedRange !== 'all') ? {
+      $or: [
+        { dateOfJoining: { $gte: start, $lt: end } },
+        { 'offerDetails.dateOfJoining': { $gte: start, $lt: end } },
+        { expectedDateOfJoining: { $gte: start, $lt: end } },
+        { 'offerDetails.expectedDateOfJoining': { $gte: start, $lt: end } },
+        { updatedAt: { $gte: start, $lt: end } },
+        { createdAt: { $gte: start, $lt: end } }
+      ]
+    } : {};
+
     const joinedCandidatesRaw = await Candidate.find({
       status: 'Joined',
-      ...(selectedRange !== 'all' ? { createdAt: { $gte: start, $lt: end } } : {})
-    }).select('name phone email positionApplied clientName companyName division joiningSalary placementPercentage revenueGenerated offerDetails dateOfJoining expectedDateOfJoining assignedRecruiterName updatedAt createdAt').lean();
+      ...divisionMatch,
+      ...joinedCandidatesDateFilter
+    }).select('name phone email positionApplied clientName companyName division joiningSalary placementPercentage revenueGenerated offerDetails dateOfJoining expectedDateOfJoining assignedRecruiter assignedRecruiterName updatedAt createdAt').lean();
 
     const joinedCandidatesList = joinedCandidatesRaw.map(c => {
       let ctc = parseFloat(c.joiningSalary) || parseFloat(c.offerDetails?.joiningSalary) || parseFloat(c.offerDetails?.offeredCTC) || 0;
@@ -1434,8 +1446,8 @@ exports.advancedReports = async (req, res, next) => {
       return {
         _id: c._id,
         name: c.name,
-        phone: c.phone,
-        email: c.email,
+        phone: c.phone || '—',
+        email: c.email || '—',
         positionApplied: c.positionApplied || '—',
         customerName: c.clientName || c.companyName || 'General / Unspecified',
         division: c.division || 'BPO',
@@ -1455,9 +1467,21 @@ exports.advancedReports = async (req, res, next) => {
     const totalJoinedRevenue = joinedCandidatesList.reduce((sum, c) => sum + c.revenue, 0);
 
     // Yet To Join candidates for projected revenue
+    const yetToJoinDateFilter = (selectedRange !== 'all') ? {
+      $or: [
+        { expectedDateOfJoining: { $gte: start, $lt: end } },
+        { 'offerDetails.expectedDateOfJoining': { $gte: start, $lt: end } },
+        { dateOfJoining: { $gte: start, $lt: end } },
+        { 'offerDetails.dateOfJoining': { $gte: start, $lt: end } },
+        { updatedAt: { $gte: start, $lt: end } },
+        { createdAt: { $gte: start, $lt: end } }
+      ]
+    } : {};
+
     const yetToJoinRaw = await Candidate.find({
       status: { $in: ['Yet To Join', 'Offer Accept', 'Offer Accepted', 'Waiting for Offer', 'Joining Date Confirmed', 'Joining Postponed'] },
-      ...(selectedRange !== 'all' ? { createdAt: { $gte: start, $lt: end } } : {})
+      ...divisionMatch,
+      ...yetToJoinDateFilter
     }).select('clientName companyName division joiningSalary placementPercentage revenueGenerated offerDetails').lean();
 
     const customerRevMap = {};

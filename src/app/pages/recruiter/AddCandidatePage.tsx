@@ -885,12 +885,12 @@ export function AddCandidatePage() {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={submitting || (!isTLReadOnly && dupResult && dupResult.daysRemaining > 0 && !isAdmin && user?.role !== 'tl' && user?.role !== 'manager') || isLockedByFinalInterview}
+              disabled={submitting || (!isTLReadOnly && dupResult && dupResult.is30DayLocked && !isAdmin && user?.role !== 'tl' && user?.role !== 'manager') || isLockedByFinalInterview}
               className={`px-5 py-2 text-white rounded-lg disabled:opacity-50 text-sm transition-colors flex items-center gap-2 ${isTLReadOnly ? 'bg-violet-600 hover:bg-violet-700' : 'bg-green-600 hover:bg-green-700'}`}
               style={{ fontWeight: 600 }}
             >
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {submitting ? 'Saving...' : isTLReadOnly ? 'Save Interview Status' : 'Save Candidate'}
+              {submitting ? 'Saving...' : isTLReadOnly ? 'Save Interview Status' : (dupResult && dupResult.isUnlockedStatus ? 'Save & Tag Candidate to My Name' : 'Save Candidate')}
             </button>
           </div>
         </div>
@@ -919,28 +919,53 @@ export function AddCandidatePage() {
             </div>
           )}
 
-          {/* ══════════ Duplicate Candidate Alert ══════════ */}
+          {/* ══════════ Duplicate Candidate Notification & Tagging ══════════ */}
           {dupResult && (
-            <div className="bg-orange-50 border border-orange-300 rounded-xl p-4">
+            <div className={`rounded-xl p-4 border ${
+              dupResult.isUnlockedStatus
+                ? 'bg-amber-50/90 border-amber-300 shadow-sm'
+                : 'bg-orange-50 border-orange-300'
+            }`}>
               <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${dupResult.isUnlockedStatus ? 'text-amber-600' : 'text-orange-500'}`} />
                 <div className="flex-1">
-                  <p className="text-orange-800 text-sm" style={{ fontWeight: 700 }}>Duplicate Candidate Found</p>
-                  <p className="text-orange-700 text-xs mt-1">A candidate with this phone/email already exists in the system.</p>
-                  <div className="mt-3 bg-white border border-orange-200 rounded-lg p-3 grid sm:grid-cols-3 gap-2 text-xs">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <p className={`text-sm font-bold ${dupResult.isUnlockedStatus ? 'text-amber-900' : 'text-orange-800'}`}>
+                      {dupResult.isUnlockedStatus
+                        ? '⚠️ Duplicate Candidate Notice — 30-Day Lock Removed'
+                        : 'Duplicate Candidate Found'}
+                    </p>
+                    {dupResult.isUnlockedStatus && (
+                      <span className="text-xs bg-emerald-100 text-emerald-800 font-semibold px-2.5 py-0.5 rounded-full border border-emerald-300">
+                        ✓ Tagging Allowed
+                      </span>
+                    )}
+                  </div>
+                  
+                  <p className={`text-xs mt-1 ${dupResult.isUnlockedStatus ? 'text-amber-800' : 'text-orange-700'}`}>
+                    {dupResult.isUnlockedStatus
+                      ? `A candidate with this phone/email already exists in the system under previous recruiter "${dupResult.recruiterName}". Because their previous status is "${dupResult.status}", the 30-day lock is waived and you can tag this profile to your name.`
+                      : 'A candidate with this phone/email already exists in the system.'}
+                  </p>
+
+                  <div className="mt-3 bg-white border border-amber-200/80 rounded-lg p-3 grid sm:grid-cols-3 gap-2 text-xs">
                     <div>
                       <span className="text-slate-500 uppercase tracking-wide block" style={{ fontWeight: 600 }}>Name</span>
-                      <span className="text-slate-800" style={{ fontWeight: 600 }}>{dupResult.name}</span>
+                      <span className="text-slate-800 font-bold">{dupResult.name}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 uppercase tracking-wide block" style={{ fontWeight: 600 }}>Recruiter</span>
-                      <span className="text-slate-700">{dupResult.recruiterName}</span>
+                      <span className="text-slate-500 uppercase tracking-wide block" style={{ fontWeight: 600 }}>Previous Recruiter</span>
+                      <span className="text-slate-700 font-medium">{dupResult.recruiterName}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 uppercase tracking-wide block" style={{ fontWeight: 600 }}>Status</span>
-                      <span className="text-slate-700">{dupResult.status}</span>
+                      <span className="text-slate-500 uppercase tracking-wide block" style={{ fontWeight: 600 }}>Previous Status</span>
+                      <span className={`font-bold ${dupResult.isUnlockedStatus ? 'text-amber-800' : 'text-slate-700'}`}>{dupResult.status}</span>
                     </div>
-                    {dupResult.daysRemaining !== undefined && (
+                    {dupResult.isUnlockedStatus ? (
+                      <div className="sm:col-span-3 mt-1 pt-2 border-t border-amber-100 text-emerald-700 font-medium flex items-center gap-1.5">
+                        <span>✅ 30-Day Lock removed for status <strong>"{dupResult.status}"</strong>. You can proceed with saving to tag this candidate to your name.</span>
+                      </div>
+                    ) : dupResult.daysRemaining !== undefined && (
                       <div className="sm:col-span-3 mt-1 pt-2 border-t border-orange-200">
                         <span className="text-orange-800 font-bold">
                           {dupResult.daysRemaining > 0
@@ -951,47 +976,39 @@ export function AddCandidatePage() {
                       </div>
                     )}
                   </div>
-                  {dupResult.daysRemaining > 0 && !isAdmin && (
+
+                  {!dupResult.isUnlockedStatus && dupResult.daysRemaining > 0 && !isAdmin && (
                     <div className="mt-3 p-3 bg-white border border-red-200 rounded-lg text-red-700 text-xs font-medium">
                       Candidate is already assigned to {dupResult.recruiterName} and is under 30-day validity. Please contact Admin for reassignment.
                     </div>
                   )}
+
                   <div className="flex gap-2 mt-3 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/recruiter/candidate/${dupResult.id}`)}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs rounded-lg transition-colors font-medium"
+                    >
+                      View Existing Profile
+                    </button>
                     {isTLOrAdmin && (
-                      <>
-                        <button
-                          onClick={() => navigate(`/recruiter/candidate/${dupResult.id}`)}
-                          className="px-3 py-1.5 bg-orange-600 text-white text-xs rounded-lg hover:bg-orange-700 transition-colors font-medium"
-                        >
-                          View Existing Profile
-                        </button>
-                        <button
-                          onClick={async () => {
-                            try {
-                              await api.markCandidateDuplicate(dupResult.id, '');
-                              alert('Candidate marked as duplicate. Admin will review.');
-                              setDupResult(null);
-                            } catch {
-                              alert('Failed to mark as duplicate');
-                            }
-                          }}
-                          className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition-colors font-medium"
-                        >
-                          Mark as Duplicate
-                        </button>
-                      </>
-                    )}
-                    {!isTLOrAdmin && (
-                      <p className="text-orange-600 text-xs italic">
-                        Only Admin or Team Leader can manage duplicate candidates.
-                      </p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await api.markCandidateDuplicate(dupResult.id, '');
+                            alert('Candidate marked as duplicate. Admin will review.');
+                            setDupResult(null);
+                          } catch {
+                            alert('Failed to mark as duplicate');
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700 transition-colors font-medium"
+                      >
+                        Mark as Duplicate
+                      </button>
                     )}
                   </div>
-                  {isTLOrAdmin && (
-                    <p className="text-orange-600 text-xs mt-2 italic">
-                      You can reassign the existing candidate or mark this as a duplicate. Only Admin can merge candidates.
-                    </p>
-                  )}
                 </div>
               </div>
             </div>

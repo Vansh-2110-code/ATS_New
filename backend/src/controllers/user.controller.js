@@ -209,23 +209,23 @@ exports.resetPassword = async (req, res, next) => {
   }
 };
 
-// GET /api/users/recruiters - List recruiters only
+// GET /api/users/recruiters - List recruiters and team leads for job assignments and workflows
 exports.getRecruiters = async (req, res, next) => {
   try {
-    let query = { role: 'recruiter', status: 'Active' };
+    let query = { role: { $in: ['recruiter', 'tl'] }, status: 'Active' };
 
-    // Role-based filtering
-    if (req.user.role === 'tl') {
+    // Role-based filtering: TLs see their team members plus themselves
+    if (req.user && req.user.role === 'tl') {
       const TeamMember = require('../models/TeamMember');
       const teamMembers = await TeamMember.find({
         teamLeaderId: req.user._id,
         removedAt: null,
       }).select('memberId');
       const memberIds = teamMembers.map(t => t.memberId);
-      query._id = { $in: memberIds };
+      query._id = { $in: [...memberIds, req.user._id] };
     }
 
-    const recruiters = await User.find(query).select('name email employeeId');
+    const recruiters = await User.find(query).select('name email employeeId role').sort({ role: 1, name: 1 });
     res.json(recruiters);
   } catch (err) {
     next(err);
