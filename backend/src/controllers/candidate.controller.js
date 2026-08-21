@@ -31,6 +31,14 @@ function isStatusUnlockedForReassignment(status) {
   const clean = String(status).trim().toLowerCase();
   return UNLOCKED_REASSIGN_STATUSES.some(s => s.toLowerCase() === clean);
 }
+
+function cleanRecruiterName(name) {
+  if (!name || typeof name !== 'string') return name || '';
+  return name
+    .replace(/\s*\((recruiter|tl|admin|manager)\)\s*/gi, '')
+    .replace(/\s*\[(recruiter|tl|admin|manager)\]\s*/gi, '')
+    .trim();
+}
 exports.getCallbacks = async (req, res, next) => {
   try {
     const query = {
@@ -477,14 +485,12 @@ exports.create = async (req, res, next) => {
       data.finalInterviewLocked = true;
     }
 
-    // Auto-sync global status with latest sub-status updates only if status is not explicitly specified
-    if (!data.status) {
-      let mappedStatus = null;
-      if (data.candidateStatusPostOffer) mappedStatus = mapSubStatusToGlobalStatus(data.candidateStatusPostOffer);
-      else if (data.finalInterviewStatus) mappedStatus = mapSubStatusToGlobalStatus(data.finalInterviewStatus);
-      else if (data.interviewStatus) mappedStatus = mapSubStatusToGlobalStatus(data.interviewStatus);
-      else if (data.firstCallStatus) mappedStatus = mapSubStatusToGlobalStatus(data.firstCallStatus);
-      if (mappedStatus) data.status = mappedStatus;
+    // Ensure candidate status preserves the exact status selected in the form
+    const selectedStatus = data.status || data.firstCallStatus || data.recruiterStatus;
+    if (selectedStatus) {
+      data.status = mapSubStatusToGlobalStatus(selectedStatus);
+    } else {
+      data.status = 'Eligible';
     }
 
     const orClauses = [];
@@ -500,12 +506,13 @@ exports.create = async (req, res, next) => {
       const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status);
       const lastActivity = existing.assignedAt || existing.createdAt;
       const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
+      const recruiterName = existing.assignedRecruiterName || 'another recruiter';
 
-      // Strict 30-day rule for non-admins (WAIVED if candidate is in any of the 14 unlocked statuses)
-      if (!isUnlockedStatus && daysSinceAssignment < 30 && req.user.role !== 'admin') {
-        const recruiterName = existing.assignedRecruiterName || 'another recruiter';
+      // Strict 30-day duplicate rule for ALL USERS (including Admin & Recruiters)
+      // If candidate is under active 30-day validity AND NOT in one of the 14 unlocked waived statuses:
+      if (!isUnlockedStatus && daysSinceAssignment < 30) {
         return res.status(409).json({
-          message: `Candidate is already assigned to ${recruiterName} and is under 30-day validity. Please contact Admin for reassignment.`,
+          message: `Candidate already exists in the system! This profile (${existing.name}, Phone: ${existing.phone}) is already assigned to ${recruiterName} under active 30-day validity (Status: "${existing.status}"). Duplicate candidates cannot be added.`,
           existingId: existing._id,
           assignedRecruiter: existing.assignedRecruiter,
           assignedRecruiterName: recruiterName,
@@ -513,7 +520,23 @@ exports.create = async (req, res, next) => {
         });
       }
 
-      // If unlocked status, expired (>= 30 days), or admin override, tag / re-assign the candidate to current recruiter
+      // Check if current user is ALREADY the owner of this candidate
+      const candRecId = existing.assignedRecruiter ? String(existing.assignedRecruiter) : '';
+      const reqUserId = req.user._id ? String(req.user._id) : (req.user.id ? String(req.user.id) : '');
+      const candRecName = String(existing.assignedRecruiterName || '').trim().toLowerCase();
+      const reqUserName = String(req.user.name || '').trim().toLowerCase();
+
+      const isSameOwner = (candRecId && reqUserId && candRecId === reqUserId) ||
+                          (candRecName && reqUserName && candRecName === reqUserName);
+
+      if (isSameOwner && !isUnlockedStatus) {
+        return res.status(409).json({
+          message: `Candidate already exists in your list! You have already added ${existing.name} (Phone: ${existing.phone}, Status: "${existing.status}").`,
+          existingId: existing._id
+        });
+      }
+
+      // If unlocked status or expired (>= 30 days), tag / re-assign the candidate to current recruiter
       const oldRecruiter = existing.assignedRecruiterName || 'Unknown';
       const oldStatus = existing.status || 'Unknown';
       const oldJob = existing.positionApplied || 'None';
@@ -540,12 +563,14 @@ exports.create = async (req, res, next) => {
       }
 
       existing.assignedRecruiter = req.user._id;
-      existing.assignedRecruiterName = req.user.name;
+      existing.assignedRecruiterName = cleanRecruiterName(req.user.name);
       existing.assignedAt = new Date();
       existing.ownershipStatus = 'Assigned';
 
-      // Reset to New workflow
-      existing.status = 'New';
+      // Set candidate status to chosen status
+      const chosenStatus = data.status || data.firstCallStatus || data.recruiterStatus;
+      existing.status = chosenStatus ? mapSubStatusToGlobalStatus(chosenStatus) : 'Eligible';
+      existing.firstCallStatus = data.firstCallStatus || chosenStatus || 'Eligible';
       existing.currentStage = 'Applied';
 
       if (!existing.stageHistory) existing.stageHistory = [];
@@ -751,7 +776,15 @@ if (typeof data.skills === 'string') {
     const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status);
 
     if (req.user.role === 'recruiter') {
-      const isAssignedToOther = existing.assignedRecruiter && String(existing.assignedRecruiter) !== String(req.user._id);
+      const candRecId = existing.assignedRecruiter ? String(existing.assignedRecruiter) : '';
+      const reqUserId = req.user._id ? String(req.user._id) : (req.user.id ? String(req.user.id) : '');
+      const candRecName = String(existing.assignedRecruiterName || '').trim().toLowerCase();
+      const reqUserName = String(req.user.name || '').trim().toLowerCase();
+
+      const isOwner = (candRecId && reqUserId && candRecId === reqUserId) ||
+                      (candRecName && reqUserName && candRecName === reqUserName);
+
+      const isAssignedToOther = (Boolean(existing.assignedRecruiter) || Boolean(existing.assignedRecruiterName)) && !isOwner;
       if (isAssignedToOther && daysSinceAssignment < 30 && !isUnlockedStatus) {
         return res.status(403).json({
           message: `Candidate is assigned to ${existing.assignedRecruiterName || 'another recruiter'}. You cannot edit or change the status of this candidate.`
@@ -965,12 +998,20 @@ exports.updateStatus = async (req, res, next) => {
     if (req.user.role === 'recruiter') {
       const lastActivity = candidate.assignedAt || candidate.createdAt;
       const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
-      const isOwner = String(candidate.assignedRecruiter || '') === String(req.user._id);
-      const isExpired = !candidate.assignedRecruiter || daysSinceAssignment >= 30;
+      
+      const candRecId = candidate.assignedRecruiter ? String(candidate.assignedRecruiter) : '';
+      const reqUserId = req.user._id ? String(req.user._id) : (req.user.id ? String(req.user.id) : '');
+      const candRecName = String(candidate.assignedRecruiterName || '').trim().toLowerCase();
+      const reqUserName = String(req.user.name || '').trim().toLowerCase();
+
+      const isOwner = (candRecId && reqUserId && candRecId === reqUserId) ||
+                      (candRecName && reqUserName && candRecName === reqUserName);
+
+      const isExpired = (!candidate.assignedRecruiter && !candidate.assignedRecruiterName) || daysSinceAssignment >= 30;
       const isGeneral = candidate.ownershipStatus === 'General Data';
       const isUnlockedStatus = isStatusUnlockedForReassignment(candidate.status);
 
-      // If candidate is assigned to another recruiter within 30 days and NOT in an unlocked status
+      // If candidate is assigned to ANOTHER recruiter within 30 days and NOT in an unlocked status
       if (!isOwner && !isExpired && !isGeneral && !isUnlockedStatus) {
         return res.status(403).json({
           message: `Candidate is assigned to ${candidate.assignedRecruiterName || 'another recruiter'}. Only the assigned recruiter or Admin/TL can update status within 30 days.`
@@ -979,7 +1020,7 @@ exports.updateStatus = async (req, res, next) => {
 
       if (!isOwner && (isExpired || isGeneral || isUnlockedStatus)) {
         candidate.assignedRecruiter = req.user._id;
-        candidate.assignedRecruiterName = req.user.name;
+        candidate.assignedRecruiterName = cleanRecruiterName(req.user.name);
         candidate.ownershipStatus = 'Assigned';
         candidate.assignedAt = new Date();
       }

@@ -885,7 +885,7 @@ export function AddCandidatePage() {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={submitting || (!isTLReadOnly && dupResult && dupResult.is30DayLocked && !isAdmin && user?.role !== 'tl' && user?.role !== 'manager') || isLockedByFinalInterview}
+              disabled={submitting || (!isTLReadOnly && dupResult && !dupResult.isUnlockedStatus && (dupResult.is30DayLocked || dupResult.daysRemaining > 0)) || isLockedByFinalInterview}
               className={`px-5 py-2 text-white rounded-lg disabled:opacity-50 text-sm transition-colors flex items-center gap-2 ${isTLReadOnly ? 'bg-violet-600 hover:bg-violet-700' : 'bg-green-600 hover:bg-green-700'}`}
               style={{ fontWeight: 600 }}
             >
@@ -924,62 +924,66 @@ export function AddCandidatePage() {
             <div className={`rounded-xl p-4 border ${
               dupResult.isUnlockedStatus
                 ? 'bg-amber-50/90 border-amber-300 shadow-sm'
-                : 'bg-orange-50 border-orange-300'
+                : 'bg-red-50 border-red-300 shadow-sm'
             }`}>
               <div className="flex items-start gap-3">
-                <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${dupResult.isUnlockedStatus ? 'text-amber-600' : 'text-orange-500'}`} />
+                <AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${dupResult.isUnlockedStatus ? 'text-amber-600' : 'text-red-600'}`} />
                 <div className="flex-1">
                   <div className="flex items-center justify-between flex-wrap gap-2">
-                    <p className={`text-sm font-bold ${dupResult.isUnlockedStatus ? 'text-amber-900' : 'text-orange-800'}`}>
+                    <p className={`text-sm font-bold ${dupResult.isUnlockedStatus ? 'text-amber-900' : 'text-red-900'}`}>
                       {dupResult.isUnlockedStatus
                         ? '⚠️ Duplicate Candidate Notice — 30-Day Lock Removed'
-                        : 'Duplicate Candidate Found'}
+                        : '🚫 Candidate Already Exists'}
                     </p>
-                    {dupResult.isUnlockedStatus && (
+                    {dupResult.isUnlockedStatus ? (
                       <span className="text-xs bg-emerald-100 text-emerald-800 font-semibold px-2.5 py-0.5 rounded-full border border-emerald-300">
                         ✓ Tagging Allowed
+                      </span>
+                    ) : (
+                      <span className="text-xs bg-red-100 text-red-800 font-semibold px-2.5 py-0.5 rounded-full border border-red-300">
+                        🔒 Cannot Add Duplicate
                       </span>
                     )}
                   </div>
                   
-                  <p className={`text-xs mt-1 ${dupResult.isUnlockedStatus ? 'text-amber-800' : 'text-orange-700'}`}>
+                  <p className={`text-xs mt-1 ${dupResult.isUnlockedStatus ? 'text-amber-800' : 'text-red-800'}`}>
                     {dupResult.isUnlockedStatus
                       ? `A candidate with this phone/email already exists in the system under previous recruiter "${dupResult.recruiterName}". Because their previous status is "${dupResult.status}", the 30-day lock is waived and you can tag this profile to your name.`
-                      : 'A candidate with this phone/email already exists in the system.'}
+                      : `A candidate with this phone/email (${dupResult.phone || dupResult.email}) already exists in the system. Duplicate candidates cannot be added again.`}
                   </p>
 
-                  <div className="mt-3 bg-white border border-amber-200/80 rounded-lg p-3 grid sm:grid-cols-3 gap-2 text-xs">
+                  <div className="mt-3 bg-white border border-slate-200 rounded-lg p-3 grid sm:grid-cols-3 gap-2 text-xs">
                     <div>
                       <span className="text-slate-500 uppercase tracking-wide block" style={{ fontWeight: 600 }}>Name</span>
                       <span className="text-slate-800 font-bold">{dupResult.name}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 uppercase tracking-wide block" style={{ fontWeight: 600 }}>Previous Recruiter</span>
+                      <span className="text-slate-500 uppercase tracking-wide block" style={{ fontWeight: 600 }}>Assigned Recruiter</span>
                       <span className="text-slate-700 font-medium">{dupResult.recruiterName}</span>
                     </div>
                     <div>
-                      <span className="text-slate-500 uppercase tracking-wide block" style={{ fontWeight: 600 }}>Previous Status</span>
+                      <span className="text-slate-500 uppercase tracking-wide block" style={{ fontWeight: 600 }}>Current Status</span>
                       <span className={`font-bold ${dupResult.isUnlockedStatus ? 'text-amber-800' : 'text-slate-700'}`}>{dupResult.status}</span>
                     </div>
                     {dupResult.isUnlockedStatus ? (
                       <div className="sm:col-span-3 mt-1 pt-2 border-t border-amber-100 text-emerald-700 font-medium flex items-center gap-1.5">
                         <span>✅ 30-Day Lock removed for status <strong>"{dupResult.status}"</strong>. You can proceed with saving to tag this candidate to your name.</span>
                       </div>
-                    ) : dupResult.daysRemaining !== undefined && (
-                      <div className="sm:col-span-3 mt-1 pt-2 border-t border-orange-200">
-                        <span className="text-orange-800 font-bold">
+                    ) : (
+                      <div className="sm:col-span-3 mt-1 pt-2 border-t border-red-200">
+                        <span className="text-red-800 font-bold">
                           {dupResult.daysRemaining > 0
-                            ? `⚠️ Locked: ${dupResult.daysRemaining} days remaining in 30-day validity.`
-                            : `✅ Validity Expired: Candidate can be re-assigned.`
+                            ? `⛔ Candidate already exists and is under 30-day validity (${dupResult.daysRemaining} days remaining). Cannot add again.`
+                            : `⛔ Candidate already exists in the system.`
                           }
                         </span>
                       </div>
                     )}
                   </div>
 
-                  {!dupResult.isUnlockedStatus && dupResult.daysRemaining > 0 && !isAdmin && (
-                    <div className="mt-3 p-3 bg-white border border-red-200 rounded-lg text-red-700 text-xs font-medium">
-                      Candidate is already assigned to {dupResult.recruiterName} and is under 30-day validity. Please contact Admin for reassignment.
+                  {!dupResult.isUnlockedStatus && (
+                    <div className="mt-3 p-3 bg-red-100/80 border border-red-300 rounded-lg text-red-800 text-xs font-semibold">
+                      Candidate is already assigned to {dupResult.recruiterName || 'another recruiter'} (Status: "{dupResult.status}"). Duplicate candidates cannot be created.
                     </div>
                   )}
 

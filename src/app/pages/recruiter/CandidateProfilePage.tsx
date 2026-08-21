@@ -175,9 +175,14 @@ export function CandidateProfilePage() {
     s => s.toLowerCase() === (candidate?.status || '').trim().toLowerCase()
   );
   const assignedId = String(candidate?.assignedRecruiter?._id || candidate?.assignedRecruiter || '');
-  const currentUserId = String(user?._id || '');
-  const isOwner = isRecruiter && (assignedId === currentUserId);
-  const isAssignedToOther = isRecruiter && Boolean(assignedId) && !isOwner;
+  const currentUserId = String(user?._id || user?.id || '');
+  const assignedName = String(candidate?.assignedRecruiterName || candidate?.assignedRecruiter?.name || '').trim().toLowerCase();
+  const currentUserName = String(user?.name || '').trim().toLowerCase();
+
+  const isOwner = (assignedId && currentUserId && assignedId === currentUserId) ||
+                  (assignedName && currentUserName && assignedName === currentUserName);
+
+  const isAssignedToOther = isRecruiter && Boolean(assignedId || assignedName) && !isOwner;
   const isLockedForOtherRecruiter = isAssignedToOther && !isUnlockedStatus && !isAdmin && !isTL && !isManager;
   const isLockedForRecruiter = isLockedForOtherRecruiter;
 

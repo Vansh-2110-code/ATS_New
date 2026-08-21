@@ -198,6 +198,14 @@ export function ReportsPage() {
     (j.teamLeader && j.teamLeader.toLowerCase().includes(activeJRSearch.toLowerCase()))
   );
 
+const cleanRecruiterName = (name: string) => {
+  if (!name) return 'Unassigned';
+  return name
+    .replace(/\s*\((recruiter|tl|admin|manager)\)\s*/gi, '')
+    .replace(/\s*\[(recruiter|tl|admin|manager)\]\s*/gi, '')
+    .trim() || 'Unassigned';
+};
+
   // Generic CSV exporter for current view
   const exportCurrentViewCSV = () => {
     let filename = `report_${activeView}_${dateFrom}_${dateTo}.csv`;
@@ -206,16 +214,16 @@ export function ReportsPage() {
     if (activeView === 'active-jr') {
       filename = `active_jr_report_${dateFrom}_${dateTo}.csv`;
       csv = 'JR Number,Customer Name,Job Title,Division,Team Leader,Skills,Open Positions,Active Profiles in Pipeline,Creator / Owner,Status\n' +
-        filteredActiveJRs.map(j => `"${j.jrNumber}","${j.customerName}","${j.jobTitle}","${j.division || 'BPO'}","${j.teamLeader || 'Unassigned'}","${j.skills.replace(/"/g, '""')}",${j.positions},${j.activeProfilesCount},"${j.createdBy}","${j.status}"`).join('\n');
+        filteredActiveJRs.map(j => `"${j.jrNumber}","${j.customerName}","${j.jobTitle}","${j.division || 'BPO'}","${cleanRecruiterName(j.teamLeader)}","${j.skills.replace(/"/g, '""')}",${j.positions},${j.activeProfilesCount},"${cleanRecruiterName(j.createdBy)}","${j.status}"`).join('\n');
     } else if (activeView === 'active-profiles') {
       filename = `active_profiles_report_${dateFrom}_${dateTo}.csv`;
       csv = 'Candidate Name,Phone,Email,Position Applied,Customer Name,Division,Active Status,Active/Inactive,JR Number,Recruiter,Team Leader,Days Pending,Last Updated\n' +
-        filteredActiveProfiles.map(c => `"${c.name}","${c.phone}","${c.email}","${c.positionApplied}","${c.clientName}","${c.division || 'BPO'}","${c.status}","${getActiveInactiveGroup(c.status)}","${c.jrNumber}","${c.recruiter}","${c.teamLeader || 'Unassigned'}",${c.daysPending},"${c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : ''}"`).join('\n');
+        filteredActiveProfiles.map(c => `"${c.name}","${c.phone}","${c.email}","${c.positionApplied}","${c.clientName}","${c.division || 'BPO'}","${c.status}","${getActiveInactiveGroup(c.status)}","${c.jrNumber}","${cleanRecruiterName(c.recruiter)}","${cleanRecruiterName(c.teamLeader)}",${c.daysPending},"${c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : ''}"`).join('\n');
     } else if (activeView === 'expected-revenue') {
       filename = `expected_revenue_report_${revenueSubView}_${dateFrom}_${dateTo}.csv`;
       if (revenueSubView === 'candidate') {
         csv = 'Candidate Name,Phone Number,Email ID,Customer / Client Name,Date of Joining,Offered CTC,Recruiter,Team Leader,Revenue Generated\n' +
-          (expectedRevenueData.joinedCandidates || []).map(c => `"${c.name}","${c.phone || '—'}","${c.email || '—'}","${c.customerName}","${c.doj || c.joinedDate || '—'}",${c.ctc || 0},"${c.recruiter}","${c.teamLeader || 'Unassigned'}",${c.revenue || 0}`).join('\n');
+          (expectedRevenueData.joinedCandidates || []).map(c => `"${c.name}","${c.phone || '—'}","${c.email || '—'}","${c.customerName}","${c.doj || c.joinedDate || '—'}",${c.ctc || 0},"${cleanRecruiterName(c.recruiter)}","${cleanRecruiterName(c.teamLeader)}",${c.revenue || 0}`).join('\n');
       } else if (revenueSubView === 'customer') {
         csv = 'Customer Name,Yet To Join Count,Joined Count,Expected Revenue,Actual Joined Revenue\n' +
           expectedRevenueData.customerRevenue.map(c => `"${c.customerName}",${c.yetToJoinCount},${c.joinedCount},${c.expectedRevenue},${c.actualJoinedRevenue}`).join('\n');
@@ -226,10 +234,10 @@ export function ReportsPage() {
     } else if (activeView === 'lead-performance') {
       filename = `lead_recruiter_performance_${dateFrom}_${dateTo}.csv`;
       csv = 'Name,Employee ID,Role,Profiles Submitted,Selects,Joinees,Joinees vs Submitted %,Joinees vs Selects %\n' +
-        leadPerformanceData.map(l => `"${l.name}","${l.employeeId}","${l.role}",${l.submitted},${l.selects},${l.joinees},"${l.joineesVsSubmittedRatio}","${l.joineesVsSelectsRatio}"`).join('\n');
+        leadPerformanceData.map(l => `"${cleanRecruiterName(l.name)}","${l.employeeId}","${l.role}",${l.submitted},${l.selects},${l.joinees},"${l.joineesVsSubmittedRatio}","${l.joineesVsSelectsRatio}"`).join('\n');
     } else {
       csv = 'Recruiter,Calls,Interviews,Placed,Conv Rate,Revenue\n' +
-        performanceData.map((r: any) => `"${r.recruiter}",${r.calls},${r.interviews},${r.placed},"${r.convRate}",${r.revenue}`).join('\n');
+        performanceData.map((r: any) => `"${cleanRecruiterName(r.recruiter)}",${r.calls},${r.interviews},${r.placed},"${r.convRate}",${r.revenue}`).join('\n');
     }
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
