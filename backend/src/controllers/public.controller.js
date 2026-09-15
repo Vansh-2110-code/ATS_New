@@ -242,7 +242,7 @@ exports.approveJoining = async (req, res, next) => {
     await emp.save();
 
     try {
-      const { createLog } = require('../utils/helpers');
+      const { createLog } = require('../utils/auditLogger');
       await createLog({
         type: 'edit',
         user: req.user._id,
@@ -296,7 +296,7 @@ exports.rejectJoining = async (req, res, next) => {
     await emp.save();
 
     try {
-      const { createLog } = require('../utils/helpers');
+      const { createLog } = require('../utils/auditLogger');
       await createLog({
         type: 'edit',
         user: req.user._id,
