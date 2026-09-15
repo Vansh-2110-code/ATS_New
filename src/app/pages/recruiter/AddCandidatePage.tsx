@@ -220,9 +220,17 @@ const EMPTY_FORM = {
   recruiterApplyEmail: '',
   sourceDetails: '',
 
+  // Eligible Tracker Details
+  jobLevel: '',
+  vendorSPOC: '',
+  companySPOC: '',
+  relevantExperience: '',
+  cibilScore: '',
+  panCardNumber: '',
+
   // First Call Status
   candidateContacted: true,
-  firstCallStatus: 'Eligible',
+  firstCallStatus: '',
   firstCallOtherReason: '',
   communicationRating: 'Good',
   firstCallInterviewType: '',
@@ -352,6 +360,13 @@ export function AddCandidatePage() {
           currentSubLocation:    c.localArea || c.currentSubLocation || '',
           preferredState:        c.preferredState || '',
           preferredCity:         c.preferredCity || '',
+          // Eligible Tracker Details
+          jobLevel:              c.jobLevel || '',
+          vendorSPOC:            c.vendorSPOC || '',
+          companySPOC:           c.companySPOC || '',
+          relevantExperience:    c.relevantExperience || '',
+          cibilScore:            c.cibilScore || '',
+          panCardNumber:         c.panCardNumber || '',
           // Job Details
           department:            c.department || '',
           client:                c.client || '',
@@ -407,6 +422,45 @@ export function AddCandidatePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidateId]);
 
+  // ── Auto-fill from query params (e.g. redirected from ATS Scanner Universal Role Tag) ──
+  useEffect(() => {
+    if (candidateId) return;
+    const jrNum = searchParams.get('jrNumber');
+    const name = searchParams.get('name');
+    const email = searchParams.get('email');
+    const phone = searchParams.get('phone');
+    const role = searchParams.get('role');
+    const dept = searchParams.get('department');
+    const exp = searchParams.get('experience');
+
+    if (jrNum || name || email || phone || role || dept || exp) {
+      setForm(prev => ({
+        ...prev,
+        ...(name ? { candidateName: name } : {}),
+        ...(email ? { candidateEmail: email } : {}),
+        ...(phone ? { candidatePhone: phone } : {}),
+        ...(role ? { positionApplied: role, projectedRole: role, eligibleRole: role } : {}),
+        ...(dept ? { department: dept } : {}),
+        ...(exp ? { experienceYears: exp.replace(/[^\d]/g, '') } : {}),
+        ...(jrNum ? { jrNumber: jrNum } : {})
+      }));
+
+      if (jrNum && jobs.length > 0) {
+        const foundJob = jobs.find((j: any) => j.jrNumber === jrNum);
+        if (foundJob) {
+          setForm(prev => ({
+            ...prev,
+            clientName: foundJob.client || foundJob.companyName || '',
+            positionApplied: role || foundJob.jobTitle || '',
+            projectedRole: role || foundJob.jobTitle || '',
+            department: dept || foundJob.department || foundJob.division || '',
+            client: foundJob.companyName || foundJob.client || '',
+          }));
+        }
+      }
+    }
+  }, [candidateId, searchParams, jobs]);
+
 
   // Real-time duplicate detection with 600ms debounce
   const triggerDupCheck = useCallback((phone: string, email: string) => {
@@ -438,6 +492,13 @@ export function AddCandidatePage() {
 
   // JR auto-fill
   const handleJrSelect = (jrNum: string) => {
+    if (errors.jrNumber) {
+      setErrors(prev => {
+        const copy = { ...prev };
+        delete copy.jrNumber;
+        return copy;
+      });
+    }
     const job = jobs.find((j: any) => j.jrNumber === jrNum);
     if (job) {
       setForm(f => ({
@@ -610,9 +671,20 @@ export function AddCandidatePage() {
     const e: Record<string, string> = {};
     if (!form.candidateName.trim()) e.candidateName = 'Candidate name is required';
     if (!form.candidatePhone.match(/^\d{10}$/)) e.candidatePhone = 'Enter a valid 10-digit phone number';
+    if (!form.jrNumber || !form.jrNumber.trim()) e.jrNumber = 'Please select a Job Requirement (JR). JR selection is mandatory.';
     if (form.candidateContacted && !form.firstCallStatus) e.firstCallStatus = 'First call status is required';
     setErrors(e);
-    return Object.keys(e).length === 0;
+
+    if (Object.keys(e).length > 0) {
+      if (e.jrNumber) {
+        const jrEl = document.getElementById('jr-selection-card');
+        if (jrEl) {
+          jrEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+      return false;
+    }
+    return true;
   };
 
   const handleSubmit = async (ev?: React.FormEvent | React.MouseEvent) => {
@@ -646,7 +718,12 @@ export function AddCandidatePage() {
       return;
     }
 
-    if (!validate()) return;
+    if (!validate()) {
+      if (!form.jrNumber || !form.jrNumber.trim()) {
+        alert('⚠️ Mandatory Field Missing: Please select a Job Requirement (JR) before submitting.');
+      }
+      return;
+    }
     setSubmitting(true);
     try {
       const fd = new FormData();
@@ -693,6 +770,14 @@ export function AddCandidatePage() {
       if (form.projectedRole) fd.append('projectedRole', form.projectedRole);
       if (form.recruiterApplyEmail) fd.append('recruiterApplyEmail', form.recruiterApplyEmail);
       if (form.sourceDetails) fd.append('sourceDetails', form.sourceDetails);
+
+      // Eligible Tracker Details
+      if (form.jobLevel) fd.append('jobLevel', form.jobLevel);
+      if (form.vendorSPOC) fd.append('vendorSPOC', form.vendorSPOC);
+      if (form.companySPOC) fd.append('companySPOC', form.companySPOC);
+      if (form.relevantExperience) fd.append('relevantExperience', form.relevantExperience);
+      if (form.cibilScore) fd.append('cibilScore', form.cibilScore);
+      if (form.panCardNumber) fd.append('panCardNumber', form.panCardNumber);
 
       // First Call Status
       fd.append('candidateContacted', String(form.candidateContacted));
@@ -1027,18 +1112,29 @@ export function AddCandidatePage() {
           >
 
           {/* ══════════ JR Selection & Auto-fill ══════════ */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-blue-50 border-b border-blue-100">
-              <h2 className="text-blue-800" style={{ fontWeight: 700, fontSize: '1rem' }}>
+          <div id="jr-selection-card" className={`bg-white rounded-xl border ${errors.jrNumber ? 'border-red-400 ring-2 ring-red-100 shadow-red-50' : 'border-slate-200'} shadow-sm overflow-hidden transition-all`}>
+            <div className={`px-6 py-4 ${errors.jrNumber ? 'bg-red-50 border-b border-red-100' : 'bg-blue-50 border-b border-blue-100'}`}>
+              <h2 className={`${errors.jrNumber ? 'text-red-800' : 'text-blue-800'}`} style={{ fontWeight: 700, fontSize: '1rem' }}>
                 <Briefcase className="inline w-4 h-4 mr-1.5" />
-                Job Requirement (JR) – Auto Fill
+                Job Requirement (JR) – Auto Fill <span className="text-red-500 font-extrabold">* (Compulsory)</span>
               </h2>
-              <p className="text-blue-600 text-xs mt-0.5">Select a JR to auto-fill client, position, recruiter details, and job specifics (Portfolio Department, Client, Projecting for Role)</p>
+              <p className={`${errors.jrNumber ? 'text-red-600 font-semibold' : 'text-blue-600'} text-xs mt-0.5`}>
+                {errors.jrNumber ? '⚠️ You must select a JR before adding this candidate to the system.' : 'Select a JR to auto-fill client, position, recruiter details, and job specifics (Portfolio Department, Client, Projecting for Role)'}
+              </p>
             </div>
             <div className="px-6 py-5">
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="block text-sm text-slate-700 mb-1.5" style={{ fontWeight: 500 }}>Select JR Number</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm text-slate-700" style={{ fontWeight: 600 }}>
+                      Select JR Number <span className="text-red-500 font-bold">*</span>
+                    </label>
+                    {errors.jrNumber && (
+                      <span className="text-red-600 text-xs font-bold animate-pulse">
+                        * Selection Required
+                      </span>
+                    )}
+                  </div>
                   <div className="mb-2">
                     <input
                       type="text"
@@ -1054,9 +1150,9 @@ export function AddCandidatePage() {
                       value={form.jrNumber}
                       onChange={e => handleJrSelect(e.target.value)}
                       disabled={isLockedByFinalInterview}
-                      className="flex-1 px-3 py-2.5 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400 bg-white disabled:bg-slate-50 disabled:text-slate-400"
+                      className={`flex-1 px-3 py-2.5 rounded-lg border ${errors.jrNumber ? 'border-red-400 bg-red-50/30 ring-1 ring-red-300' : 'border-slate-200 bg-white'} text-sm outline-none focus:border-green-400 disabled:bg-slate-50 disabled:text-slate-400`}
                     >
-                      <option value="">-- Select JR ({filteredJobs.length} found) --</option>
+                      <option value="">-- Select JR ({filteredJobs.length} found) * --</option>
                       {filteredJobs.map((j: any) => (
                         <option key={j._id} value={j.jrNumber}>
                           {j.jrNumber} – {j.jobTitle} ({j.client || j.companyName}) | Owner: {j.recruiterName || 'N/A'} | Loc: {j.location || 'N/A'} | Posted: {j.createdAt ? new Date(j.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'}
@@ -1077,6 +1173,12 @@ export function AddCandidatePage() {
                       </button>
                     )}
                   </div>
+                  {errors.jrNumber && (
+                    <p className="text-red-500 text-xs font-semibold mt-2 flex items-center gap-1.5 bg-red-50 p-2 rounded-lg border border-red-200">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      {errors.jrNumber}
+                    </p>
+                  )}
                 </div>
                 
                 <fieldset disabled={isLockedCoreFields} className="grid sm:grid-cols-2 gap-4 sm:col-span-2 border-none p-0 m-0 contents">
@@ -1117,6 +1219,76 @@ export function AddCandidatePage() {
             </div>
           </div>
           </fieldset>
+
+          {/* ══════════ Resume Attachment (Positioned directly below JR) ══════════ */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 bg-green-50 border-b border-green-100">
+              <h2 className="text-green-800" style={{ fontWeight: 700, fontSize: '1rem' }}>Resume Attachment</h2>
+            </div>
+            <div className="px-6 py-5">
+              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
+                <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                <p className="text-blue-700 text-sm">
+                  <strong>Tip:</strong> Upload the resume first — the system will auto-fill candidate details from it.
+                </p>
+              </div>
+
+              <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-green-300 transition-colors">
+                <Upload className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                <p className="text-sm text-slate-500 mb-3">
+                  {form.resume
+                    ? <span className="text-green-600 font-medium">{form.resume.name}</span>
+                    : resumeFileName
+                      ? <span className="text-green-600 font-medium">{resumeFileName}</span>
+                      : <span>No file selected.</span>
+                  }
+                </p>
+                {/* 
+                   Logic: 
+                   - If resume exists: TL sees View link (read-only).
+                   - If resume MISSING: TL can upload it (editable).
+                   - Otherwise (recruiter mode): Always editable.
+                */}
+                {isTLReadOnly && resumeFileUrl ? (
+                  <a
+                    href={resumeFileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-100 hover:bg-green-200 transition-colors text-sm font-semibold text-green-700"
+                    style={{ pointerEvents: 'auto' }}
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    View / Download Resume
+                  </a>
+                ) : (
+                  <>
+                    <label className={`cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 rounded-lg transition-colors text-sm font-semibold text-white ${extracting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>
+                      {extracting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                      {extracting ? 'Extracting...' : 'Upload Resume'}
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        className="hidden"
+                        disabled={extracting}
+                        onChange={e => handleResumeUpload(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                    <p className="text-xs text-slate-400 mt-2">Accepted: PDF, DOCX (max 10MB)</p>
+                  </>
+                )}
+              </div>
+
+              {extractMsg && (
+                <div className={`mt-3 rounded-lg p-3 flex items-start gap-2 text-sm ${extractMsg.includes('Could not')
+                  ? 'bg-amber-50 border border-amber-200 text-amber-700'
+                  : 'bg-green-50 border border-green-200 text-green-700'
+                  }`}>
+                  <Sparkles className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  {extractMsg}
+                </div>
+              )}
+            </div>
+          </div>
 
           <fieldset disabled={isLockedCoreFields} className="space-y-10 border-none p-0 m-0">
           {/* ══════════ Candidate Details ══════════ */}
@@ -1467,76 +1639,6 @@ export function AddCandidatePage() {
                 </div>
               )}
 
-            </div>
-          </div>
-
-          {/* ══════════ Resume Attachment ══════════ */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 bg-green-50 border-b border-green-100">
-              <h2 className="text-green-800" style={{ fontWeight: 700, fontSize: '1rem' }}>Resume Attachment</h2>
-            </div>
-            <div className="px-6 py-5">
-              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-start gap-2">
-                <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                <p className="text-blue-700 text-sm">
-                  <strong>Tip:</strong> Upload the resume first — the system will auto-fill candidate details from it.
-                </p>
-              </div>
-
-              <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-green-300 transition-colors">
-                <Upload className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-                <p className="text-sm text-slate-500 mb-3">
-                  {form.resume
-                    ? <span className="text-green-600 font-medium">{form.resume.name}</span>
-                    : resumeFileName
-                      ? <span className="text-green-600 font-medium">{resumeFileName}</span>
-                      : <span>No file selected.</span>
-                  }
-                </p>
-                {/* 
-                   Logic: 
-                   - If resume exists: TL sees View link (read-only).
-                   - If resume MISSING: TL can upload it (editable).
-                   - Otherwise (recruiter mode): Always editable.
-                */}
-                {isTLReadOnly && resumeFileUrl ? (
-                  <a
-                    href={resumeFileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-green-100 hover:bg-green-200 transition-colors text-sm font-semibold text-green-700"
-                    style={{ pointerEvents: 'auto' }}
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    View / Download Resume
-                  </a>
-                ) : (
-                  <>
-                    <label className={`cursor-pointer inline-flex items-center gap-2 px-5 py-2.5 rounded-lg transition-colors text-sm font-semibold text-white ${extracting ? 'bg-green-400 cursor-not-allowed' : 'bg-green-600 hover:bg-green-700'}`}>
-                      {extracting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                      {extracting ? 'Extracting...' : 'Upload Resume'}
-                      <input
-                        type="file"
-                        accept=".pdf,.doc,.docx"
-                        className="hidden"
-                        disabled={extracting}
-                        onChange={e => handleResumeUpload(e.target.files?.[0] || null)}
-                      />
-                    </label>
-                    <p className="text-xs text-slate-400 mt-2">Accepted: PDF, DOCX (max 10MB)</p>
-                  </>
-                )}
-              </div>
-
-              {extractMsg && (
-                <div className={`mt-3 rounded-lg p-3 flex items-start gap-2 text-sm ${extractMsg.includes('Could not')
-                  ? 'bg-amber-50 border border-amber-200 text-amber-700'
-                  : 'bg-green-50 border border-green-200 text-green-700'
-                  }`}>
-                  <Sparkles className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  {extractMsg}
-                </div>
-              )}
             </div>
           </div>
 

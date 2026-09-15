@@ -1,0 +1,2192 @@
+{
+  ".Net + MVC": {
+    "fileName": ".Net + MVC",
+    "roleTitle": ".Net + MVC",
+    "extractedDomain": ".Net + MVC (Model-View-Controller)",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: .Net + MVC (Model-View-Controller)",
+      "Experience of .Net development primarily in C#",
+      "Should be good at advance C# skills like threading, parallel programming, familiar with locks, design patterns."
+    ],
+    "textLength": 817
+  },
+  ".Net Fullstack Developer": {
+    "fileName": ".Net Fullstack Developer",
+    "roleTitle": ".Net Fullstack Developer",
+    "extractedDomain": ".Net Fullstack Developer",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: .Net Fullstack Developer",
+      "Proficient in .NET Core, ASP.NET Core MVC, C#, MVC, Angular, Web API, .NET MVC, SQL Server,",
+      "Strong understanding of software development methodologies and agile development principles."
+    ],
+    "textLength": 863
+  },
+  ".Net": {
+    "fileName": ".Net",
+    "roleTitle": ".Net",
+    "extractedDomain": ".Net",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: .Net",
+      "Should have worked on .Net development/implementation/Support project",
+      "Must have experience in .NET, ASP.NET MVC, C#, WPF, WCF, SQL Server, Azure"
+    ],
+    "textLength": 849
+  },
+  "Amazon Web Services": {
+    "fileName": "Amazon Web Services",
+    "roleTitle": "Amazon Web Services",
+    "extractedDomain": "Amazon Web Services",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Amazon Web Services",
+      "Containerization and Orchestration with AWS ECS or EKS",
+      "AWS performance tuning and cost optimization, AWS service expertise (S3, EC2, RDS, Lambda and more)"
+    ],
+    "textLength": 903
+  },
+  "Angular Full stack developer (Java or ,net)": {
+    "fileName": "Angular Full stack developer (Java or ,net)",
+    "roleTitle": "Angular Full stack developer (Java or ,net)",
+    "extractedDomain": "Angular Full stack developer (Java or ,net)",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Angular Full stack developer (Java or ,net)",
+      "Design, develop, and maintain web applications with Angular for the front-end and Java or .NET for the back-end.",
+      "Build responsive and user-friendly interfaces using Angular and modern front-end technologies."
+    ],
+    "textLength": 1429
+  },
+  "Angular, Java": {
+    "fileName": "Angular, Java",
+    "roleTitle": "Angular, Java",
+    "extractedDomain": "Angular, Java",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Angular, Java",
+      "Senior Java, Angular developer with Good working experience in latest Angular version 17.",
+      "Hands-on leadership and end-to-end ownership of leading and delivering platforms and products by leveraging modern technology stack (Microservices, Cloud, DevOps)"
+    ],
+    "textLength": 870
+  },
+  "Angular": {
+    "fileName": "Angular",
+    "roleTitle": "Angular",
+    "extractedDomain": "Angular",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Angular",
+      "Hands on experience on JavaScript, CSS, HTML5, front-end languages, cross-browser compatible testing",
+      "Hands on experience in Unit Test, Jasmine Karma and TDD (Test Driven Development)"
+    ],
+    "textLength": 841
+  },
+  "API Automation": {
+    "fileName": "API Automation (1)",
+    "roleTitle": "API Automation",
+    "extractedDomain": "API Automation",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: API Automation",
+      "Design and implement automated test scripts using Rest Assured (Java)",
+      "Validate RESTful APIs (GET, POST, PUT, DELETE)"
+    ],
+    "textLength": 1292
+  },
+  "API Testing,Rest Assured": {
+    "fileName": "API Testing,Rest Assured",
+    "roleTitle": "API Testing,Rest Assured",
+    "extractedDomain": "API Testing, Rest Assured",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: API Testing, Rest Assured",
+      "Strong hands on experience in Java, Selenium and API rest assured",
+      "Good knowledge on API automation with RestAssured."
+    ],
+    "textLength": 674
+  },
+  "AWS Redshift DBA": {
+    "fileName": "AWS Redshift DBA",
+    "roleTitle": "AWS Redshift DBA",
+    "extractedDomain": "AWS Redshift DBA",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: AWS Redshift DBA",
+      "Experience on DB and AWS.",
+      "Perform data migrations from existing databases to AWS"
+    ],
+    "textLength": 962
+  },
+  "Azure": {
+    "fileName": "Azure",
+    "roleTitle": "Azure",
+    "extractedDomain": "Azure",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Azure",
+      "Creation of VMs according to the project requirements, Deploying VMs and cloud services through VNETs and SNETs.",
+      "Connecting, adding disk, resizing, disk formatting, and disk partitions to AZURE Linux and Windows VM"
+    ],
+    "textLength": 1060
+  },
+  "Azure, AI ML, C#, .Net": {
+    "fileName": "Azure, AI ML, C#, .Net",
+    "roleTitle": "Azure, AI ML, C#, .Net",
+    "extractedDomain": "Azure, AI ML, C#, .Net",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Azure, AI ML, C#, .Net",
+      "Experience in applying AI to practical and comprehensive technology solutions.",
+      "Experience with ML, deep learning, TensorFlow, Python, NLP. Experience in ASP .Net Core."
+    ],
+    "textLength": 1060
+  },
+  "C# Selenium, API Automation": {
+    "fileName": "C# Selenium, API Automation",
+    "roleTitle": "C# Selenium, API Automation",
+    "extractedDomain": "C# Selenium, API Automation",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: C# Selenium, API Automation",
+      "Strong hands-on experience in C# Selenium, API Automation",
+      "Automation testing experience with C#, Selenium"
+    ],
+    "textLength": 788
+  },
+  "Change Manager": {
+    "fileName": "Change Manager",
+    "roleTitle": "Change Manager",
+    "extractedDomain": "Change Manager",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Change Manager",
+      "Overall responsible for the full E2E life cycle of the Change Management processes.",
+      "Responsible for the day-to-day coordination of Change Requests, to include ticket updates, coordinating approvals and dealing with queries and issues that may arise."
+    ],
+    "textLength": 941
+  },
+  "Cloud Architect with DW experience": {
+    "fileName": "Cloud Architect with DW experience",
+    "roleTitle": "Cloud Architect with DW experience",
+    "extractedDomain": "Cloud Architect with DW experience",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Cloud Architect with DW experience",
+      "Good experience on cloud administration, infrastructure optimization, and service delivery.",
+      "Developing and implementing data using Azure cloud management solutions."
+    ],
+    "textLength": 886
+  },
+  "Content and Technical writer": {
+    "fileName": "Content and Technical writer",
+    "roleTitle": "Content and Technical writer",
+    "extractedDomain": "Technical writer that can convert complex technical concepts into easy to consume documents for the targeted audience. In addition, will also be a mentor to the team with technical writing.",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Content and Technical writer",
+      "Develop high-quality technical documents, including user manuals, guides, and release notes.",
+      "Collaborate with cross-functional teams to gather requirements and create accurate documentation."
+    ],
+    "textLength": 1167
+  },
+  "Core .Net": {
+    "fileName": "Core .Net",
+    "roleTitle": "Core .Net",
+    "extractedDomain": "Core .Net",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Core .Net",
+      "Design, develop, and implement .NET Core web applications and APIs",
+      "Write clean, maintainable, and well-documented code"
+    ],
+    "textLength": 810
+  },
+  "Core Java, Spring boot": {
+    "fileName": "Core Java, Spring boot",
+    "roleTitle": "Core Java, Spring boot",
+    "extractedDomain": "Core Java, Spring boot",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Core Java, Spring boot",
+      "Exp in developer skills in Core Java, Java 8, Spring Boot",
+      "Design and development of medium to large scale application components in Java."
+    ],
+    "textLength": 919
+  },
+  "Core Java": {
+    "fileName": "Core Java",
+    "roleTitle": "Core Java",
+    "extractedDomain": "Core Java",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Core Java",
+      "In-depth understanding of Java language fundamentals and OOP concepts.",
+      "Experience with Java frameworks like Spring, Hibernate, and Struts is a plus."
+    ],
+    "textLength": 863
+  },
+  "Data Analyst": {
+    "fileName": "Data Analyst",
+    "roleTitle": "Data Analyst",
+    "extractedDomain": "Data Analyst",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Data Analyst",
+      "Experience with Programming/Scripting in Python, Bash",
+      "Hands on experience in Database: SQL"
+    ],
+    "textLength": 772
+  },
+  "Desktop Support": {
+    "fileName": "Desktop Support",
+    "roleTitle": "Desktop Support",
+    "extractedDomain": "Desktop Support",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Desktop Support",
+      "Provide L1/L2 desktop support for hardware, software, and network issues",
+      "Troubleshoot laptops, desktops, printers, and peripheral devices"
+    ],
+    "textLength": 1198
+  },
+  "ETL DB Testing": {
+    "fileName": "ETL DB Testing",
+    "roleTitle": "ETL DB Testing",
+    "extractedDomain": "ETL DB Testing",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ETL DB Testing",
+      "Strong experience in ETL testing, data warehousing, and business intelligence.",
+      "Strong proficiency in SQL."
+    ],
+    "textLength": 1417
+  },
+  "ETL Testing + Python Programming": {
+    "fileName": "ETL Testing + Python Programming",
+    "roleTitle": "ETL Testing + Python Programming",
+    "extractedDomain": "experience",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ETL Testing + Python Programming",
+      "Experience in Data Migration Testing (ETL Testing), Manual & Automation with Python Programming. Strong on writing complex SQLs for data migration validations.",
+      "Work experience with Agile Scrum Methodology"
+    ],
+    "textLength": 894
+  },
+  "ETL Testing + Python": {
+    "fileName": "ETL Testing + Python",
+    "roleTitle": "ETL Testing + Python",
+    "extractedDomain": "experience",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ETL Testing + Python",
+      "Experience in Data Migration Testing (ETL Testing), Manual & Automation with Python Programming. Strong on writing complex SQLs for data migration validations.",
+      "Work experience with Agile Scrum Methodology"
+    ],
+    "textLength": 870
+  },
+  "ETL Testing Automation": {
+    "fileName": "ETL Testing Automation",
+    "roleTitle": "ETL Testing Automation",
+    "extractedDomain": "ETL Testing Automation",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ETL Testing Automation",
+      "Strong experience in ETL testing and automation.",
+      "Strong proficiency in SQL and experience with relational databases (e.g., Oracle, MySQL, PostgreSQL, SQL Server)."
+    ],
+    "textLength": 1316
+  },
+  "ETL Testing with Database and UI testing": {
+    "fileName": "ETL Testing with Database and UI testing",
+    "roleTitle": "ETL Testing with Database and UI testing",
+    "extractedDomain": "ETL Testing with Database and UI testing",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ETL Testing with Database and UI testing",
+      "Proven experience working as a QA Tester in ETL environments.",
+      "Strong proficiency in SQL, with hands-on experience working with RDBMS databases."
+    ],
+    "textLength": 1095
+  },
+  "ETL Testing with Java Selenium Automation": {
+    "fileName": "ETL Testing with Java Selenium Automation",
+    "roleTitle": "ETL Testing with Java Selenium Automation",
+    "extractedDomain": "ETL Testing with Java Selenium Automation",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ETL Testing with Java Selenium Automation",
+      "Proven experience working as a QA Tester in ETL environments.",
+      "Strong proficiency in SQL, with hands-on experience working with RDBMS databases."
+    ],
+    "textLength": 1109
+  },
+  "ETL Testing with UI & TOSCA Automation": {
+    "fileName": "ETL Testing with UI & TOSCA Automation",
+    "roleTitle": "ETL Testing with UI & TOSCA Automation",
+    "extractedDomain": "ETL Testing with UI & TOSCA Automation",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ETL Testing with UI & TOSCA Automation",
+      "Proven experience working as a QA Tester in Database testing.",
+      "Strong proficiency in SQL, with hands-on experience working with RDBMS databases."
+    ],
+    "textLength": 1138
+  },
+  "ETL_Data Warehousing Testing": {
+    "fileName": "ETL_Data Warehousing Testing",
+    "roleTitle": "ETL_Data Warehousing Testing",
+    "extractedDomain": "ETL/Data Warehousing Testing",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ETL / Data Warehousing Testing",
+      "ETL QA with 6+ years of ETL testing experience with good understanding of data warehouse and ETL process and related testing processes.",
+      "Deep database testing expertise and strong SQL skills"
+    ],
+    "textLength": 1283
+  },
+  "Facets": {
+    "fileName": "Facets",
+    "roleTitle": "Facets",
+    "extractedDomain": "Facets",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Facets",
+      "Able to perform Postproduction claims validation.",
+      "Validate and confirm configuration user stories (benefits, pricing, claims editing system, configuration automation, application support, and RPA) have moved to the Production Environment."
+    ],
+    "textLength": 1779
+  },
+  "Front end JAVA developer with Camel": {
+    "fileName": "Front end JAVA developer with Camel",
+    "roleTitle": "Front end JAVA developer with Camel",
+    "extractedDomain": "Front end JAVA developer with Camel",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Front end JAVA developer with Camel",
+      "Should have hands on experience in Front end JAVA developer with Camel.",
+      "Should holds knowledge in SOAP \\ Rest Webservices, Camunda"
+    ],
+    "textLength": 761
+  },
+  "Full stack developer - Angular, React": {
+    "fileName": "Full stack developer - Angular, React",
+    "roleTitle": "Full stack developer - Angular, React",
+    "extractedDomain": "Full stack developer - Angular, React",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Full stack developer - Angular, React",
+      "Hands on experience in front-end languages and libraries (HTML/ CSS, JavaScript, jQuery)",
+      "Experience working in back-end languages (Java, Python) and JavaScript frameworks (Angular, React, Node.js)"
+    ],
+    "textLength": 841
+  },
+  "Functional testing - TOSCA": {
+    "fileName": "Functional testing - TOSCA",
+    "roleTitle": "Functional testing - TOSCA",
+    "extractedDomain": "Functional testing - TOSCA",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Functional testing - TOSCA",
+      "Experience with TOSCA test automation.",
+      "Strong understanding of SAP testing principles and methodologies"
+    ],
+    "textLength": 948
+  },
+  "Google Cloud Platform": {
+    "fileName": "Google Cloud Platform",
+    "roleTitle": "Google Cloud Platform",
+    "extractedDomain": "Google Cloud Platform",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Google Cloud Platform",
+      "Providing support on creating and sustaining cloud infrastructure that extends to different services like storage, network, and security.",
+      "Creation of the most important cloud resources like virtual machines and containers."
+    ],
+    "textLength": 1114
+  },
+  "GRC": {
+    "fileName": "GRC (1)",
+    "roleTitle": "GRC",
+    "extractedDomain": "SAP GRC",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "SAP GRC (Governance, Risk & Compliance) Access Control professional is responsible for:",
+      "Managing user access in SAP systems",
+      "Ensuring compliance with security policies"
+    ],
+    "textLength": 1099
+  },
+  "IBM-Maximo": {
+    "fileName": "IBM-Maximo",
+    "roleTitle": "IBM-Maximo",
+    "extractedDomain": "IBM-Maximo",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: IBM-Maximo",
+      "IBM Maximo-Experience in design, develop and deploy new Maximo BIRT reports and dashboard.",
+      "Connecting multiple data sources, visualization, cubes, crosstab, and ad-hoc reporting."
+    ],
+    "textLength": 831
+  },
+  "Incident Management and Change management": {
+    "fileName": "Incident Management and Change management",
+    "roleTitle": "Incident Management and Change management",
+    "extractedDomain": "Incident Management and Change management",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Incident Management and Change management.",
+      "Strong knowledge of IT service management including ITIL",
+      "Responding to a reported incident, identifying the cause, and initiating the incident management process."
+    ],
+    "textLength": 1022
+  },
+  "Incident, problem and change management": {
+    "fileName": "Incident, problem and change management",
+    "roleTitle": "Incident, problem and change management",
+    "extractedDomain": "Incident, problem and change management",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Incident, problem and change management",
+      "Must have experience in Change management and problem Management.",
+      "Aware of Service now tool."
+    ],
+    "textLength": 804
+  },
+  "ITIL - Incident Management": {
+    "fileName": "ITIL - Incident Management",
+    "roleTitle": "ITIL - Incident Management",
+    "extractedDomain": "ITIL - Incident Management",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ITIL - Incident Management",
+      "Overseeing the incident management process and team members involved in resolving the incident.",
+      "Responding to a reported service incident, identifying the cause, and initiating the incident management process."
+    ],
+    "textLength": 959
+  },
+  "ITIL Support with Telecom Domain": {
+    "fileName": "ITIL Support with Telecom Domain",
+    "roleTitle": "ITIL Support with Telecom Domain",
+    "extractedDomain": "ITIL Support with exp in telecom domain. Understanding of project life cycle",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ITIL Support with Telecom Domain",
+      "ITIL Support with exp in telecom domain. Understanding of project life cycle",
+      "Knowledge of project management, release management"
+    ],
+    "textLength": 871
+  },
+  "ITIL": {
+    "fileName": "ITIL",
+    "roleTitle": "ITIL",
+    "extractedDomain": "ITIL",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ITIL",
+      "Overseeing the incident management process and team members involved in resolving the incident.",
+      "Responding to a reported service incident, identifying the cause, and initiating the incident management process."
+    ],
+    "textLength": 915
+  },
+  "ITSM Process Manager": {
+    "fileName": "ITSM Process Manager",
+    "roleTitle": "ITSM Process Manager",
+    "extractedDomain": "ITSM Process Manager",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: ITSM Process Manager",
+      "Oversee and lead direction for assigned IT processes utilizing the ITIL framework.",
+      "Review and govern the ITSM tool team for assigned ITIL processes to ensure alignment and data quality."
+    ],
+    "textLength": 1047
+  },
+  "IVR Performance Tester": {
+    "fileName": "IVR Performance Tester",
+    "roleTitle": "IVR Performance Tester",
+    "extractedDomain": "/IVR Testing would be preferable.",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: IVR Performance Tester",
+      "Experience working in Performance Testing Project. Experience in JMeter/Java Scripts/Groovy Scripts",
+      "Experience in writing DB queries preferably for MS SQL Server"
+    ],
+    "textLength": 843
+  },
+  "IVR QA Lead": {
+    "fileName": "IVR QA Lead",
+    "roleTitle": "IVR QA Lead",
+    "extractedDomain": "/IVR Testing would be preferable.",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: IVR QA Lead",
+      "Must have experience in IVR (IVR Concepts/Call Flow)",
+      "Experience in Functional/Automation Testing Project. Experience in writing DB queries preferably for MS SQL Server"
+    ],
+    "textLength": 868
+  },
+  "Java & Camel": {
+    "fileName": "Java & Camel",
+    "roleTitle": "Java & Camel",
+    "extractedDomain": "Java & Camel",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Java & Camel",
+      "Should have good knowledge in Java and Spring Boot microservices.",
+      "Good knowledge in Apache Camel. Good knowledge in Camunda workflows"
+    ],
+    "textLength": 860
+  },
+  "Java & React.js": {
+    "fileName": "Java & React.js",
+    "roleTitle": "Java & React.js",
+    "extractedDomain": "Java & React.js",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Java & React.js",
+      "Strong experience in Design, develop, test, and deploy full-stack applications using React.js and Spring Boot.",
+      "Collaborate with cross-functional teams to identify requirements and deliver high-quality solutions"
+    ],
+    "textLength": 948
+  },
+  "Java and SQL": {
+    "fileName": "Java and SQL",
+    "roleTitle": "Java and SQL",
+    "extractedDomain": "Java and SQL",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Java and SQL",
+      "Core Java, proficiency in Java Standard Edition (SE), deep understanding of object-oriented programming concepts, data structures and code libraries.",
+      "Familiarity with Integrated development Environments (IDEs) like IntelliJ IDEA Eclipse or NetBeans."
+    ],
+    "textLength": 1121
+  },
+  "Java Architect": {
+    "fileName": "Java Architect",
+    "roleTitle": "Java Architect",
+    "extractedDomain": "Java Architect",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Java Architect",
+      "Hands-on leadership and end-to-end ownership of leading and delivering platforms and products by leveraging modern technology stack (Microservices, Cloud, DevOps). Agile environment experience.",
+      "ReactJS or AngularJS. Java, API Gateways (such as Apigee, AWS Api Gateway)"
+    ],
+    "textLength": 911
+  },
+  "Java Full Stack Developer": {
+    "fileName": "Java Full Stack Developer - JD",
+    "roleTitle": "Java Full Stack Developer",
+    "extractedDomain": "",
+    "sampleLines": [
+      "Job Description: Java Full Stack Developer",
+      "For full stack JAVA with above skills and React/Angular and HTML/CSS/JAVAscript"
+    ],
+    "textLength": 136
+  },
+  "Java Spring boot with AWS": {
+    "fileName": "Java Spring boot with AWS",
+    "roleTitle": "Java Spring boot with AWS",
+    "extractedDomain": "Java Spring boot with AWS",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Java Spring boot with AWS",
+      "Develop and maintain Java applications using Spring Boot framework, Rest API, and Containerization with Docker",
+      "Any cloud exposure AWS/GCP/Azure"
+    ],
+    "textLength": 773
+  },
+  "JAVA SPRINGBOOT MONGO DB": {
+    "fileName": "JAVA SPRINGBOOT MONGO DB",
+    "roleTitle": "JAVA SPRINGBOOT MONGO DB",
+    "extractedDomain": "JAVA SPRINGBOOT MONGO DB",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: JAVA SPRINGBOOT MONGO DB",
+      "Experience in either worked earlier in development projects/Good skills required.",
+      "Should holds knowledge in SOAP \\ Rest Webservices, Mongo DB"
+    ],
+    "textLength": 750
+  },
+  "Java, Camunda": {
+    "fileName": "Java, Camunda",
+    "roleTitle": "Java, Camunda",
+    "extractedDomain": "Java, Camunda",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Java, Camunda",
+      "Should have good knowledge in Java and Spring Boot microservices.",
+      "Good knowledge in Camunda workflows. Should have good hands-on knowledge over oops concept and DB (SQL) basics."
+    ],
+    "textLength": 834
+  },
+  "Java, Springboot + Microservices +Kafka": {
+    "fileName": "Java, Springboot + Microservices +Kafka",
+    "roleTitle": "Java, Springboot + Microservices +Kafka",
+    "extractedDomain": "effectively.",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Java, Springboot + Microservices +Kafka",
+      "Design, build, and maintain efficient, reusable, reliable Java code.",
+      "Write well designed, testable, and scalable applications for mission-critical systems."
+    ],
+    "textLength": 1512
+  },
+  "Java, Springboot, Microservices": {
+    "fileName": "Java, Springboot, Microservices",
+    "roleTitle": "Java, Springboot, Microservices",
+    "extractedDomain": "Java, Spring boot, Microservices",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Java, Spring boot, Microservices",
+      "Agile environment experience. ReactJS or AngularJS",
+      "Java, API Gateways (such as Apigee, AWS Api Gateway)"
+    ],
+    "textLength": 782
+  },
+  "SAP ABAP": {
+    "fileName": "SAP ABAP",
+    "roleTitle": "SAP ABAP",
+    "extractedDomain": "SAP ABAP",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP ABAP",
+      "Develop and customize SAP ABAP programs, reports, interfaces, conversions, enhancements, and forms",
+      "Experience as an ABAP Consultant in SAP implementation and support projects"
+    ],
+    "textLength": 1231
+  },
+  "SAP FICO": {
+    "fileName": "SAP FICO",
+    "roleTitle": "SAP FICO",
+    "extractedDomain": "SAP FICO",
+    "sampleLines": [
+      "Team Lead/Process Lead",
+      "Description",
+      "Job Description: SAP FICO",
+      "SAP Finance consultants with skills in costing (CO) with ICWA",
+      "Expertise in all core functionalities of SAP FICO and advanced modules (e.g., Financial Consolidation, Treasury Management)"
+    ],
+    "textLength": 1029
+  },
+  "SAP MDG": {
+    "fileName": "SAP MDG",
+    "roleTitle": "SAP MDG",
+    "extractedDomain": "SAP MDG",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP MDG",
+      "Functional design for Data modelling, UI modelling, Rules and Validations in BRF+ through configurations, Replication modelling– DRFin and DRFout, IDOCs, ALE, SOAP services for SAP MDG.",
+      "Work with the various technical teams to come up with the future state solution architecture to support the MDG implementation."
+    ],
+    "textLength": 1219
+  },
+  "Technical Support": {
+    "fileName": "JD - Technical Support",
+    "roleTitle": "Technical Support",
+    "extractedDomain": "Technical Support",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Technical Support",
+      "1. Tech Support",
+      "Overview: The Tech Support will serve as a centralized IT help desk where users can come for immediate face-to-face support. The goal is to handle a variety of user requests, from simple troubleshooting to more complex IT issues."
+    ],
+    "textLength": 2000
+  },
+  "Java Selenium,  Katalon": {
+    "fileName": "Java Selenium,  Katalon",
+    "roleTitle": "Java Selenium,  Katalon",
+    "extractedDomain": "experience",
+    "sampleLines": [
+      "Team Lead/Process Lead",
+      "Description",
+      "Job Description: Java Selenium / Katalon",
+      "Java Selenium / Katalon",
+      "Financial domain experience"
+    ],
+    "textLength": 611
+  },
+  "Java, J2EE and Spring Boot": {
+    "fileName": "Java, J2EE and Spring Boot",
+    "roleTitle": "Java, J2EE and Spring Boot",
+    "extractedDomain": "Java, J2EE and Spring Boot",
+    "sampleLines": [
+      "Team Lead/Process Lead",
+      "Description",
+      "Job Description: Java, J2EE and Spring Boot",
+      "Design, develop, and maintain scalable Java applications using Spring Boot and J2EE technologies.",
+      "Perform unit and integration testing to ensure software quality."
+    ],
+    "textLength": 1396
+  },
+  "Python selenium and SQL": {
+    "fileName": "Python selenium and SQL",
+    "roleTitle": "Python selenium and SQL",
+    "extractedDomain": "Python selenium and SQL",
+    "sampleLines": [
+      "Team Lead/Process Lead",
+      "Description",
+      "Job Description: Python selenium and SQL",
+      "Strong experience in Python selenium",
+      "Strong experience in SQL."
+    ],
+    "textLength": 625
+  },
+  "React.js developer with AI Expertise": {
+    "fileName": "React.js developer with AI Expertise",
+    "roleTitle": "React.js developer with AI Expertise",
+    "extractedDomain": "React.js developer with AI Expertise",
+    "sampleLines": [
+      "Team Lead/Process Lead",
+      "Description",
+      "Job Description: React.js developer with AI Expertise",
+      "Design, develop, and maintain web applications with React.js for the front-end",
+      "Build responsive and user-friendly interfaces using React.js and modern front-end technologies."
+    ],
+    "textLength": 1759
+  },
+  "Selenium, playwright, Rest API": {
+    "fileName": "Selenium, playwright, Rest API",
+    "roleTitle": "Selenium, playwright, Rest API",
+    "extractedDomain": "Selenium, playwright, Rest API",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Selenium, playwright, Rest API",
+      "Highly skilled QA Automation Engineer with strong experience in Selenium, Playwright, and REST API testing. Candidate will be responsible for designing and executing automated test scripts, validating API endpoints, and ensuring the overall quality of web applications.",
+      "Develop and maintain automated test scripts using Selenium and Playwright."
+    ],
+    "textLength": 1512
+  },
+  "L1 Helpdesk": {
+    "fileName": "L1 Helpdesk",
+    "roleTitle": "L1 Helpdesk",
+    "extractedDomain": "",
+    "sampleLines": [
+      "L1 Voice Support:",
+      "Technical Help Desk Support (L1)",
+      "Min 3 Experienced Customer & technical support. (Inbound calls / FCR - First Contact Resolution).",
+      "Experience in Voice and email Support (US client).",
+      "Strong customer service & Handling skills."
+    ],
+    "textLength": 1300
+  },
+  "L1 Support (Windows Desktop Support) - Voice": {
+    "fileName": "L1 Support (Windows Desktop Support) - Voice",
+    "roleTitle": "L1 Support (Windows Desktop Support) - Voice",
+    "extractedDomain": "L1 Support (Windows Desktop Support) - Voice",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: L1 Support (Windows Desktop Support) – Voice",
+      "Experience in a technical support role, preferably with Windows environments.",
+      "Strong understanding of Windows operating systems, including troubleshooting common issues."
+    ],
+    "textLength": 1024
+  },
+  "L1 Support, procurement": {
+    "fileName": "L1 Support, procurement",
+    "roleTitle": "L1 Support, procurement",
+    "extractedDomain": "L1 Support, procurement",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: L1 Support, procurement",
+      "Handle procurement requests (PR/PO creation, tracking, vendor coordination)",
+      "Provide L1 support for procurement tools/process queries"
+    ],
+    "textLength": 1188
+  },
+  "L3 support, DevOps skills": {
+    "fileName": "L3 support, DevOps skills",
+    "roleTitle": "L3 support, DevOps skills",
+    "extractedDomain": "L3 support, DevOps skills",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: L3 support, DevOps skills",
+      "L3 support, DevOps skills.",
+      "L3 support - manual deployments of java and .net based applications."
+    ],
+    "textLength": 804
+  },
+  "Linux Admin": {
+    "fileName": "Linux Admin",
+    "roleTitle": "Linux Admin",
+    "extractedDomain": "Linux Admin",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Linux Admin",
+      "Installation and general support of Linux operating systems to support migration to newer OS and hardware.",
+      "Research/analyze/define/propose/design/document/implement solution to achieve business objectives."
+    ],
+    "textLength": 858
+  },
+  "Linux Unix": {
+    "fileName": "Linux Unix",
+    "roleTitle": "Linux Unix",
+    "extractedDomain": "Linux Unix",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Linux Unix",
+      "Hands on experience on Suse (12 and 15) and RHEL (7, 8 and 9)",
+      "Suse cluster (CRM), Rhel Cluster (PCS)"
+    ],
+    "textLength": 910
+  },
+  "Mainframe ,Cobol, JCL, DB2, CICS, SORT & Changeman": {
+    "fileName": "Mainframe ,Cobol, JCL, DB2, CICS, SORT & Changeman",
+    "roleTitle": "Mainframe ,Cobol, JCL, DB2, CICS, SORT & Changeman",
+    "extractedDomain": "Mainframe, Cobol, JCL, DB2, CICS, SORT & Changeman",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Mainframe, Cobol, JCL, DB2, CICS, SORT & Changeman",
+      "Strong Mainframe skills with hands on experience",
+      "Hands-on in Cobol, JCL, DB2, CICS, SORT & Changeman"
+    ],
+    "textLength": 763
+  },
+  "Mainframe": {
+    "fileName": "Mainframe",
+    "roleTitle": "Mainframe",
+    "extractedDomain": "Mainframe",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Mainframe",
+      "Responsible for the analysis, design, coding, testing, and documentation of new or modified applications developed on the IBM z/OS Mainframe platform.",
+      "Required to provide support for applications already in production."
+    ],
+    "textLength": 1387
+  },
+  "Major Incident Manager": {
+    "fileName": "Major Incident Manager",
+    "roleTitle": "Major Incident Manager",
+    "extractedDomain": "Major Incident Manager",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Major Incident Manager",
+      "Manage end-to-end Major Incident (P1/P2) lifecycle and ensure timely resolution",
+      "Act as single point of contact during incidents and drive war room calls"
+    ],
+    "textLength": 1285
+  },
+  "Maria DB Support": {
+    "fileName": "Maria DB Support",
+    "roleTitle": "Maria DB Support",
+    "extractedDomain": "Maria DB Support",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Maria DB Support",
+      "Should have worked on MariaDB.",
+      "Maintaining databases, ensuring data security, tuning performance, backing up data"
+    ],
+    "textLength": 858
+  },
+  "MIM": {
+    "fileName": "MIM",
+    "roleTitle": "MIM",
+    "extractedDomain": "MIM",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: MIM",
+      "Strong knowledge of IT service management including ITIL",
+      "Responding to a reported incident, identifying the cause, and initiating the incident management process."
+    ],
+    "textLength": 945
+  },
+  "Mobile Automation": {
+    "fileName": "Mobile Automation (1)",
+    "roleTitle": "Mobile Automation",
+    "extractedDomain": "Mobile Automation",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Mobile Automation",
+      "Develop automation scripts using Appium (Java / JavaScript / Python)",
+      "Test mobile applications on Android and iOS platforms"
+    ],
+    "textLength": 1361
+  },
+  "MuleSoft": {
+    "fileName": "MuleSoft",
+    "roleTitle": "MuleSoft",
+    "extractedDomain": "MuleSoft",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: MuleSoft",
+      "Hands on Experience in MuleSoft Development.",
+      "Hands on Experience in Any point Studio, connectors, Scopes, Routers, Flows, caching, and Exception handling."
+    ],
+    "textLength": 1344
+  },
+  "Network - storage and back up profile": {
+    "fileName": "Network - storage and back up profile",
+    "roleTitle": "Network - storage and back up profile",
+    "extractedDomain": "Network - storage and back up profile",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Network - storage and back up profile",
+      "Designs, develops, configures, integrates, tests, and maintains existing Storage and Backup Infrastructure and Software implementations.",
+      "Should holds an experience in File storage and sharing."
+    ],
+    "textLength": 906
+  },
+  "Network Operations (NET ops)": {
+    "fileName": "Network Operations (NET ops)",
+    "roleTitle": "Network Operations (NET ops)",
+    "extractedDomain": "Network Operations (NET ops)",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Network Operations (NET ops)",
+      "Network – WAN/LAN/WLAN/MAN/MPLS/VPN and data communications technologies.",
+      "SDWAN technology, Quality of Service, IPv6 Address Planning and Deployment"
+    ],
+    "textLength": 932
+  },
+  "Network Security Application Routing Switching": {
+    "fileName": "Network Security Application Routing Switching",
+    "roleTitle": "Network Security Application Routing Switching",
+    "extractedDomain": ".",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Network Security Application Routing Switching",
+      "Hands on exp in Network Security Application /Routing/Switching.",
+      "Must have experience in BGP and Routing protocols."
+    ],
+    "textLength": 801
+  },
+  "Networking - Cisco and Juniper upgrades": {
+    "fileName": "Networking - Cisco and Juniper upgrades",
+    "roleTitle": "Networking - Cisco and Juniper upgrades",
+    "extractedDomain": "Networking - Cisco and Juniper upgrades",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Networking - Cisco and Juniper upgrades",
+      "Should have hands on experience in Cisco and Juniper upgrades.",
+      "Juniper MX, QFX, EX Upgrades"
+    ],
+    "textLength": 754
+  },
+  "Networking - Infoblox Engineer": {
+    "fileName": "Networking - Infoblox Engineer",
+    "roleTitle": "Networking - Infoblox Engineer",
+    "extractedDomain": "Networking - Infoblox Engineer",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Networking - Infoblox Engineer",
+      "Candidate should be Infoblox Certified",
+      "Should have hands on experience in DHCP."
+    ],
+    "textLength": 738
+  },
+  "Networking - Routing & Switching": {
+    "fileName": "Networking - Routing & Switching",
+    "roleTitle": "Networking - Routing & Switching",
+    "extractedDomain": "Networking - Routing & Switching",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Networking - Routing & Switching",
+      "Hands on experience in Routing & switching and LAN, WAN.",
+      "Implementation, configuration and maintenance, LAN-WAN network."
+    ],
+    "textLength": 888
+  },
+  "Networking - Routing and Switching & Security": {
+    "fileName": "Networking - Routing and Switching & Security",
+    "roleTitle": "Networking - Routing and Switching & Security",
+    "extractedDomain": ".",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Networking - Routing and Switching & Security",
+      "Experience & Good understanding of Networking and Security Domain.",
+      "Good understanding of Firewall policy review and Firewall ACL Management."
+    ],
+    "textLength": 1022
+  },
+  "Networking - SDWAN P2P Internet Managed Services": {
+    "fileName": "Networking - SDWAN P2P Internet Managed Services",
+    "roleTitle": "Networking - SDWAN P2P Internet Managed Services",
+    "extractedDomain": "Networking - SDWAN/P2P/Internet Managed Services",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Networking - SDWAN/P2P/Internet Managed Services",
+      "Networking (WAN, SDWAN, Fiber, 4G/5G, Firewalls)",
+      "Knowledge of telecom products such as SDWAN, P2P, and Internet Managed Services"
+    ],
+    "textLength": 731
+  },
+  "Networking - SDWAN, Routing Protocols, CCNA": {
+    "fileName": "Networking - SDWAN, Routing Protocols, CCNA",
+    "roleTitle": "Networking - SDWAN, Routing Protocols, CCNA",
+    "extractedDomain": "Networking - SDWAN, Routing Protocols, CCNA",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Networking - SDWAN, Routing Protocols, CCNA",
+      "Good Exposure on firewall administrative support including Troubleshooting, configuration changes, Upgrades, compliance, Monitoring, and backup.",
+      "Good understanding on security technologies including Site to site VPN, SSL VPN, NAT, ACL, IPS and NGFW features would be preferable."
+    ],
+    "textLength": 945
+  },
+  "Networking - Senior": {
+    "fileName": "Networking - Senior",
+    "roleTitle": "Networking - Senior",
+    "extractedDomain": "Networking - Senior",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Networking - Senior",
+      "IP Addressing, Subnetting, Routing, Switching, Firewall, Load Balancer, Networking Protocols",
+      "Manage & troubleshoot enterprise network infra (routers, switches, firewalls, load balancers) [fx-exchange.com]"
+    ],
+    "textLength": 1274
+  },
+  "Networking- SDWAN": {
+    "fileName": "Networking- SDWAN",
+    "roleTitle": "Networking- SDWAN",
+    "extractedDomain": "Networking- SDWAN",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Networking- SDWAN",
+      "SDWAN- Networking, CCNA, SDWAN Activation Tech.",
+      "Get IP assigned and ready for SDWAN."
+    ],
+    "textLength": 703
+  },
+  "Networking": {
+    "fileName": "Networking",
+    "roleTitle": "Networking",
+    "extractedDomain": "Networking",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Networking",
+      "IP Addressing, Subnetting, Routing, Switching, Firewall, Load Balancer, Networking Protocols",
+      "Configure & troubleshoot routers, switches, firewalls, load balancers [fx-exchange.com]"
+    ],
+    "textLength": 1027
+  },
+  "Next JS Develpoer": {
+    "fileName": "Next JS Develpoer",
+    "roleTitle": "Next JS Develpoer",
+    "extractedDomain": "Next JS Developer",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Next JS Developer",
+      "Design, develop, and maintain web applications using Next.js and React.js.",
+      "Build server-side rendered (SSR), static site generation (SSG), and client-side rendered (CSR) applications."
+    ],
+    "textLength": 1407
+  },
+  "Node JS developer": {
+    "fileName": "Node JS developer",
+    "roleTitle": "Node JS developer",
+    "extractedDomain": "Node JS developer",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Node JS developer",
+      "Strong proficiency in JavaScript and TypeScript.",
+      "Experience with React.js and its core principles (Flux, Redux), workflows (Redux Saga)."
+    ],
+    "textLength": 1017
+  },
+  "Node JS with React JS": {
+    "fileName": "Node JS with React JS",
+    "roleTitle": "Node JS with React JS",
+    "extractedDomain": "Node JS with React JS",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Node JS with React JS",
+      "Experience in Node.js and the most common packages in the ecosystem working",
+      "knowledge of MongoDB and Python. Have a deep understanding of JavaScript/HTML/CSS"
+    ],
+    "textLength": 897
+  },
+  "Oracle - EBS PLSQL": {
+    "fileName": "Oracle - EBS PLSQL",
+    "roleTitle": "Oracle - EBS PLSQL",
+    "extractedDomain": "Oracle - EBS PLSQL",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Oracle - EBS PLSQL",
+      "Well versed Oracle SQL query for writing, modifying, and executing as per ticket requirement.",
+      "Basis Oracle support with good excel report knowledge for running SLA report."
+    ],
+    "textLength": 891
+  },
+  "Oracle Applications": {
+    "fileName": "Oracle Applications",
+    "roleTitle": "Oracle Applications",
+    "extractedDomain": "Oracle Applications",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Oracle Applications",
+      "Responsible for configuration management, performance tuning, and administration of multiple development, test, and production databases and Applications (such as EBS R12, SOA)",
+      "Knowledge in any of the Data Tools like TOAD, SQL Developer, SQL Loader, PLSQL developer"
+    ],
+    "textLength": 957
+  },
+  "Oracle DBA": {
+    "fileName": "Oracle DBA",
+    "roleTitle": "Oracle DBA",
+    "extractedDomain": "Oracle DBA",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Oracle DBA",
+      "Oracle DBA Skills in Administration, Configuration, Export Import, Standby database, Data Guard, Character set Migration.",
+      "Hands on experience in supporting Oracle databases on EXADATA, Oracle RAC, ASM"
+    ],
+    "textLength": 1081
+  },
+  "Oracle EBS Finance": {
+    "fileName": "Oracle EBS Finance",
+    "roleTitle": "Oracle EBS Finance",
+    "extractedDomain": "Oracle EBS Finance",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Oracle EBS Finance",
+      "Configure and maintain core Oracle EBS Financials modules including General Ledger (GL), Accounts Payable (AP), Accounts Receivable (AR) and Fixed Assets (FA).",
+      "Assist with month-end closing procedures, reconciliations, and journal entries."
+    ],
+    "textLength": 893
+  },
+  "Oracle EBS HCM": {
+    "fileName": "Oracle EBS HCM",
+    "roleTitle": "Oracle EBS HCM",
+    "extractedDomain": "Oracle EBS HCM",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Oracle EBS HCM",
+      "Support the implementation, configuration, and maintenance of Oracle HCM Cloud modules (e.g., Core HR, Payroll, Absence Management, Benefits, Talent Management).",
+      "Assist in gathering and analyzing client business requirements and translating them into functional specifications."
+    ],
+    "textLength": 1813
+  },
+  "Oracle EBS SCM": {
+    "fileName": "Oracle EBS SCM",
+    "roleTitle": "Oracle EBS SCM",
+    "extractedDomain": "Oracle EBS SCM",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Oracle EBS SCM",
+      "Implement, configure, and maintain core Oracle EBS SCM modules such as Purchasing (PO), Inventory Management, Order Management (OM) and potentially others like Advanced Warehouse Management (WMS) or Transportation Management (TM) (depending on the company's needs).",
+      "Develop and maintain configurations for functionalities like requisitions, purchase orders, inventory control, shipments, returns and billing."
+    ],
+    "textLength": 1068
+  },
+  "Oracle EBS Tech": {
+    "fileName": "Oracle EBS Tech",
+    "roleTitle": "Oracle EBS Tech",
+    "extractedDomain": "Oracle EBS Tech",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Oracle EBS Tech",
+      "Install, configure, and maintain Oracle EBS instances across development, test, and production environments.",
+      "Perform system administration tasks including user management, security management, backup, and recovery procedures."
+    ],
+    "textLength": 895
+  },
+  "Oracle PL SQL": {
+    "fileName": "Oracle PL SQL",
+    "roleTitle": "Oracle PL SQL",
+    "extractedDomain": "Oracle PL/SQL",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Oracle PL/SQL",
+      "Working knowledge of Oracle 11g/Oracle 12c added capabilities and functionality.",
+      "Strong programming/development skills using PL/SQL (package, procedures, functions, triggers) and batch coding skills such as Bulk collections, dynamic SQL, and parallel processing."
+    ],
+    "textLength": 1007
+  },
+  "Oracle PLSQL": {
+    "fileName": "Oracle PLSQL",
+    "roleTitle": "Oracle PLSQL",
+    "extractedDomain": "Oracle PLSQL",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Oracle PLSQL",
+      "Design, develop, test, debug, and deploy PL/SQL code including stored procedures, functions, packages, triggers, and cursors.",
+      "Analyze and optimize complex SQL statements to ensure efficient data retrieval and manipulation."
+    ],
+    "textLength": 1008
+  },
+  "Oracle SCM Testing": {
+    "fileName": "Oracle SCM Testing",
+    "roleTitle": "Oracle SCM Testing",
+    "extractedDomain": "Oracle SCM Testing",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Oracle SCM Testing",
+      "Oracle Apps modules including EBS SCM and Finance modules.",
+      "Experienced with R12 support and upgrade projects. Strong knowledge of SQL/PLSQL diagnostics"
+    ],
+    "textLength": 1013
+  },
+  "Oracle SQL Server DBA": {
+    "fileName": "Oracle SQL Server DBA",
+    "roleTitle": "Oracle SQL Server DBA",
+    "extractedDomain": "Oracle SQL Server DBA",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Oracle SQL Server DBA",
+      "Experience of SQL Server/Oracle DBA will be responsible for the implementation, configuration, maintenance.",
+      "Performance of critical SQL Server RDBMS systems, to ensure the availability and consistent performance of our corporate applications."
+    ],
+    "textLength": 792
+  },
+  "Payments Testing": {
+    "fileName": "Payments Testing",
+    "roleTitle": "Payments Testing",
+    "extractedDomain": ".",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Payments Testing",
+      "Payment Testing professional with hands-on experience in validating digital payment systems. Candidate should have strong knowledge of payment flows including cards, UPI, net banking, wallets, and transaction lifecycle testing. Experience in the financial domain.",
+      "Perform functional, integration, and regression testing of payment systems."
+    ],
+    "textLength": 1320
+  },
+  "Phyton Developers with Robocorp Framework": {
+    "fileName": "Phyton Developers with Robocorp Framework",
+    "roleTitle": "Phyton Developers with Robocorp Framework",
+    "extractedDomain": "Phyton Developers with Robocorp Framework",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Phyton Developers with Robocorp Framework",
+      "Design, develop, and configure Robotic Process Automation (RPA) software systems to meet business process and application requirements by following best practices, standard and reusability of automations solutions",
+      "Ability to understand a business process from a workflow diagram and to conceptualize it as an automated solution"
+    ],
+    "textLength": 2000
+  },
+  "Playwright Automation": {
+    "fileName": "Playwright Automation (1)",
+    "roleTitle": "Playwright Automation",
+    "extractedDomain": "Playwright Automation",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Playwright Automation",
+      "Develop and maintain automated test scripts using Playwright (TypeScript/JavaScript/Python)",
+      "Design end-to-end (E2E), UI, and regression test suites"
+    ],
+    "textLength": 1434
+  },
+  "PLSQL with Develpoment experience": {
+    "fileName": "PLSQL with Develpoment experience",
+    "roleTitle": "PLSQL with Develpoment experience",
+    "extractedDomain": "PLSQL with Development experience",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: PLSQL with Development experience",
+      "Working knowledge of Oracle 11g/Oracle 12c added capabilities and functionality.",
+      "Strong programming/development skills using PL/SQL (package, procedures, functions, triggers) and batch coding skills such as Bulk collections, dynamic SQL, and parallel processing."
+    ],
+    "textLength": 1566
+  },
+  "PLSQL": {
+    "fileName": "PLSQL",
+    "roleTitle": "PLSQL",
+    "extractedDomain": "PLSQL",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: PLSQL",
+      "Design, develop, test, debug, implement complex PL/SQL procedures, functions, packages, triggers, and cursors.",
+      "Analyze and optimize existing PL/SQL code for performance and maintainability."
+    ],
+    "textLength": 891
+  },
+  "Postgres": {
+    "fileName": "Postgres",
+    "roleTitle": "Postgres",
+    "extractedDomain": "Postgres",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Postgres",
+      "Extensive Postgres, Citus, and High Availability knowledge is required. Consulting expected in architecture, best practices, and deployment.",
+      "Server set up for coordinators and worker nodes. Citus navigation and best practices"
+    ],
+    "textLength": 1009
+  },
+  "Power BI Developer": {
+    "fileName": "Power BI Developer",
+    "roleTitle": "Power BI Developer",
+    "extractedDomain": "Power BI Developer",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Power BI Developer",
+      "Deep hands-on expertise with Power BI Desktop and Power BI Service — report design, dataset management, workspaces, and deployment pipelines",
+      "Strong DAX — comfortable writing complex measures, time intelligence, and performance-tuned calculations"
+    ],
+    "textLength": 1586
+  },
+  "Python and AWS": {
+    "fileName": "Python and AWS",
+    "roleTitle": "Python and AWS",
+    "extractedDomain": "Python and AWS",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Python and AWS",
+      "Experience in Python, AWS services, Serverless, SQL, Lambda",
+      "Experience in development and coding."
+    ],
+    "textLength": 740
+  },
+  "Python Ansible Developer": {
+    "fileName": "Python Ansible Developer",
+    "roleTitle": "Python Ansible Developer",
+    "extractedDomain": "Python Ansible Developer",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Python Ansible Developer",
+      "Develop, test, and maintain high-quality software using Python programming language.",
+      "Participate in the entire software development lifecycle, building, testing and delivering high-quality solutions."
+    ],
+    "textLength": 809
+  },
+  "Python Developer": {
+    "fileName": "Python Developer",
+    "roleTitle": "Python Developer",
+    "extractedDomain": "Python Developer",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Python Developer",
+      "Strong proficiency in Python programming language (version 3+).",
+      "Should have at least 2 python framework experience (Django/Flask), Oops programming knowledge, Good in coding skill."
+    ],
+    "textLength": 798
+  },
+  "QA, Automation": {
+    "fileName": "QA, Automation",
+    "roleTitle": "QA, Automation",
+    "extractedDomain": "QA, Automation",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: QA, Automation",
+      "UI Automation and API Automation Tester. Must have experience in Testing/QA or QE",
+      "Must have all fundamental testing knowledge, Software Development Life Cycle (SDLC), and Agile methodology."
+    ],
+    "textLength": 999
+  },
+  "Qlik, Attunity": {
+    "fileName": "Qlik, Attunity",
+    "roleTitle": "Qlik, Attunity",
+    "extractedDomain": "Qlik, Attunity",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Qlik, Attunity",
+      "Attunity Development, ETL.",
+      "Multiple implementations in Attunity as developer."
+    ],
+    "textLength": 772
+  },
+  "R-Shiny web application development & Python": {
+    "fileName": "R-Shiny web application development & Python",
+    "roleTitle": "R-Shiny web application development & Python",
+    "extractedDomain": "R-Shiny web application development & Python",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: R-Shiny web application development & Python",
+      "R-Shiny web application development & Python. Ensuring daily reaching of data for optimal performance.",
+      "GhostPlan Deployment and Testing: Overseeing the deployment process for GhostPlan, Rigorous testing to guarantee seamless integration and functionality."
+    ],
+    "textLength": 1090
+  },
+  "React JS Full stack developer (Java or ,net) + copilot": {
+    "fileName": "React JS Full stack developer (Java or ,net) + copilot",
+    "roleTitle": "React JS Full stack developer (Java or ,net) + copilot",
+    "extractedDomain": "React JS Full stack developer (Java or .net) + copilot",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: React JS Full stack developer (Java or .net) + copilot",
+      "Design, develop, and maintain web applications with React.js for the front-end and .Net/Java for the back end.",
+      "Build responsive and user-friendly interfaces using React.js and modern front-end technologies."
+    ],
+    "textLength": 1582
+  },
+  "React JS or Angular with .Net back end developer": {
+    "fileName": "React JS or Angular with .Net back end developer",
+    "roleTitle": "React JS or Angular with .Net back end developer",
+    "extractedDomain": "React JS or Angular with .Net back-end developer",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: React JS or Angular with .Net back-end developer.",
+      "Experience in developing REST APIs.",
+      "Develop and maintain web applications using various .Net frameworks, ASP.NET MVC and REST services/API."
+    ],
+    "textLength": 985
+  },
+  "React JS with AWS": {
+    "fileName": "React JS with AWS",
+    "roleTitle": "React JS with AWS",
+    "extractedDomain": "React JS with AWS",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: React JS with AWS",
+      "Strong Development experience with React JS framework.",
+      "Thorough understanding of React.js and its core principles"
+    ],
+    "textLength": 864
+  },
+  "React JS with Python": {
+    "fileName": "React JS with Python",
+    "roleTitle": "React JS with Python",
+    "extractedDomain": "React JS with Python",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: React JS with Python",
+      "Strong hands-on experience with Python and React.",
+      "Strong understanding of JavaScript, ES6+, and TypeScript (preferred)."
+    ],
+    "textLength": 951
+  },
+  "React JS": {
+    "fileName": "React JS",
+    "roleTitle": "React JS",
+    "extractedDomain": "React JS",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: React JS",
+      "Hands on Experience on React JS frameworks",
+      "React.js/ React Native & HTML, CSS, Javascript in the most recent projects"
+    ],
+    "textLength": 799
+  },
+  "Red Hat Linux": {
+    "fileName": "Red Hat Linux",
+    "roleTitle": "Red Hat Linux",
+    "extractedDomain": "Red Hat Linux",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Red Hat Linux",
+      "Installation & Configurations of Red Hat Enterprise Linux, CentOS, and SUSE.",
+      "Performing OS level troubleshooting such as kernel panic error issues, fsck."
+    ],
+    "textLength": 996
+  },
+  "S4 HANA EHS": {
+    "fileName": "S4 HANA EHS",
+    "roleTitle": "S4 HANA EHS",
+    "extractedDomain": "S4/HANA EHS",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: S4/HANA EHS",
+      "Implement and configure SAP EHS module to meet organizational needs.",
+      "Ensure compliance with all relevant regulatory requirements."
+    ],
+    "textLength": 1075
+  },
+  "Sales Force": {
+    "fileName": "Sales Force",
+    "roleTitle": "Sales Force",
+    "extractedDomain": "Sales Force",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Sales Force",
+      "Configure and customize Salesforce objects, fields, layouts, record types and security settings to align with business processes.",
+      "Design and implement workflows, approval processes and validation rules to automate tasks and enforce data quality."
+    ],
+    "textLength": 1023
+  },
+  "SAP - SECURITY": {
+    "fileName": "SAP - SECURITY",
+    "roleTitle": "SAP - SECURITY",
+    "extractedDomain": "SAP Security",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP Security",
+      "Knowledge and Experience - SAP Security (user administration, authorization concepts, security profiles)",
+      "Monitor critical risks in SAP systems and work with risk owners to remediate or mitigate risks. Create and execute SOD analysis reports manually and through background jobs"
+    ],
+    "textLength": 1629
+  },
+  "SAP ABAP HANA": {
+    "fileName": "SAP ABAP HANA",
+    "roleTitle": "SAP ABAP HANA",
+    "extractedDomain": "SAP ABAP/HANA",
+    "sampleLines": [
+      "Team Lead/Process Lead",
+      "Description",
+      "Job Description: SAP ABAP/HANA",
+      "Strong hands-on experience in SAP ABAP development.",
+      "Proven experience with SAP HANA technology, including developing native HANA applications and using SQLScript."
+    ],
+    "textLength": 1073
+  },
+  "SAP API": {
+    "fileName": "SAP API",
+    "roleTitle": "SAP API",
+    "extractedDomain": "SAP API",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP API",
+      "Strong knowledge of API security best practices, including OAuth and JWT.",
+      "Ensure APIs are secure, scalable, and efficient."
+    ],
+    "textLength": 854
+  },
+  "SAP Ariba": {
+    "fileName": "SAP Ariba",
+    "roleTitle": "SAP Ariba",
+    "extractedDomain": "SAP Ariba",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP Ariba",
+      "Configure and customize SAP Ariba modules to meet specific client needs.",
+      "Troubleshoot and resolve technical issues related to SAP Ariba."
+    ],
+    "textLength": 799
+  },
+  "SAP Basis": {
+    "fileName": "SAP Basis",
+    "roleTitle": "SAP Basis",
+    "extractedDomain": "SAP Basis",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP Basis",
+      "Install, configure, and maintain SAP systems, including system landscapes, servers, and databases.",
+      "Experience in Basis administration."
+    ],
+    "textLength": 781
+  },
+  "SAP BTP-CPI": {
+    "fileName": "SAP BTP-CPI (1)",
+    "roleTitle": "SAP BTP-CPI",
+    "extractedDomain": "SAP BTP-CPI",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Develop integrations using SAP CPI",
+      "Familiarity with APIs, OData Services, REST services and Integration flows.",
+      "Knowledge if CI\\CD pipelines, transport management and deployment process in BTP environment."
+    ],
+    "textLength": 938
+  },
+  "SAP CPI": {
+    "fileName": "SAP CPI",
+    "roleTitle": "SAP CPI",
+    "extractedDomain": "SAP CPI",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP CPI",
+      "Design, develop, and implement integration flows (iFlows) using CPI features and functionalities.",
+      "Handle various integration adapters (e.g., SFTP, IDOC, SOAP, HTTP, Process Direct, REST) to exchange data between systems."
+    ],
+    "textLength": 940
+  },
+  "SAP EWM": {
+    "fileName": "SAP EWM",
+    "roleTitle": "SAP EWM",
+    "extractedDomain": "SAP EWM",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP EWM",
+      "Good exposure on all standard EWM Process like In/Out bound, Internal and Physical Inventory",
+      "Must have good exposure on S/4 HANA"
+    ],
+    "textLength": 939
+  },
+  "SAP FIORI": {
+    "fileName": "SAP FIORI",
+    "roleTitle": "SAP FIORI",
+    "extractedDomain": "SAP FIORI",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP FIORI",
+      "Strong experience in SAP Fiori and SAPUI5 development, including custom and standard applications.",
+      "Experience with SAP Fiori Elements and SAP Cloud Platform (BTP) UI services."
+    ],
+    "textLength": 1346
+  },
+  "SAP Functional testing": {
+    "fileName": "SAP Functional testing",
+    "roleTitle": "SAP Functional testing",
+    "extractedDomain": "SAP Functional testing",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP Functional testing",
+      "Strong understanding of all of any of the following SAP Functional Modules.",
+      "Should be aware of the business processes, integrations & implementations using above SAP modules."
+    ],
+    "textLength": 936
+  },
+  "SAP GRC": {
+    "fileName": "SAP GRC",
+    "roleTitle": "SAP GRC",
+    "extractedDomain": "SAP GRC",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP GRC",
+      "Development, and implementation of SAP security solutions for ECC, HANA, Fiori, and GRC.",
+      "Implement and maintain SAP GRC solutions, including Access Control, Process Control, and Risk Management."
+    ],
+    "textLength": 1230
+  },
+  "SAP MM WM": {
+    "fileName": "SAP MM WM",
+    "roleTitle": "SAP MM WM",
+    "extractedDomain": "SAP MM\\WM",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP MM\\WM",
+      "Participate in the implementation and configuration of SAP MM modules.",
+      "Develop and maintain customized solutions to optimize MM processes."
+    ],
+    "textLength": 929
+  },
+  "SAP MM": {
+    "fileName": "SAP MM",
+    "roleTitle": "SAP MM",
+    "extractedDomain": "SAP MM",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP MM",
+      "Participate in the implementation and configuration of SAP MM modules.",
+      "Develop and maintain customized solutions to optimize MM processes."
+    ],
+    "textLength": 889
+  },
+  "SAP PI": {
+    "fileName": "SAP PI",
+    "roleTitle": "SAP PI",
+    "extractedDomain": "SAP PI",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP PI",
+      "Should be able to interpret Functional Requirements (Mapping Specifications) into Techn",
+      "& develop the interface."
+    ],
+    "textLength": 958
+  },
+  "SAP PM": {
+    "fileName": "SAP PM",
+    "roleTitle": "SAP PM",
+    "extractedDomain": "SAP PM",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP PM",
+      "Implement and configure SAP MM, PP, and PM modules according to business requirements.",
+      "Analyze client business processes and recommend solutions to optimize SAP systems."
+    ],
+    "textLength": 1157
+  },
+  "SAP PP QM": {
+    "fileName": "SAP PP QM ",
+    "roleTitle": "SAP PP QM",
+    "extractedDomain": "SAP PP and QM",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP PP and QM module",
+      "Analyze and optimize production planning and quality management processes.",
+      "Configure and implement SAP PP (Production Planning) and QM (Quality Management) modules."
+    ],
+    "textLength": 1029
+  },
+  "SAP PP": {
+    "fileName": "SAP PP",
+    "roleTitle": "SAP PP",
+    "extractedDomain": "SAP PP",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP PP",
+      "Implement and configure SAP PP modules to meet business requirements.",
+      "Provide expertise and support for SAP PP-related projects and change management."
+    ],
+    "textLength": 1088
+  },
+  "SAP QM": {
+    "fileName": "SAP QM",
+    "roleTitle": "SAP QM",
+    "extractedDomain": "SAP QM",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP QM",
+      "Configure, customize, and maintain SAP QM modules (e.g., Inspection Plans, Quality Certificates, CAPA)",
+      "Analyze quality data and identify trends and root causes of non-conformance"
+    ],
+    "textLength": 913
+  },
+  "SAP SD": {
+    "fileName": "SAP SD",
+    "roleTitle": "SAP SD",
+    "extractedDomain": "SAP SD",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP SD",
+      "Hands-on experience in implementing and supporting SAP SD modules.",
+      "Strong understanding of SAP SD modules, including Sales Order Management, Pricing, Billing, Delivery, and Customer Master Data"
+    ],
+    "textLength": 942
+  },
+  "SAP Success Factors": {
+    "fileName": "SAP Success Factors",
+    "roleTitle": "SAP Success Factors",
+    "extractedDomain": "SAP Success Factors",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP Success Factors",
+      "Provide production support for SAP SuccessFactors Employee Central (EC)",
+      "Handle incidents, service requests and enhancements"
+    ],
+    "textLength": 900
+  },
+  "SAP TM PM": {
+    "fileName": "SAP TM PM",
+    "roleTitle": "SAP TM PM",
+    "extractedDomain": "SAP TM PM",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP TM PM",
+      "Maintain skills in SAP applications process design and configuration, testing till deployment.",
+      "Creating and forwarding orders for parties. Transfer orders and deliveries from an ERP system and create freight bookings."
+    ],
+    "textLength": 958
+  },
+  "SAP WM": {
+    "fileName": "SAP WM",
+    "roleTitle": "SAP WM",
+    "extractedDomain": "SAP WM",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SAP WM",
+      "Analyze business needs and translate them into SAP WM functional requirements.",
+      "Configure and customize the SAP WM module to meet business objectives."
+    ],
+    "textLength": 1030
+  },
+  "Selenium Automation": {
+    "fileName": "Selenium Automation (1)",
+    "roleTitle": "Selenium Automation",
+    "extractedDomain": "Selenium Automation",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Selenium Automation",
+      "Develop test automation scripts using Selenium WebDriver with Java",
+      "Create and maintain frameworks such as Hybrid, Data-driven, or BDD (TestNG/JUnit/Cucumber)"
+    ],
+    "textLength": 1351
+  },
+  "Service Desk Agent": {
+    "fileName": "Service Desk Agent",
+    "roleTitle": "Service Desk Agent",
+    "extractedDomain": "Service Desk Agent",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Service Desk Agent",
+      "Fluent communication, SD voice experience -voice calling",
+      "Readiness to work from office"
+    ],
+    "textLength": 676
+  },
+  "Spring boot developer": {
+    "fileName": "Spring boot developer",
+    "roleTitle": "Spring boot developer",
+    "extractedDomain": "Spring boot developer",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Spring boot developer",
+      "Software development experience with spring boot java-based framework development",
+      "Strong experience in developing web application, including understanding UI frameworks and back-end architecture interactions"
+    ],
+    "textLength": 808
+  },
+  "Spring boot with AWS": {
+    "fileName": "Spring boot with AWS",
+    "roleTitle": "Spring boot with AWS",
+    "extractedDomain": "Spring boot with AWS",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Spring boot with AWS",
+      "Spring Boot Framework: Strong experience in building microservices and REST APIs.",
+      "AWS Cloud Services: Hands-on experience with core AWS services such as EC2, S3, Lambda, RDS, DynamoDB, API Gateway, and IAM."
+    ],
+    "textLength": 1381
+  },
+  "SQL, ETL": {
+    "fileName": "SQL, ETL",
+    "roleTitle": "SQL, ETL",
+    "extractedDomain": "SQL, ETL",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SQL, ETL",
+      "SQL knowledge (query performance tuning, index maintenance, etc.)",
+      "Experience/Hands-on hold of SQL Development, ETL, Teradata."
+    ],
+    "textLength": 782
+  },
+  "SUSE Linux": {
+    "fileName": "SUSE Linux",
+    "roleTitle": "SUSE Linux",
+    "extractedDomain": "SUSE Linux",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: SUSE Linux",
+      "Installation & Configurations of Red Hat Enterprise Linux, CentOS, and SUSE.",
+      "Performing OS level troubleshooting such as kernel panic error issues, fsck."
+    ],
+    "textLength": 990
+  },
+  "Technical BA, Microservices": {
+    "fileName": "Technical BA, Microservices",
+    "roleTitle": "Technical BA, Microservices",
+    "extractedDomain": "Technical BA, Microservices",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Technical BA, Microservices.",
+      "Must have Telecom functional knowledge.",
+      "Technical understanding of implementation."
+    ],
+    "textLength": 750
+  },
+  "Technical Writer - JD": {
+    "fileName": "Technical Writer - JD (1)",
+    "roleTitle": "Technical Writer - JD",
+    "extractedDomain": "",
+    "sampleLines": [
+      "Job Description: Technical WriterScope of the Position:  Minimum 3 years experince in technical and content writingUnder the direction of the Sr. Technical Writer, the Technical Writer develops and writes a wide range of IT Infrastructure processes, procedures, diagrams, workflows and process flows. This position works collaboratively with technical writing team, internal stakeholders, departments, and other partners to ensure technical documents are effective and consistent in content and context. Essential Functions: • Create, maintain well-organized, up-to-date technical documents.• Works with the Managers, Engineers, SME’s and other Technical Writers to prepare concise technical process and procedural documents.• Has a clear understanding of Using Visio to produce outlines and technical diagrams.• Other duties as assigned.Education/Experience: • Bachelor’s degree required, major in communication, marketing, English, public relations or journalism• 5+ years’ experience in Technical Writing (creating process and procedural documentation) • Knowledge or background in the IT industry, a plusKey Qualifications: • Grit, a great attitude, and dedication to achieving assigned tasks• Mid-level to Expert levels in MS Office and MS Visio • An ability to multi-task, prioritize, and work independently as well as in team environments• Strong personal accountability and commitment to meeting deadlines• Excellent communication and writing skills. • Ability to assess priorities and work well under pressure.• Ability to work professionally with others"
+    ],
+    "textLength": 1563
+  },
+  "Test_Automation_java_Rest Assured_API_Test_Automation_Test Lead_Engineer_ 4 to 6+_Years_JD": {
+    "fileName": "Test_Automation_java_Rest Assured_API_Test_Automation_Test Lead_Engineer_ 4 to 6+_Years_JD",
+    "roleTitle": "Test_Automation_java_Rest Assured_API_Test_Automation_Test Lead_Engineer_ 4 to 6+_Years_JD",
+    "extractedDomain": "",
+    "sampleLines": [
+      "Job Description: 4 to 6+ Yrs Exp Sr. Test Lead / Automation Test Engineer (JAVA , Rest Assured and Selenium)",
+      "Company: Infosys BPM Limited Skill(s): Java, Rest Assured and Selenium automation specialist with AI exposure",
+      "Experience Range: 4 to 6+Primary Location: Infosys Global Development Centers at IndiaLocation(s): GCC – Hyd  and Regular – Pune, Mys, Chennai, BLR",
+      "Role Summary",
+      "Senior API Automation Test Engineer with 4 to 6 + years of experience in API Automation & functional, regression testing supported by hands‑on exposure to Rest Assured API automation using Java and good to have selenium knowledge. Strong understanding of STLC, Agile methodologies, and API validation testing. Experienced in collaborating with cross‑functional teams through all stages of the Agile lifecycle to deliver high‑quality software. Person should have AI tools exposure to automate workflows."
+    ],
+    "textLength": 2000
+  },
+  "TIBCO": {
+    "fileName": "TIBCO",
+    "roleTitle": "TIBCO",
+    "extractedDomain": "TIBCO",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: TIBCO",
+      "Experience with TIBCO Suite products, including TIBCO Business Events 6.x and TIBCO EMS 8.",
+      "Proficiency with TIBCO administration tools such as TRA, Tibco Hawk, Tibco Lifecycle Governance Framework, and various adapters/plugins."
+    ],
+    "textLength": 1132
+  },
+  "TOSCA automation": {
+    "fileName": "TOSCA automation",
+    "roleTitle": "TOSCA automation",
+    "extractedDomain": "is a plus.",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: TOSCA automation",
+      "Automation Test Engineer with hands-on experience in TOSCA automation. Candidate should have strong expertise in test case design, execution, and maintenance using TOSCA, along with a solid understanding of automation frameworks and testing methodologies. Experience in the banking or financial domain is a plus.",
+      "Design and develop automated test cases using TOSCA."
+    ],
+    "textLength": 1437
+  },
+  "Tosca Playright": {
+    "fileName": "Tosca Playright",
+    "roleTitle": "Tosca Playright",
+    "extractedDomain": "Tosca Playright",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Tosca Playright",
+      "Mandatory Skills: Hands-on experience in Tosca Automation Testing",
+      "Strong experience in Playwright testing"
+    ],
+    "textLength": 1164
+  },
+  "TOSCA": {
+    "fileName": "TOSCA",
+    "roleTitle": "TOSCA",
+    "extractedDomain": "TOSCA",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: TOSCA",
+      "Hands-on experience in automation using Tricentis TOSCA",
+      "Hands-on experience in creating CI/CD pipeline using Jenkins"
+    ],
+    "textLength": 848
+  },
+  "UAT Tester": {
+    "fileName": "UAT Tester",
+    "roleTitle": "UAT Tester",
+    "extractedDomain": ", UAT Exposure.",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: UAT Tester",
+      "UAT experience- Finance Domain, UAT Exposure.",
+      "Experience in Functional testing."
+    ],
+    "textLength": 667
+  },
+  "Unix and SQL": {
+    "fileName": "Unix and SQL",
+    "roleTitle": "Unix and SQL",
+    "extractedDomain": "Unix and SQL",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Unix and SQL",
+      "Experience in Application Support in Unix, PL/SQL",
+      "Good to have knowledge in any one object-oriented programming language, UNIX scripting, debugging skills."
+    ],
+    "textLength": 1033
+  },
+  "UX designer": {
+    "fileName": "UX designer",
+    "roleTitle": "UX designer",
+    "extractedDomain": "UI/UX Designer",
+    "sampleLines": [
+      "Technology Support Specialist.",
+      "Description",
+      "UI/UX Designer:",
+      "Proven experience as a UI/UX developer or analogous part.",
+      "Proficiency in design and prototyping tools like Adobe XD, Figma, Sketch, etc."
+    ],
+    "textLength": 1119
+  },
+  "UX with JavaScript, AI": {
+    "fileName": "UX with JavaScript, AI",
+    "roleTitle": "UX with JavaScript, AI",
+    "extractedDomain": "UX with JavaScript/AI",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: UX with JavaScript/AI",
+      "Technical Design tools (e.g., Photoshop, Adobe XD, Figma), strong knowledge of HTML, CSS, JavaScript, and experience with SharePoint customization.",
+      "Experience with Wireframe, Prototype, intuitive, responsive design, Documentation,"
+    ],
+    "textLength": 1173
+  },
+  "UX with JavaScript": {
+    "fileName": "UX with JavaScript",
+    "roleTitle": "UX with JavaScript",
+    "extractedDomain": "UX with JavaScript",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: UX with JavaScript",
+      "Technical Design tools (e.g., Photoshop, XD, Figma), strong knowledge of HTML, CSS, JavaScript, and experience with SharePoint customization.",
+      "Experience with Wireframe, Prototype, intuitive, responsive design, Documentation,"
+    ],
+    "textLength": 884
+  },
+  "Walkme": {
+    "fileName": "Walkme",
+    "roleTitle": "Walkme",
+    "extractedDomain": "Walkme Digital adoption specialist",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Walkme Digital adoption specialist",
+      "Design, develop, and deploy WalkMe solutions to enhance user experience and drive digital adoption.",
+      "Experience in task-based documentation, training and content strategy"
+    ],
+    "textLength": 1113
+  },
+  "Windows & VMware": {
+    "fileName": "Windows & VMware",
+    "roleTitle": "Windows & VMware",
+    "extractedDomain": "Windows/ VMware",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Windows/ VMware",
+      "Installation, migration, and production support of Windows Server operating system (all components) and VMware vSphere infrastructure.",
+      "Candidate must have extensive knowledge and real-world experience with VMware."
+    ],
+    "textLength": 857
+  },
+  "Windows Admin": {
+    "fileName": "Windows Admin",
+    "roleTitle": "Windows Admin",
+    "extractedDomain": "Windows Admin",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Windows Admin",
+      "Understanding and Remediation of the BHP Compliance Requirement",
+      "Proficiency with ServiceNow & CMDB, VMWare Skills, AD & Group Policy Management"
+    ],
+    "textLength": 881
+  },
+  "Work Day": {
+    "fileName": "Work Day",
+    "roleTitle": "Work Day",
+    "extractedDomain": "Work Day",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: Work Day",
+      "Collaborate with clients to define requirements, analyze business processes, and develop Workday configuration strategies.",
+      "Configure Workday modules (e.g., Core HR, Payroll, Benefits, Compensation) to meet client needs."
+    ],
+    "textLength": 999
+  },
+  "WorkSoft - Testing": {
+    "fileName": "WorkSoft - Testing",
+    "roleTitle": "WorkSoft - Testing",
+    "extractedDomain": "WorkSoft - Testing",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: WorkSoft - Testing",
+      "Mandatory Skills: WorkSoft Automation Testing experience",
+      "Execute end-to-end automation testing using WorkSoft tools"
+    ],
+    "textLength": 804
+  },
+  "WorkSoft": {
+    "fileName": "WorkSoft",
+    "roleTitle": "WorkSoft",
+    "extractedDomain": "WorkSoft",
+    "sampleLines": [
+      "Technology Support Specialist",
+      "Description",
+      "Job Description: WorkSoft",
+      "Collaborate with clients to define requirements, analyze business processes, and develop Workday configuration strategies.",
+      "Configure Workday modules (e.g., Core HR, Payroll, Benefits, Compensation) to meet client needs."
+    ],
+    "textLength": 999
+  }
+}

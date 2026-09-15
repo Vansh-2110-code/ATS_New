@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useLocation } from 'react-router';
 import {
   Monitor, Clock, FileText, AlertTriangle, Shield, Activity, TrendingUp, TrendingDown,
   Loader2, ExternalLink, Phone, Users, Calendar, ArrowRight, AlertCircle, CheckCircle2,
@@ -122,7 +122,21 @@ export function AdminDashboard() {
   const navigate = useNavigate();
   const fmt = (n: number) => n >= 100000 ? `₹${(n / 100000).toFixed(1)}L` : `₹${(n / 1000).toFixed(0)}K`;
 
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    if (window.location.pathname === '/business-development' || window.location.pathname === '/bd') return 'businessDev';
+    if (user?.role === 'bd' || user?.role === 'business_developer') return 'businessDev';
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+    if (tabParam && TABS.some(t => t.id === tabParam)) return tabParam as Tab;
+    return 'overview';
+  });
+
+  useEffect(() => {
+    if (location.pathname === '/business-development' || location.pathname === '/bd') {
+      setActiveTab('businessDev');
+    }
+  }, [location.pathname]);
   const [loading, setLoading] = useState(true);
   const isFirstRender = useRef(true);
 
@@ -302,7 +316,12 @@ export function AdminDashboard() {
         limit: bizDevLimit.toString(),
         sortBy: bizDevSort.by,
         sortOrder: bizDevSort.order,
+        range: dateRange.toLowerCase(),
       };
+      if (dateRange === 'Custom') {
+        if (customFrom) params.startDate = customFrom;
+        if (customTo) params.endDate = customTo;
+      }
       if (bizDevSearch) params.search = bizDevSearch;
       if (bizDevFilters.clientStatus) params.clientStatus = bizDevFilters.clientStatus;
       if (bizDevFilters.callStatus) params.callStatus = bizDevFilters.callStatus;
@@ -314,7 +333,7 @@ export function AdminDashboard() {
 
       const [recordsRes, statsRes] = await Promise.all([
         api.getBizDevRecords(params),
-        api.getBizDevStats(),
+        api.getBizDevStats(params),
       ]);
 
       setBizDevRecords(recordsRes.records || []);
@@ -331,7 +350,7 @@ export function AdminDashboard() {
     if (activeTab === 'businessDev') {
       loadBizDevData();
     }
-  }, [activeTab, bizDevPage, bizDevSearch, bizDevFilters, bizDevSort]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab, bizDevPage, bizDevSearch, bizDevFilters, bizDevSort, dateRange, customFrom, customTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleBizDevSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -369,7 +388,13 @@ export function AdminDashboard() {
 
   const handleBizDevExport = async () => {
     try {
-      const params: Record<string, string> = {};
+      const params: Record<string, string> = {
+        range: dateRange.toLowerCase(),
+      };
+      if (dateRange === 'Custom') {
+        if (customFrom) params.startDate = customFrom;
+        if (customTo) params.endDate = customTo;
+      }
       if (bizDevSearch) params.search = bizDevSearch;
       if (bizDevFilters.clientStatus) params.clientStatus = bizDevFilters.clientStatus;
       if (bizDevFilters.callStatus) params.callStatus = bizDevFilters.callStatus;
@@ -642,15 +667,15 @@ export function AdminDashboard() {
     <div className="p-6 max-w-6xl mx-auto space-y-6">
 
       {/* ── Sticky Notes Widget ─────────────────────────────────────── */}
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-34 right-6 z-40">
         {notesOpen ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-2xl w-72 flex flex-col overflow-hidden">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-2xl w-72 flex flex-col overflow-hidden mb-2 animate-in slide-in-from-bottom-3 duration-150">
             <div className="flex items-center justify-between px-4 py-3 bg-amber-100 border-b border-amber-200">
               <div className="flex items-center gap-2">
                 <StickyNote className="w-4 h-4 text-amber-700" />
                 <span className="text-amber-800 text-sm" style={{ fontWeight: 600 }}>Quick Notes</span>
               </div>
-              <button onClick={() => setNotesOpen(false)} className="text-amber-600 hover:text-amber-800">
+              <button onClick={() => setNotesOpen(false)} className="text-amber-600 hover:text-amber-800 cursor-pointer">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -664,7 +689,7 @@ export function AdminDashboard() {
             <div className="px-4 py-2 bg-amber-50 border-t border-amber-200 flex justify-between items-center">
               <span className="text-amber-600 text-xs">Auto-saved</span>
               {noteText && (
-                <button onClick={() => saveNote('')} className="text-amber-500 hover:text-red-500 text-xs" style={{ fontWeight: 500 }}>
+                <button onClick={() => saveNote('')} className="text-amber-500 hover:text-red-500 text-xs cursor-pointer" style={{ fontWeight: 500 }}>
                   Clear
                 </button>
               )}
@@ -673,11 +698,11 @@ export function AdminDashboard() {
         ) : (
           <button
             onClick={() => setNotesOpen(true)}
-            className="w-14 h-14 bg-amber-400 hover:bg-amber-500 text-white rounded-2xl shadow-lg flex items-center justify-center transition-all hover:scale-105 relative"
-            title="Quick Notes"
+            className="w-11 h-11 bg-amber-500 hover:bg-amber-600 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 relative cursor-pointer"
+            title="Admin Quick Notes"
           >
-            <StickyNote className="w-6 h-6" />
-            {noteText && <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full" />}
+            <StickyNote className="w-5 h-5" />
+            {noteText && <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />}
           </button>
         )}
       </div>
@@ -1933,20 +1958,21 @@ export function AdminDashboard() {
           {/* KPI Cards Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {[
-              { label: 'Calls Today', value: bizDevStats.callsToday ?? 0, icon: Phone, color: 'blue', onClick: () => setBizDevFilters({ ...bizDevFilters, kpiFilter: 'callsToday' }) },
-              { label: 'Calls This Week', value: bizDevStats.callsThisWeek ?? 0, icon: Calendar, color: 'indigo', onClick: () => setBizDevFilters({ ...bizDevFilters, kpiFilter: 'callsThisWeek' }) },
-              { label: 'Connected Calls', value: bizDevStats.connectedCalls ?? 0, icon: BadgeCheck, color: 'emerald', onClick: () => setBizDevFilters({ ...bizDevFilters, kpiFilter: 'connectedCalls' }) },
-              { label: 'Follow-ups Due', value: bizDevStats.followUpsDue ?? 0, icon: Clock, color: 'amber', onClick: () => setBizDevFilters({ ...bizDevFilters, kpiFilter: 'followUpsDue' }) },
-              { label: 'Meetings Scheduled', value: bizDevStats.meetingsScheduled ?? 0, icon: CalendarCheck, color: 'violet', onClick: () => setBizDevFilters({ ...bizDevFilters, kpiFilter: 'meetingsScheduled' }) },
-              { label: 'Proposals Pending', value: bizDevStats.proposalsPending ?? 0, icon: FileText, color: 'pink', onClick: () => setBizDevFilters({ ...bizDevFilters, kpiFilter: 'proposalsPending' }) },
-              { label: 'Agreements Pending', value: bizDevStats.agreementsPending ?? 0, icon: FileCheck, color: 'sky', onClick: () => setBizDevFilters({ ...bizDevFilters, kpiFilter: 'agreementsPending' }) },
-              { label: 'Hot Leads', value: bizDevStats.hotLeads ?? 0, icon: Flame, color: 'red', onClick: () => setBizDevFilters({ ...bizDevFilters, kpiFilter: 'hotLeads' }) },
-              { label: 'Converted Clients', value: bizDevStats.convertedClients ?? 0, icon: UserCheck, color: 'emerald', onClick: () => setBizDevFilters({ ...bizDevFilters, kpiFilter: 'convertedClients' }) },
-              { label: 'Expected Revenue', value: bizDevStats.expectedRevenue ? fmt(bizDevStats.expectedRevenue) : '₹0', icon: DollarSign, color: 'green', onClick: () => { } },
-              { label: 'Conversion %', value: `${bizDevStats.conversionPct ?? 0}%`, icon: TrendingUp, color: 'teal', onClick: () => { } },
-              { label: 'Avg Calls/Day', value: bizDevStats.avgCallsPerDay ?? 0, icon: Activity, color: 'slate', onClick: () => { } },
+              { key: 'callsToday', label: 'Calls Today', value: bizDevStats.callsToday ?? 0, icon: Phone, color: 'blue' },
+              { key: 'callsThisWeek', label: 'Calls This Week', value: bizDevStats.callsThisWeek ?? 0, icon: Calendar, color: 'indigo' },
+              { key: 'connectedCalls', label: 'Connected Calls', value: bizDevStats.connectedCalls ?? 0, icon: BadgeCheck, color: 'emerald' },
+              { key: 'followUpsDue', label: 'Follow-ups Due', value: bizDevStats.followUpsDue ?? 0, icon: Clock, color: 'amber' },
+              { key: 'meetingsScheduled', label: 'Meetings Scheduled', value: bizDevStats.meetingsScheduled ?? 0, icon: CalendarCheck, color: 'violet' },
+              { key: 'proposalsPending', label: 'Proposals Pending', value: bizDevStats.proposalsPending ?? 0, icon: FileText, color: 'pink' },
+              { key: 'agreementsPending', label: 'Agreements Pending', value: bizDevStats.agreementsPending ?? 0, icon: FileCheck, color: 'sky' },
+              { key: 'hotLeads', label: 'Hot Leads', value: bizDevStats.hotLeads ?? 0, icon: Flame, color: 'red' },
+              { key: 'convertedClients', label: 'Converted Clients', value: bizDevStats.convertedClients ?? 0, icon: UserCheck, color: 'emerald' },
+              { key: 'expectedRevenue', label: 'Expected Revenue', value: bizDevStats.expectedRevenue ? fmt(bizDevStats.expectedRevenue) : '₹0', icon: DollarSign, color: 'green' },
+              { key: 'conversionPct', label: 'Conversion %', value: `${bizDevStats.conversionPct ?? 0}%`, icon: TrendingUp, color: 'teal' },
+              { key: 'avgCallsPerDay', label: 'Avg Calls/Day', value: bizDevStats.avgCallsPerDay ?? 0, icon: Activity, color: 'slate' },
             ].map((card, i) => {
               const Icon = card.icon;
+              const isSelected = card.key && bizDevFilters.kpiFilter === card.key;
               const bgColors: Record<string, string> = {
                 blue: 'bg-blue-50 text-blue-600 border-blue-100',
                 indigo: 'bg-indigo-50 text-indigo-600 border-indigo-100',
@@ -1961,7 +1987,21 @@ export function AdminDashboard() {
                 slate: 'bg-slate-100 text-slate-600 border-slate-200',
               };
               return (
-                <button key={i} onClick={card.onClick} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between hover:shadow-md hover:-translate-y-0.5 transition-all text-left">
+                <button
+                  key={i}
+                  onClick={() => {
+                    if (card.key && !['expectedRevenue', 'conversionPct', 'avgCallsPerDay'].includes(card.key)) {
+                      setBizDevFilters((prev: any) => ({
+                        ...prev,
+                        kpiFilter: prev.kpiFilter === card.key ? '' : card.key
+                      }));
+                      setBizDevPage(1);
+                    }
+                  }}
+                  className={`bg-white rounded-xl p-4 border shadow-sm flex flex-col justify-between hover:shadow-md hover:-translate-y-0.5 transition-all text-left cursor-pointer ${
+                    isSelected ? 'ring-2 ring-green-600 border-green-500 bg-green-50/20' : 'border-slate-100'
+                  }`}
+                >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2 border ${bgColors[card.color]}`}>
                     <Icon className="w-4 h-4" />
                   </div>

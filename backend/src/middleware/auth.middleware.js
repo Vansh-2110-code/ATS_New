@@ -37,6 +37,13 @@ const auth = async (req, res, next) => {
 
     req.user = user;
     req.userId = user._id;
+
+    // Run demo sandbox protection if demo account is active
+    if (user.isDemoAccount) {
+      const demoProtection = require('./demoProtection.middleware');
+      return demoProtection(req, res, next);
+    }
+
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {

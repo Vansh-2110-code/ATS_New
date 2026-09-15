@@ -166,25 +166,160 @@ exports.getJoiningDetail = async (req, res, next) => {
   }
 };
 
-// PUT /api/public/joining/:id - Admin-only: update a joining record
+// PUT /api/public/joining/:id - Admin or TL: update a joining record
 exports.updateJoining = async (req, res, next) => {
   try {
-    const emp = await Employee.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    ).populate('createdBy', 'name employeeId');
+    const emp = await Employee.findById(req.params.id);
     if (!emp) return res.status(404).json({ message: 'Record not found' });
-    res.json(emp);
+
+    if (req.user.role === 'tl') {
+      const TeamMember = require('../models/TeamMember');
+      const teamMember = await TeamMember.findOne({
+        teamLeaderId: req.user._id,
+        memberId: emp.createdBy?._id || emp.createdBy,
+        removedAt: null,
+      });
+      const isSelf = String(emp.createdBy?._id || emp.createdBy) === String(req.user._id);
+      if (!isSelf && !teamMember) {
+        return res.status(403).json({ message: 'Access denied: Creator is not on your team.' });
+      }
+    }
+
+    const payload = { ...req.body };
+    if (payload.isApproved === true || payload.approvalStatus === 'approved') {
+      payload.isApproved = true;
+      payload.approvalStatus = 'approved';
+      payload.approvedBy = req.user._id;
+      payload.approvedByName = req.user.name;
+      payload.approvedAt = new Date();
+      payload.rejectionRemarks = '';
+    } else if (payload.approvalStatus === 'rejected') {
+      payload.isApproved = false;
+      payload.approvalStatus = 'rejected';
+      payload.approvedBy = req.user._id;
+      payload.approvedByName = req.user.name;
+      payload.approvedAt = new Date();
+    }
+
+    const updated = await Employee.findByIdAndUpdate(
+      req.params.id,
+      payload,
+      { new: true, runValidators: true }
+    ).populate('createdBy', 'name employeeId').populate('approvedBy', 'name employeeId');
+
+    res.json(updated);
   } catch (err) {
     next(err);
   }
 };
 
-// GET /api/public/joining - List all joining records (filtered by role)
+// POST /api/public/joining/:id/approve - TL or Admin approves recruiter joining form
+exports.approveJoining = async (req, res, next) => {
+  try {
+    const emp = await Employee.findById(req.params.id).populate('createdBy', 'name employeeId');
+    if (!emp) return res.status(404).json({ message: 'Record not found' });
+
+    if (req.user.role === 'tl') {
+      const TeamMember = require('../models/TeamMember');
+      const teamMember = await TeamMember.findOne({
+        teamLeaderId: req.user._id,
+        memberId: emp.createdBy?._id || emp.createdBy,
+        removedAt: null,
+      });
+      const isSelf = String(emp.createdBy?._id || emp.createdBy) === String(req.user._id);
+      if (!isSelf && !teamMember) {
+        return res.status(403).json({ message: 'Access denied: Creator is not on your team.' });
+      }
+    }
+
+    emp.isApproved = true;
+    emp.approvalStatus = 'approved';
+    emp.approvedBy = req.user._id;
+    emp.approvedByName = req.user.name;
+    emp.approvedAt = new Date();
+    emp.rejectionRemarks = '';
+    emp.rejectedDocuments = [];
+    await emp.save();
+
+    try {
+      const { createLog } = require('../utils/helpers');
+      await createLog({
+        type: 'edit',
+        user: req.user._id,
+        userName: req.user.name,
+        role: req.user.role,
+        action: `Approved and verified joining form for ${emp.fullName} (${emp.employeeId})`,
+        target: emp._id.toString(),
+        ip: req.ip,
+      });
+    } catch (logErr) {
+      console.error('Audit log error on approveJoining:', logErr);
+    }
+
+    res.json({ success: true, message: 'Joining form approved and locked', employee: emp });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/public/joining/:id/reject - TL or Admin requests changes / rejects joining form
+exports.rejectJoining = async (req, res, next) => {
+  try {
+    const { remarks, rejectedDocuments } = req.body;
+    if (!remarks || !remarks.trim()) {
+      return res.status(400).json({ message: 'Rejection remarks are required explaining what needs correction.' });
+    }
+
+    const emp = await Employee.findById(req.params.id).populate('createdBy', 'name employeeId');
+    if (!emp) return res.status(404).json({ message: 'Record not found' });
+
+    if (req.user.role === 'tl') {
+      const TeamMember = require('../models/TeamMember');
+      const teamMember = await TeamMember.findOne({
+        teamLeaderId: req.user._id,
+        memberId: emp.createdBy?._id || emp.createdBy,
+        removedAt: null,
+      });
+      const isSelf = String(emp.createdBy?._id || emp.createdBy) === String(req.user._id);
+      if (!isSelf && !teamMember) {
+        return res.status(403).json({ message: 'Access denied: Creator is not on your team.' });
+      }
+    }
+
+    emp.isApproved = false;
+    emp.approvalStatus = 'rejected';
+    emp.approvedBy = req.user._id;
+    emp.approvedByName = req.user.name;
+    emp.approvedAt = new Date();
+    emp.rejectionRemarks = remarks.trim();
+    emp.rejectedDocuments = Array.isArray(rejectedDocuments) ? rejectedDocuments : [];
+    await emp.save();
+
+    try {
+      const { createLog } = require('../utils/helpers');
+      await createLog({
+        type: 'edit',
+        user: req.user._id,
+        userName: req.user.name,
+        role: req.user.role,
+        action: `Requested changes on joining form for ${emp.fullName} (${emp.employeeId}): ${remarks.trim()}`,
+        target: emp._id.toString(),
+        ip: req.ip,
+      });
+    } catch (logErr) {
+      console.error('Audit log error on rejectJoining:', logErr);
+    }
+
+    res.json({ success: true, message: 'Joining form rejected with remarks for revision', employee: emp });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/public/joining - List all joining records (filtered by role and status)
 exports.listJoining = async (req, res, next) => {
   try {
-    const { search, page = 1, limit = 20 } = req.query;
+    const { search, status, page = 1, limit = 20 } = req.query;
     const query = {};
     if (search) {
       query.$or = [
@@ -208,14 +343,37 @@ exports.listJoining = async (req, res, next) => {
       query.createdBy = { $in: memberIds };
     }
 
+    // Status filter
+    if (status && status !== 'all') {
+      if (status === 'approved') {
+        query.$or = [
+          { approvalStatus: 'approved' },
+          { isApproved: true }
+        ];
+      } else if (status === 'pending') {
+        query.$and = [
+          { isApproved: { $ne: true } },
+          { $or: [{ approvalStatus: 'pending' }, { approvalStatus: { $exists: false } }, { approvalStatus: 'draft' }] }
+        ];
+      } else if (status === 'rejected') {
+        query.approvalStatus = 'rejected';
+      }
+    }
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const [employees, total] = await Promise.all([
+    const [employees, total, pendingCount] = await Promise.all([
       Employee.find(query).sort('-createdAt').skip(skip).limit(parseInt(limit))
         .populate('createdBy', 'name employeeId')
+        .populate('approvedBy', 'name employeeId')
         .populate('candidateRef', 'name status source'),
       Employee.countDocuments(query),
+      Employee.countDocuments({
+        ...query,
+        isApproved: { $ne: true },
+        approvalStatus: { $ne: 'rejected' }
+      }),
     ]);
-    res.json({ employees, total });
+    res.json({ employees, total, pendingCount });
   } catch (err) {
     next(err);
   }

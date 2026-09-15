@@ -40,6 +40,15 @@ const employeeSchema = new mongoose.Schema({
   highestDocumentPath: { type: String },
   panCardPath: { type: String },
   aadhaarCardPath: { type: String },
+  bankProofPath: { type: String },
+
+  // Bank Details (Payroll)
+  bankName: { type: String, trim: true },
+  accountHolderName: { type: String, trim: true },
+  accountNumber: { type: String, trim: true },
+  ifscCode: { type: String, trim: true },
+  branchName: { type: String, trim: true },
+  accountType: { type: String, enum: ['Savings', 'Current', 'Salary', ''], default: 'Savings', trim: true },
 
   expYears: { type: Number, default: 0 },
   expMonths: { type: Number, default: 0 },
@@ -54,6 +63,13 @@ const employeeSchema = new mongoose.Schema({
   candidateRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Candidate' },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   isApproved: { type: Boolean, default: false },
+  approvalStatus: { type: String, enum: ['draft', 'pending', 'approved', 'rejected'], default: 'pending' },
+  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  approvedByName: { type: String, trim: true },
+  approvedAt: { type: Date },
+  rejectionRemarks: { type: String, trim: true },
+  rejectedDocuments: [{ type: String, trim: true }],
+  submittedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
 employeeSchema.index({ fullName: 'text', email: 'text' });

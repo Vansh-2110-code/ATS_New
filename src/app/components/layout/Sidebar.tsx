@@ -6,9 +6,11 @@ import {
   BarChart2, FileText, Shield, Clock, LogOut, Star,
   DollarSign, TrendingUp, UserCog, Activity, ChevronRight,
   ScanLine, CalendarCheck, UserPlus, ListChecks, Briefcase, FileCheck,
-  Building2, Database, ClipboardCheck, CheckSquare, MonitorCheck, Mail, LayoutGrid, Upload, Settings, Globe, XCircle,
+  Building2, Database, ClipboardCheck, CheckSquare, MonitorCheck, Mail, LayoutGrid, Upload, Settings, Globe, XCircle, RotateCcw,
+  BookOpen, Play, ShieldCheck, Award, MessageSquare, FileSignature,
 } from 'lucide-react';
 import { useAuth, Role, ROLE_DASHBOARD } from '../../context/AuthContext';
+import { useInternalChat } from '../../context/InternalChatContext';
 import logoImg from '../../../assets/Logo.png';
 import { FaceVerificationModal } from '../attendance/FaceVerificationModal';
 
@@ -17,13 +19,15 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   roles: Role[];
-  category: 'Admin' | 'Manager' | 'Team Lead' | 'Recruiter';
+  category: 'Admin' | 'Payroll' | 'Manager' | 'Team Lead' | 'Recruiter';
 }
 
 const NAV_ITEMS: NavItem[] = [
   // Recruiter
   { label: 'Dashboard',        href: '/recruiter',               icon: LayoutDashboard, roles: ['recruiter', 'spoc'], category: 'Recruiter' },
+  { label: 'Business Development', href: '/business-development', icon: TrendingUp, roles: ['admin', 'manager', 'tl', 'recruiter', 'bd', 'business_developer', 'spoc'], category: 'Recruiter' },
   { label: 'Candidate Management', href: '/recruiter/resumes',       icon: Users,           roles: ['recruiter', 'spoc', 'tl'], category: 'Recruiter' },
+  { label: 'Eligible Tracker', href: '/recruiter/eligible-tracker',  icon: ClipboardCheck,  roles: ['recruiter', 'spoc', 'tl', 'manager', 'admin'], category: 'Recruiter' },
   { label: 'Rejected Bucket',  href: '/recruiter/rejected',      icon: XCircle,         roles: ['recruiter', 'spoc', 'tl', 'manager', 'admin'], category: 'Recruiter' },
   { label: 'Add Candidate',    href: '/recruiter/add',           icon: UserPlus,        roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
   { label: 'Walk-In Queue',    href: '/recruiter/walkin-queue',  icon: ListChecks,      roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
@@ -36,22 +40,32 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Email Center',     href: '/email',                   icon: Mail,            roles: ['recruiter'], category: 'Recruiter' },
   { label: 'My Leaves',        href: '/employee/leaves',         icon: CalendarCheck,   roles: ['recruiter', 'spoc', 'tl', 'manager', 'admin'], category: 'Recruiter' },
   { label: 'My Salary Slip',   href: '/salary-slip',             icon: DollarSign,      roles: ['recruiter', 'spoc', 'tl'], category: 'Recruiter' },
+  { label: 'My Incentives',    href: '/recruiter/incentives',    icon: Award,           roles: ['recruiter', 'spoc', 'tl'], category: 'Recruiter' },
+  { label: 'Team Chat',        href: '/chat',                    icon: MessageSquare,   roles: ['recruiter', 'spoc', 'tl', 'manager', 'admin', 'bd', 'business_developer'], category: 'Recruiter' },
+  { label: 'Operating Policy & SOP', href: '/recruiter/policy',  icon: BookOpen,        roles: ['recruiter', 'spoc', 'tl', 'manager', 'admin'], category: 'Recruiter' },
 
   // Team Lead
   { label: 'Overview',         href: '/tl',                      icon: LayoutDashboard, roles: ['tl'], category: 'Team Lead' },
+  { label: 'Business Development', href: '/business-development', icon: TrendingUp, roles: ['admin', 'manager', 'tl', 'recruiter', 'bd', 'business_developer', 'spoc'], category: 'Team Lead' },
   { label: 'My Team',          href: '/tl/my-team',              icon: Users,           roles: ['tl'], category: 'Team Lead' },
   { label: 'Leave Approvals',  href: '/tl/leaves',               icon: CalendarCheck,   roles: ['tl'], category: 'Team Lead' },
+  { label: 'Joining Approvals', href: '/admin/joining',          icon: FileCheck,       roles: ['tl'], category: 'Team Lead' },
   { label: 'Candidate Management', href: '/recruiter/resumes',   icon: Users,           roles: ['tl', 'manager', 'admin'], category: 'Team Lead' },
+  { label: 'Eligible Tracker', href: '/tl/eligible-tracker',     icon: ClipboardCheck,  roles: ['tl', 'manager', 'admin'], category: 'Team Lead' },
   { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['tl'], category: 'Team Lead' },
   { label: 'Create Job (JR)',  href: '/recruiter/jobs/new',      icon: FileText,         roles: ['tl', 'manager'], category: 'Team Lead' },
   { label: 'Bulk Job Post',    href: '/recruiter/jobs/bulk',     icon: LayoutGrid,       roles: ['tl', 'manager'], category: 'Team Lead' },
   { label: 'Performance Reviews', href: '/tl/performance-reviews', icon: Star, roles: ['tl'], category: 'Team Lead' },
   { label: 'Email Center',     href: '/email',                   icon: Mail,            roles: ['tl'], category: 'Team Lead' },
+  { label: 'Team Chat',        href: '/chat',                    icon: MessageSquare,   roles: ['tl'], category: 'Team Lead' },
+  { label: 'Team Leader Policy & SOP', href: '/tl/policy',       icon: BookOpen,        roles: ['tl'], category: 'Team Lead' },
 
   // Manager
   { label: 'Overview',         href: '/manager',                 icon: LayoutDashboard, roles: ['manager'], category: 'Manager' },
+  { label: 'Business Development', href: '/business-development', icon: TrendingUp, roles: ['admin', 'manager', 'tl', 'recruiter', 'bd', 'business_developer', 'spoc'], category: 'Manager' },
   { label: 'Leave Approvals',  href: '/manager/leaves',          icon: CalendarCheck,   roles: ['manager'], category: 'Manager' },
   { label: 'Candidate DB',     href: '/admin/candidates',        icon: Database,         roles: ['manager'], category: 'Manager' },
+  { label: 'Eligible Tracker', href: '/manager/eligible-tracker', icon: ClipboardCheck, roles: ['manager'], category: 'Manager' },
   { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['manager'], category: 'Manager' },
   { label: 'Bulk Job Post',    href: '/recruiter/jobs/bulk',     icon: LayoutGrid,       roles: ['manager'], category: 'Manager' },
   { label: 'Reports',          href: '/manager/reports',         icon: BarChart2,        roles: ['manager'], category: 'Manager' },
@@ -59,30 +73,45 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Salary',           href: '/salary',                  icon: DollarSign,       roles: ['manager'], category: 'Manager' },
   { label: 'Performance Reviews', href: '/manager/performance-reviews', icon: Star, roles: ['manager'], category: 'Manager' },
   { label: 'TL Login Activity',href: '/manager/tl-activity',     icon: MonitorCheck,     roles: ['manager'], category: 'Manager' },
+  { label: 'Team Chat',        href: '/chat',                    icon: MessageSquare,   roles: ['manager'], category: 'Manager' },
+  { label: 'Manager Policy & SOP', href: '/manager/policy',      icon: BookOpen,        roles: ['manager'], category: 'Manager' },
 
   // Admin
-  { label: 'Dashboard',        href: '/admin',                   icon: LayoutDashboard, roles: ['admin'], category: 'Admin' },
+  { label: 'Dashboard',        href: '/admin',                   icon: LayoutDashboard, roles: ['admin', 'bd', 'business_developer'], category: 'Admin' },
+  { label: 'Business Development', href: '/business-development', icon: TrendingUp, roles: ['admin', 'manager', 'tl', 'recruiter', 'bd', 'business_developer'], category: 'Admin' },
   { label: 'User Management',  href: '/admin/users',             icon: UserCog,          roles: ['admin'], category: 'Admin' },
   { label: 'Attendance',       href: '/admin/attendance',        icon: Clock,            roles: ['admin'], category: 'Admin' },
   { label: 'Leave Approvals',  href: '/admin/leaves',            icon: CalendarCheck,   roles: ['admin'], category: 'Admin' },
   { label: 'Access Control',   href: '/admin/access',            icon: Shield,           roles: ['admin'], category: 'Admin' },
   { label: 'Candidate DB',     href: '/admin/candidates',        icon: Database,         roles: ['admin'], category: 'Admin' },
+  { label: 'Eligible Tracker', href: '/admin/eligible-tracker',  icon: ClipboardCheck,   roles: ['admin'], category: 'Admin' },
   { label: 'ATS Scan Database',href: '/admin/ats-records',       icon: ScanLine,         roles: ['admin'], category: 'Admin' },
   { label: 'Excel Import',     href: '/admin/excel-import',      icon: Upload,           roles: ['admin'], category: 'Admin' },
   { label: 'Field Config',     href: '/admin/field-config',      icon: Settings,         roles: ['admin'], category: 'Admin' },
   { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['admin'], category: 'Admin' },
   { label: 'Bulk Job Post',    href: '/recruiter/jobs/bulk',     icon: LayoutGrid,       roles: ['admin'], category: 'Admin' },
   { label: 'Companies',        href: '/admin/companies',         icon: Building2,        roles: ['admin'], category: 'Admin' },
-  { label: 'Tasks',            href: '/admin/tasks',             icon: CheckSquare,      roles: ['admin', 'tl', 'recruiter'], category: 'Admin' },
+  { label: 'Tasks',            href: '/admin/tasks',             icon: CheckSquare,      roles: ['admin', 'tl', 'recruiter', 'bd', 'business_developer'], category: 'Admin' },
   { label: 'My Joining Form', href: '/recruiter/joining', icon: FileCheck,        roles: ['admin', 'recruiter', 'tl'], category: 'Recruiter' },
   { label: 'Recruiter Records',  href: '/admin/joining',           icon: ClipboardCheck,   roles: ['admin', 'recruiter', 'tl'], category: 'Admin' },
-  { label: 'Email Center',     href: '/email',                   icon: Mail,            roles: ['admin'], category: 'Admin' },
+  { label: 'Offer Letters',    href: '/admin/offer-letters',     icon: FileSignature,    roles: ['admin'], category: 'Admin' },
+  { label: 'Email Center',     href: '/email',                   icon: Mail,            roles: ['admin', 'bd', 'business_developer'], category: 'Admin' },
+  { label: 'Team Chat',        href: '/chat',                    icon: MessageSquare,   roles: ['admin', 'bd', 'business_developer'], category: 'Admin' },
   { label: 'TL Login Activity',href: '/admin/tl-activity',       icon: MonitorCheck,     roles: ['admin'], category: 'Admin' },
   { label: 'Performance Reviews', href: '/admin/performance-reviews', icon: Star, roles: ['admin'], category: 'Admin' },
   { label: 'System Logs',      href: '/admin/logs',              icon: Activity,         roles: ['admin'], category: 'Admin' },
   { label: 'Salary',           href: '/salary',                  icon: DollarSign,       roles: ['admin'], category: 'Admin' },
-  { label: 'Revenue',          href: '/revenue',                 icon: TrendingUp,       roles: ['admin', 'manager'], category: 'Admin' },
+  { label: 'Revenue',          href: '/revenue',                 icon: TrendingUp,       roles: ['admin', 'manager', 'bd', 'business_developer'], category: 'Admin' },
   { label: 'Credit Notes',     href: '/credit-notes',            icon: FileCheck,        roles: ['admin'], category: 'Admin' },
+  { label: 'Recruiter Policy & SOP', href: '/recruiter/policy',  icon: BookOpen,        roles: ['admin'], category: 'Admin' },
+
+  // Payroll & Compliance Suite
+  { label: 'Payroll Overview',   href: '/payroll/dashboard', icon: LayoutDashboard, roles: ['admin', 'manager'], category: 'Payroll' },
+  { label: 'Run Monthly Payroll', href: '/payroll/run',       icon: Play,            roles: ['admin', 'manager'], category: 'Payroll' },
+  { label: 'Employee Salary CTC', href: '/payroll/employees', icon: Users,           roles: ['admin', 'manager'], category: 'Payroll' },
+  { label: 'Salary Slips Hub',   href: '/payroll/payslips',  icon: FileText,        roles: ['admin', 'manager'], category: 'Payroll' },
+  { label: 'Recruiter Incentives', href: '/payroll/incentives', icon: Award,        roles: ['admin', 'manager'], category: 'Payroll' },
+  { label: 'Payroll Masters',    href: '/payroll/masters',   icon: Settings,        roles: ['admin'],            category: 'Payroll' },
 ];
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -93,6 +122,8 @@ const ROLE_LABELS: Record<Role, string> = {
   spoc: 'SPOC',
   walkin: 'Walk-In',
   demo_walkin: 'Demo Walk-In',
+  bd: 'Business Developer',
+  business_developer: 'Business Developer',
 };
 
 const ROLE_COLORS: Record<Role, string> = {
@@ -103,6 +134,8 @@ const ROLE_COLORS: Record<Role, string> = {
   spoc: 'bg-sky-100 text-sky-700',
   walkin: 'bg-teal-100 text-teal-700',
   demo_walkin: 'bg-indigo-100 text-indigo-700',
+  bd: 'bg-cyan-100 text-cyan-700',
+  business_developer: 'bg-cyan-100 text-cyan-700',
 };
 
 interface SidebarProps {
@@ -110,15 +143,18 @@ interface SidebarProps {
 }
 
 const ROLE_CATEGORIES: Record<string, string[]> = {
-  admin: ['Admin', 'Manager', 'Team Lead', 'Recruiter'],
-  manager: ['Manager', 'Team Lead', 'Recruiter'],
+  admin: ['Admin', 'Payroll', 'Manager', 'Team Lead', 'Recruiter'],
+  manager: ['Manager', 'Payroll', 'Team Lead', 'Recruiter'],
   tl: ['Team Lead', 'Recruiter'],
   recruiter: ['Recruiter'],
   spoc: ['Recruiter'],
+  bd: ['Admin', 'Manager', 'Team Lead', 'Recruiter'],
+  business_developer: ['Admin', 'Manager', 'Team Lead', 'Recruiter'],
 };
 
 export function Sidebar({ onClose }: SidebarProps) {
   const { user, logout } = useAuth();
+  const { totalUnread } = useInternalChat();
   const location = useLocation();
   const navigate = useNavigate();
   const [showCheckOutFaceModal, setShowCheckOutFaceModal] = useState(false);
@@ -139,15 +175,22 @@ export function Sidebar({ onClose }: SidebarProps) {
   if (!user) return null;
 
   const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+  const hasBDRole = userRoles.includes('bd') || userRoles.includes('business_developer') || user.role === 'admin' || user.role === 'manager';
+
   const allowedCategoriesSet = new Set<string>();
   userRoles.forEach(r => {
     const cats = ROLE_CATEGORIES[r] || ['Recruiter'];
     cats.forEach(c => allowedCategoriesSet.add(c));
   });
-  const categoryOrder = ['Admin', 'Manager', 'Team Lead', 'Recruiter'];
+  const categoryOrder = ['Admin', 'Payroll', 'Manager', 'Team Lead', 'Recruiter'];
   const allowedCategories = categoryOrder.filter(c => allowedCategoriesSet.has(c));
 
-  const rawFilteredNav = NAV_ITEMS.filter(item => allowedCategories.includes(item.category));
+  const rawFilteredNav = NAV_ITEMS.filter(item => {
+    if (item.href === '/business-development') {
+      return hasBDRole;
+    }
+    return allowedCategories.includes(item.category);
+  });
   
   // Deduplicate by href
   const seenHrefs = new Set<string>();
@@ -160,7 +203,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   });
 
   const handleLogout = () => {
-    if (user.role === 'admin' || user.disableBiometric) {
+    if (user.role === 'admin' || user.role === 'walkin' || user.role === 'demo_walkin' || Boolean(user.disableBiometric)) {
       completeLogout();
     } else {
       setShowCheckOutFaceModal(true);
@@ -247,6 +290,13 @@ export function Sidebar({ onClose }: SidebarProps) {
                       <span className="flex-1">
                         {item.href === '/admin/tasks' && user.role !== 'admin' ? 'My Tasks' : item.label}
                       </span>
+                      {item.href === '/chat' && totalUnread > 0 && (
+                        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full transition-colors ${
+                          active ? 'bg-white text-emerald-700' : 'bg-emerald-600 text-white shadow-sm'
+                        }`}>
+                          {totalUnread > 99 ? '99+' : totalUnread}
+                        </span>
+                      )}
                       {active && <ChevronRight className="w-3 h-3 opacity-70" />}
                     </Link>
                   );
@@ -259,8 +309,29 @@ export function Sidebar({ onClose }: SidebarProps) {
 
       {/* Bottom Actions */}
       <div className="border-t border-slate-100">
+        {(user?.isDemoAccount || user?.email?.toLowerCase().includes('demo')) && (
+          <div className="px-3 pt-3">
+            <button
+              onClick={async () => {
+                if (window.confirm('Reset corporate demo environment? All temporary test additions will be purged and baseline demo data restored.')) {
+                  try {
+                    await api.resetDemoData();
+                    alert('✅ Demo environment reset successfully! Baseline demo data restored.');
+                    window.location.reload();
+                  } catch (err: any) {
+                    alert('Failed to reset demo environment: ' + (err.message || 'Error'));
+                  }
+                }
+              }}
+              className="flex items-center justify-center gap-2 px-3 py-2 w-full text-xs font-bold rounded-lg text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset Demo Data
+            </button>
+          </div>
+        )}
         {/* Logout Button */}
-        <div className="px-3 py-4 space-y-0.5">
+        <div className="px-3 py-3 space-y-0.5">
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 px-3 py-2.5 w-full text-left rounded-lg text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"

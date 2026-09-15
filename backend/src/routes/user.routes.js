@@ -14,5 +14,6 @@ router.put('/:id', authorize('admin'), ctrl.update);
 router.delete('/:id', authorize('admin'), ctrl.remove);
 router.patch('/:id/status', authorize('admin'), ctrl.toggleStatus);
 router.post('/:id/reset-password', authorize('admin'), ctrl.resetPassword);
+router.post('/reset-demo-data', authorize('admin'), ctrl.resetDemoData);
 
 module.exports = router;

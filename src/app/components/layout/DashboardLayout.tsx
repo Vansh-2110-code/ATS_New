@@ -6,6 +6,7 @@ import { Sidebar } from './Sidebar';
 import api from '../../services/api';
 import { FaceVerificationModal } from '../attendance/FaceVerificationModal';
 import { ChatbotWidget } from '../ui/ChatbotWidget';
+import { FloatingChatWidget } from '../chat/FloatingChatWidget';
 
 interface NotificationItem {
   _id: string;
@@ -92,16 +93,16 @@ export function DashboardLayout() {
         setAttMarkedAt(label);
         localStorage.setItem(todayKey(user.id), label);
       } else {
-        // Enforce face scanner immediately on login if not marked (unless biometric disabled)
-        if (!user.disableBiometric && user.role !== 'admin') {
+        const isFaceExempt = user.role === 'admin' || user.role === 'walkin' || user.role === 'demo_walkin' || Boolean(user.disableBiometric);
+        if (!isFaceExempt) {
           setShowCheckInFaceModal(true);
         } else {
           completeMarkAttendance(user.isWFH || false);
         }
       }
     }).catch(() => {
-      // Fallback: trigger face scanner if todayStatus cannot be verified (unless biometric disabled)
-      if (!user.disableBiometric && user.role !== 'admin') {
+      const isFaceExempt = user.role === 'admin' || user.role === 'walkin' || user.role === 'demo_walkin' || Boolean(user.disableBiometric);
+      if (!isFaceExempt) {
         setShowCheckInFaceModal(true);
       } else {
         completeMarkAttendance(user.isWFH || false);
@@ -649,33 +650,33 @@ export function DashboardLayout() {
       )}
 
       {/* ── Face Verification Modal for Check-In ───────────────── */}
-      <FaceVerificationModal
-        isOpen={showCheckInFaceModal}
-        disableBiometric={user?.disableBiometric}
-        onClose={() => {
-          setShowCheckInFaceModal(false);
-          setPendingWFH(null);
-          logout();
-          navigate('/login');
-        }}
-        onSuccess={async (descriptor, photo) => {
-          setShowCheckInFaceModal(false);
-          if (user && (!user.faceDescriptor || user.faceDescriptor.length === 0)) {
-            try {
-              await api.registerFace(descriptor);
-              login({ ...user, faceDescriptor: descriptor });
-            } catch (err) {
-              console.error('Failed to register face:', err);
-              alert('Biometric face registration failed. Please try again.');
-              return;
+      {!user?.disableBiometric && user?.role !== 'admin' && user?.role !== 'walkin' && user?.role !== 'demo_walkin' && (
+        <FaceVerificationModal
+          isOpen={showCheckInFaceModal}
+          disableBiometric={user?.disableBiometric}
+          onClose={() => {
+            setShowCheckInFaceModal(false);
+            setPendingWFH(null);
+            logout();
+            navigate('/login');
+          }}
+          onSuccess={async (descriptor, photo) => {
+            setShowCheckInFaceModal(false);
+            if (user && descriptor && descriptor.length > 0 && (!user.faceDescriptor || user.faceDescriptor.length === 0)) {
+              try {
+                await api.registerFace(descriptor);
+                login({ ...user, faceDescriptor: descriptor });
+              } catch (err) {
+                console.error('Failed to register face:', err);
+              }
             }
-          }
-          completeMarkAttendance(pendingWFH !== null ? pendingWFH : (user?.isWFH || false));
-        }}
-        actionType="checkin"
-        preventCancel={true}
-        registeredDescriptor={user?.faceDescriptor}
-      />
+            completeMarkAttendance(pendingWFH !== null ? pendingWFH : (user?.isWFH || false));
+          }}
+          actionType="checkin"
+          preventCancel={true}
+          registeredDescriptor={user?.faceDescriptor}
+        />
+      )}
       {/* ⏰ CALL BACK REMINDER POPUP MODAL */}
       {activeCallBack && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
@@ -754,6 +755,7 @@ export function DashboardLayout() {
         </div>
       )}
       <ChatbotWidget mode="internal" />
+      <FloatingChatWidget />
     </div>
   );
 }

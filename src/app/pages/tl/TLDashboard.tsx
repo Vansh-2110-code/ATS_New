@@ -5,7 +5,7 @@ import {
   Phone, Calendar, AlertCircle, TrendingUp, ArrowRight, Users, Edit3, Loader2, Mail,
   X, Eye, BarChart3, Zap, Target, Award, CheckCircle2, FileText,
   PhoneOff, PhoneMissed, PhoneCall, ClipboardList, UserX, Building2,
-  BadgeCheck, Clipboard, UserPlus, Clock, Briefcase, UserCheck
+  BadgeCheck, Clipboard, UserPlus, Clock, Briefcase, UserCheck, FileCheck
 } from 'lucide-react';
 import api from '../../services/api';
 import { getGreeting } from '../../utils/greetingUtils';
@@ -116,8 +116,9 @@ export function TLDashboard() {
   const [recruiterCandidates, setRecruiterCandidates] = useState<any[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
   const [tlCandidate, setTlCandidate] = useState<any>(null);
+  const [pendingJoiningCount, setPendingJoiningCount] = useState(0);
 
-  const DATE_TABS: DateRange[] = ['Day', 'Week', 'Quarter', 'Year', 'All', 'Custom'];
+  const DATE_TABS: DateRange[] = ['Day', 'Week', 'Month', 'Quarter', 'Year', 'All', 'Custom'];
 
   // Load Companies & Recruiters list
   useEffect(() => {
@@ -137,9 +138,28 @@ export function TLDashboard() {
     const load = async () => {
       try {
         setLoading(true);
+        let fromVal = customFrom;
+        let toVal = customTo;
+        if (dateRange === 'Custom' && fromVal && toVal && new Date(fromVal) > new Date(toVal)) {
+          const tmp = fromVal;
+          fromVal = toVal;
+          toVal = tmp;
+          setCustomFrom(fromVal);
+          setCustomTo(toVal);
+        }
+
         const params: Record<string, string> = { range: dateRange.toLowerCase() };
-        if (dateRange === 'Custom' && customFrom) params.from = customFrom;
-        if (dateRange === 'Custom' && customTo) params.to = customTo;
+        if (dateRange === 'Custom') {
+          params.range = 'custom';
+          if (fromVal) {
+            params.from = fromVal;
+            params.startDate = fromVal;
+          }
+          if (toVal) {
+            params.to = toVal;
+            params.endDate = toVal;
+          }
+        }
         if (division) params.division = division;
         if (company) params.company = company;
         if (customer) params.customer = customer;
@@ -181,6 +201,10 @@ export function TLDashboard() {
         }
 
         setTasks(tasksData.tasks || []);
+
+        api.getJoiningList({ limit: '1', status: 'pending' }).then(res => {
+          setPendingJoiningCount(res.pendingCount || res.total || 0);
+        }).catch(() => {});
       } catch (err) {
         console.error('Failed to load TL dashboard:', err);
       } finally {
@@ -265,6 +289,31 @@ export function TLDashboard() {
         ))}
       </div>
 
+      {/* ── Pending Joining Approvals Alert Banner ── */}
+      {pendingJoiningCount > 0 && (
+        <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl p-4 shadow-sm flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+              <FileCheck className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">
+                {pendingJoiningCount} Recruiter Joining {pendingJoiningCount === 1 ? 'Form' : 'Forms'} Pending Verification
+              </p>
+              <p className="text-white/85 text-xs">
+                Recruiters from your team have submitted onboarding forms and KYC documents awaiting your approval.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/admin/joining"
+            className="px-4 py-2 bg-white text-amber-800 rounded-xl text-xs font-bold hover:bg-amber-50 transition-colors shadow-xs"
+          >
+            Review & Verify Now →
+          </Link>
+        </div>
+      )}
+
       {/* ── Date & Filter Bar ── */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-xs px-4 py-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -273,7 +322,16 @@ export function TLDashboard() {
             {DATE_TABS.map(tab => (
               <button
                 key={tab}
-                onClick={() => setDateRange(tab)}
+                onClick={() => {
+                  setDateRange(tab);
+                  if (tab === 'Custom' && (!customFrom || !customTo)) {
+                    const now = new Date();
+                    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                    const todayDay = now.toISOString().split('T')[0];
+                    setCustomFrom(firstDay);
+                    setCustomTo(todayDay);
+                  }
+                }}
                 className={`px-4 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
                   dateRange === tab
                     ? 'bg-green-600 text-white'

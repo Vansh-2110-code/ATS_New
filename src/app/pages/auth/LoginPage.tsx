@@ -52,7 +52,8 @@ export function LoginPage() {
     try {
       if (loginMode === 'employee') {
         const data = await api.login(employeeId.trim(), password, isWFH);
-        const needsFaceCheck = ['recruiter', 'tl', 'manager'].includes(data.user.role) && !data.user.disableBiometric;
+        const isFaceExempt = ['admin', 'walkin', 'demo_walkin'].includes(data.user.role) || Boolean(data.user.disableBiometric);
+        const needsFaceCheck = !isFaceExempt && ['recruiter', 'tl', 'manager'].includes(data.user.role);
         if (needsFaceCheck) {
           setTempAuthData(data);
           setShowFaceModal(true);
@@ -60,11 +61,15 @@ export function LoginPage() {
           return;
         }
         api.setToken(data.token);
+        if (data.user.role === 'walkin' || data.user.role === 'demo_walkin') {
+          localStorage.setItem('walkin_token', data.token);
+        }
         login(data.user);
         navigate(ROLE_DASHBOARD[data.user.role as keyof typeof ROLE_DASHBOARD]);
       } else {
         const data = await api.walkInLogin(employeeId.trim(), password);
         api.setToken(data.token);
+        localStorage.setItem('walkin_token', data.token);
         // Normalize walkin data to match AuthUser interface
         const walkinUser = {
           id: data.walkin.id || data.walkin._id,

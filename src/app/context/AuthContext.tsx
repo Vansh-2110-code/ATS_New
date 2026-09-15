@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 import api from '../services/api';
 
-export type Role = 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin';
+export type Role = 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin' | 'bd' | 'business_developer';
 
 export interface AuthUser {
   id: string;
@@ -114,4 +114,6 @@ export const ROLE_DASHBOARD: Record<Role, string> = {
   spoc: '/recruiter',
   walkin: '/walkin/dashboard',
   demo_walkin: '/walkin/demo-registration',
+  bd: '/admin',
+  business_developer: '/admin',
 };

@@ -1,5 +1,7 @@
 const { parseResume, matchWithJD } = require('../utils/resumeParser');
+const { classifyUniversalRole } = require('../utils/universalRoleClassifier');
 const AtsRecord = require('../models/AtsRecord');
+const Job = require('../models/Job');
 const path = require('path');
 
 /* ─── Derive ATS status from score ─────────────────────────── */
@@ -56,10 +58,10 @@ function buildAtsRecord(parsed, user, jobTitle) {
     totalExperience:        parsed.experience?.[0]?.duration || '',
     currentCompanyName:     parsed.experience?.[0]?.company  || '',
     currentCompanyDesignation: parsed.experience?.[0]?.title || '',
-    department:             '',
-    role:                   parsed.experience?.[0]?.title    || '',
-    industry:               '',
-    keySkills:              (parsed.skills || []).map(s => s.name).join(', '),
+    department:             parsed.universalRoleProfile?.primaryDomain || '',
+    role:                   parsed.universalRoleProfile?.bestFitRole || parsed.experience?.[0]?.title || '',
+    industry:               parsed.universalRoleProfile?.primaryDomain || '',
+    keySkills:              (parsed.skills || []).map(s => (typeof s === 'string' ? s : s.name)).filter(Boolean).join(', '),
     annualSalary:           '',
     noticePeriod:           '',
     resumeHeadline:         (parsed.summary || '').substring(0, 120),
@@ -157,8 +159,26 @@ exports.scan = async (req, res, next) => {
       parsed = matchWithJD(parsed, jobDescription);
     }
 
+    // ─── Universal Role Classification & Open JRs Matching ───
+    let openJobs = [];
+    try {
+      openJobs = await Job.find({})
+        .select('jrNumber jobTitle companyName client skills division portfolioDepartment location experience positions description requirements status')
+        .lean();
+    } catch (jobErr) {
+      console.warn('[ResumeScan] Failed to load open jobs for matching:', jobErr.message);
+    }
+
+    const universalProfile = classifyUniversalRole(parsed, openJobs);
+    parsed.universalRoleProfile = universalProfile;
+
+    const effectiveJobTitle = jobTitle || universalProfile?.bestFitRole || parsed.experience?.[0]?.title || '';
+    if (!parsed.jobTitle) {
+      parsed.jobTitle = effectiveJobTitle;
+    }
+
     // ─── Auto-save to AtsRecord (append-only, never skip) ───
-    await saveAtsRecord(parsed, req.user, jobTitle || '');
+    await saveAtsRecord(parsed, req.user, effectiveJobTitle);
 
     res.json(parsed);
   } catch (err) {
@@ -182,8 +202,26 @@ exports.scanWithJD = async (req, res, next) => {
       parsed = matchWithJD(parsed, jobDescription);
     }
 
+    // ─── Universal Role Classification & Open JRs Matching ───
+    let openJobs = [];
+    try {
+      openJobs = await Job.find({})
+        .select('jrNumber jobTitle companyName client skills division portfolioDepartment location experience positions description requirements status')
+        .lean();
+    } catch (jobErr) {
+      console.warn('[ResumeScan] Failed to load open jobs for matching:', jobErr.message);
+    }
+
+    const universalProfile = classifyUniversalRole(parsed, openJobs);
+    parsed.universalRoleProfile = universalProfile;
+
+    const effectiveJobTitle = jobTitle || universalProfile?.bestFitRole || parsed.experience?.[0]?.title || '';
+    if (!parsed.jobTitle) {
+      parsed.jobTitle = effectiveJobTitle;
+    }
+
     // ─── Auto-save to AtsRecord ───────────────────────────
-    await saveAtsRecord(parsed, req.user, jobTitle || '');
+    await saveAtsRecord(parsed, req.user, effectiveJobTitle);
 
     res.json(parsed);
   } catch (err) {

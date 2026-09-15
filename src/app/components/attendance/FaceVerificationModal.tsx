@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Camera, Scan, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { Camera, Scan, CheckCircle2, AlertTriangle, Loader2, Monitor } from 'lucide-react';
 import * as faceapi from '@vladmandic/face-api';
 
 interface FaceVerificationModalProps {
@@ -23,6 +23,7 @@ export function FaceVerificationModal({
 }: FaceVerificationModalProps) {
   const [step, setStep] = useState<0 | 1 | 2>(0); // 0: Init/Loading, 1: Scanning, 2: Success
   const [progress, setProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('Initializing camera...');
   const [error, setError] = useState('');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
@@ -35,20 +36,20 @@ export function FaceVerificationModal({
 
     if (disableBiometric) {
       onSuccess([], '');
-      onClose();
       return;
     }
 
     // Reset state
     setStep(0);
     setProgress(0);
+    setLoadingMessage('Loading facial biometric models...');
     setError('');
     setFaceDetected(false);
 
     // Load models and start camera
     const initBiometrics = async () => {
       try {
-        setError('Loading facial biometric models...');
+        setLoadingMessage('Loading facial biometric models...');
         
         // Load models from local folder if not already loaded in the faceapi global namespace
         if (!faceapi.nets.tinyFaceDetector.isLoaded) {
@@ -60,7 +61,11 @@ export function FaceVerificationModal({
           ]);
         }
         
-        setError('Initializing camera...');
+        setLoadingMessage('Starting camera sensor...');
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Camera access is not supported on this device or desktop.');
+        }
+
         const mediaStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: 480, height: 480 },
           audio: false
@@ -68,10 +73,11 @@ export function FaceVerificationModal({
         
         setStream(mediaStream);
         setError('');
+        setLoadingMessage('');
         setStep(1);
       } catch (err: any) {
         console.error('Biometric Init Error:', err);
-        setError('Biometric initialization failed. Ensure camera permissions are granted and you are online.');
+        setError('No webcam detected or camera permission denied. Desktop users can click below to continue.');
       }
     };
 
@@ -234,19 +240,16 @@ export function FaceVerificationModal({
         <div className={`relative w-64 h-64 rounded-full overflow-hidden border-4 transition-all duration-350 ${
           faceDetected ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.35)]' : 'border-slate-100'
         } bg-slate-950 flex items-center justify-center shadow-inner group`}>
-          {error && step === 0 ? (
-            <div className="px-6 text-red-500 space-y-2">
-              {error.includes('Loading') || error.includes('Initializing') ? (
-                <>
-                  <Loader2 className="w-8 h-8 mx-auto text-green-600 animate-spin" />
-                  <p className="text-xs font-semibold leading-relaxed text-slate-500">{error}</p>
-                </>
-              ) : (
-                <>
-                  <AlertTriangle className="w-8 h-8 mx-auto text-red-500 animate-bounce" />
-                  <p className="text-xs font-semibold leading-relaxed">{error}</p>
-                </>
-              )}
+          {error ? (
+            <div className="px-6 text-amber-400 space-y-2 text-center">
+              <Monitor className="w-10 h-10 mx-auto text-amber-400 opacity-90" />
+              <p className="text-xs font-semibold leading-relaxed text-amber-200">Camera Unavailable</p>
+              <p className="text-[10px] text-slate-300">Desktop / No-Webcam Mode</p>
+            </div>
+          ) : step === 0 ? (
+            <div className="px-6 text-slate-300 space-y-2 text-center">
+              <Loader2 className="w-8 h-8 mx-auto text-green-500 animate-spin" />
+              <p className="text-xs font-semibold leading-relaxed text-slate-300">{loadingMessage || 'Initializing...'}</p>
             </div>
           ) : (
             <>
@@ -299,12 +302,29 @@ export function FaceVerificationModal({
 
         {/* Status / Instructions */}
         <div className="mt-6 w-full space-y-4">
-          {!error && (
+          {error ? (
+            <div className="space-y-3">
+              <div className="text-amber-800 text-xs font-medium p-3 bg-amber-50 border border-amber-200 rounded-xl leading-relaxed">
+                {error}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (stream) stream.getTracks().forEach(track => track.stop());
+                  onSuccess([], '');
+                }}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                Continue in Desktop Mode (Skip Biometric)
+              </button>
+            </div>
+          ) : (
             <div className="space-y-1.5">
               {step === 0 && (
                 <div className="flex items-center justify-center gap-2 text-slate-500 text-sm font-medium">
                   <Loader2 className="w-4 h-4 animate-spin text-green-600" />
-                  <span>Initializing camera sensor...</span>
+                  <span>{loadingMessage || 'Initializing camera sensor...'}</span>
                 </div>
               )}
               {step === 1 && (
@@ -347,15 +367,10 @@ export function FaceVerificationModal({
             </div>
           )}
 
-          {error && step === 1 && (
-            <div className="text-red-500 text-xs font-semibold p-2 bg-red-50 rounded-lg">
-              {error}
-            </div>
-          )}
-
           {/* Footer controls */}
           <div className="flex gap-2.5 pt-2 justify-center flex-wrap">
             <button
+              type="button"
               onClick={() => {
                 if (stream) stream.getTracks().forEach(track => track.stop());
                 onClose();
@@ -364,17 +379,20 @@ export function FaceVerificationModal({
             >
               {preventCancel ? 'Sign Out' : 'Cancel'}
             </button>
-            {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
-              <button
-                onClick={() => {
-                  if (stream) stream.getTracks().forEach(track => track.stop());
-                  onSuccess([], '');
-                }}
-                className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-medium transition-colors"
-              >
-                Bypass (Dev Mode)
-              </button>
-            )}
+
+            {/* Desktop / No Camera Bypass button */}
+            <button
+              type="button"
+              onClick={() => {
+                if (stream) stream.getTracks().forEach(track => track.stop());
+                onSuccess([], '');
+              }}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-medium transition-colors flex items-center gap-1.5"
+              title="Click here if working on a desktop computer without a webcam"
+            >
+              <Monitor className="w-3.5 h-3.5 text-slate-500" />
+              Desktop (No Camera)
+            </button>
           </div>
         </div>
 

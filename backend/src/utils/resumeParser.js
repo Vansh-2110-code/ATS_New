@@ -43,12 +43,48 @@ const PHRASE_SKILLS = [
   'customer service', 'customer support', 'technical support', 'call center',
   'quality assurance', 'business process outsourcing', 'client management',
   'stakeholder management', 'project management', 'product management',
-  'talent acquisition', 'resume screening', 'candidate sourcing',
+  'talent acquisition', 'resume screening', 'candidate sourcing', 'end to end recruitment',
+  'technical recruiting', 'volume hiring', 'interview scheduling', 'salary negotiation',
+  // Procurement, P2P & O2C Operations
+  'procure to pay', 'p2p operations', 'invoice processing', 'accounts payable',
+  'payment processing', 'vendor payments', 'po invoice', 'non po invoice',
+  'invoice verification', 'invoice matching', 'payment reconciliation', 'account reconciliation',
+  'vendor master data', 'order to cash', 'accounts receivable', 'billing management',
+  'revenue management', 'cash application', 'cash allocation', 'dispute management',
+  'deduction management', 'receivables management', 'customer reconciliation',
+  // Procurement & Supply Chain
+  'strategic sourcing', 'vendor management', 'purchase order', 'purchase orders',
+  'contract negotiation', 'vendor development', 'spend analysis',
+  'supplier evaluation', 'supply chain management', 'inventory management',
+  'warehouse management', 'logistics operations', 'material management',
+  // Enterprise Systems, ERP, SAP, ServiceNow & Monitoring
+  'sap erp', 'sap s/4 hana', 'sap mm', 'sap fico', 'sap sd', 'sap abap',
+  'sap bpc', 'sap ehs', 'sap ewm', 'sap pp', 'sap qm', 'sap ariba',
+  'cds views', 'odata services', 'sap btp', 'restful abap programming',
+  'oracle ebs', 'oracle scm', 'oracle financials',
+  'servicenow development', 'servicenow testing', 'servicenow itsm', 'service catalog',
+  'business rules', 'client scripts', 'ui policies', 'ui actions',
+  'infrastructure monitoring', 'application monitoring', 'monitoring operations',
+  'major incident management', 'event management', 'alert management',
+  'sap hana', 'sap basis', 'erp implementation', 'master data management',
   // Finance / Ops
   'financial analysis', 'business analysis', 'data analysis', 'root cause analysis',
+  // Digital Marketing, AdOps & Performance
+  'ad operations', 'adops execution', 'campaign architecture', 'performance marketing',
+  'google ads', 'meta ads manager', 'meta ads', 'display & video 360', 'dv360',
+  'the trade desk', 'programmatic advertising', 'conversion api', 'attribution modeling',
+  'genai in adops', 'roas optimization', 'media planning', 'creative testing',
+  // Telecom, Service Transition & Day 2 Readiness (JL4A/JL5B)
+  'service transition', 'day 2 readiness', 'operational readiness', 'sla governance',
+  'incident management', 'ticketing workflows', 'escalation procedures', 'ses door lock',
+  'raci matrix', 'steady state operations', 'service assurance', 'telecom infrastructure',
+  'long-haul fiber', 'fiber build', 'hut deployment', 'lateral builds',
+  'construction and engineering', 'building management systems', 'telemetry systems',
+  'operational turn-up', 'commercial readiness', 'iru build charges', 'o&m charges',
   // Soft skills (multi-word)
   'problem solving', 'critical thinking', 'time management', 'team management',
   'people management', 'conflict resolution', 'public speaking', 'written communication',
+  'voice and accent training', 'voice & accent', 'soft skills training', 'accent neutralization',
 ];
 
 /* ─────────────────────────────────────────────────────────────
@@ -91,6 +127,26 @@ const SYNONYMS = {
   'agile':              ['scrum', 'kanban', 'agile methodology'],
   'rest api':           ['rest', 'restful', 'restful api', 'api'],
   'graphql':            ['graph ql'],
+  'procurement':        ['sourcing', 'purchasing', 'purchase', 'strategic sourcing'],
+  'procure to pay':     ['p2p', 'p2p operations', 'procure-to-pay', 'purchase to pay'],
+  'order to cash':      ['o2c', 'o2c operations', 'order-to-cash'],
+  'accounts payable':   ['ap', 'ap operations', 'invoice processing', 'payment processing'],
+  'accounts receivable':['ar', 'ar operations', 'billing management', 'cash application', 'cash allocation', 'collections'],
+  'vendor management':  ['supplier management', 'vendor development', 'supplier evaluation', 'vendor master data'],
+  'purchase order':     ['purchase orders', 'po management', 'po processing', 'po invoice', 'non po invoice'],
+  'supply chain':       ['supply chain management', 'scm', 'logistics operations'],
+  'servicenow':         ['service now', 'servicenow developer', 'servicenow itsm', 'servicenow testing'],
+  'infrastructure monitoring': ['monitoring operations', 'server monitoring', 'application monitoring', 'noc operations', 'noc'],
+  'sap':                ['sap erp', 's/4 hana', 's4 hana', 'sap hana', 'sap mm', 'sap fico', 'sap sd', 'sap abap', 'sap bpc', 'sap ehs', 'sap ewm', 'sap pp', 'sap qm'],
+  'ad operations':      ['adops', 'ad ops', 'advertising operations'],
+  'google ads':         ['adwords', 'google adwords', 'search ads', 'display ads'],
+  'meta ads':           ['facebook ads', 'fb ads', 'instagram ads', 'meta ads manager'],
+  'dv360':              ['display & video 360', 'display and video 360', 'doubleclick bid manager', 'dbm'],
+  'the trade desk':     ['ttd', 'thetradedesk'],
+  'service transition': ['service transition management', 'transition project management'],
+  'day 2 readiness':    ['day-2 readiness', 'day 2 operational readiness', 'day 2 operations'],
+  'long-haul fiber':    ['long haul fiber', 'fiber deployment', 'lh fiber'],
+  'building management systems': ['bms', 'hut bms'],
 };
 
 // Build reverse lookup: alias → canonical
@@ -140,9 +196,12 @@ const ALL_SKILLS = [
   'customer service','technical support','call center','crm',
   'communication','leadership','teamwork','problem solving','time management',
   'agile','scrum','project management','product management',
-  // Finance/Ops
+  // Finance/Ops/Procurement/ERP/ServiceNow
   'accounting','financial analysis','business analysis','data analysis',
-  'operations','logistics','supply chain',
+  'operations','logistics','supply chain','inventory management','warehousing',
+  'procurement','sourcing','purchasing','purchase order','vendor management',
+  'sap','sap mm','sap fico','sap sd','sap abap','sap bpc','sap ehs','sap ewm','sap pp','sap qm',
+  'erp','p2p','o2c','rfq','rfp','servicenow','glidescript','noc','tosca','playwright','cds views','odata','rap',
 ];
 
 /* ─────────────────────────────────────────────────────────────

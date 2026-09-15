@@ -25,7 +25,9 @@ import { JoiningFormPage } from './pages/recruiter/JoiningFormPage';
 import { TodaysCallsPage } from './pages/recruiter/TodaysCallsPage';
 import { WalkInManagementPage } from './pages/recruiter/WalkInManagementPage';
 import { WalkInInterviewFormPage } from './pages/recruiter/WalkInInterviewFormPage';
+import { RecruiterPolicyPage } from './pages/recruiter/RecruiterPolicyPage';
 import { JRSummaryPage } from './pages/recruiter/JRSummaryPage';
+import { EligibleTrackerPage } from './pages/recruiter/EligibleTrackerPage';
 
 import { WalkInPage } from './pages/walkin/WalkInPage';
 import { WalkInLoginPage } from './pages/walkin/WalkInLoginPage';
@@ -60,6 +62,7 @@ import { TLActivityPage } from './pages/admin/TLActivityPage';
 import { EmailCenterPage } from './pages/shared/EmailCenterPage';
 import { NotificationsPage } from './pages/shared/NotificationsPage';
 import { PerformanceReviewPage } from './pages/admin/PerformanceReviewPage';
+import { OfferLettersPage } from './pages/admin/OfferLettersPage';
 
 import { AnalyticsPage } from './pages/analytics/AnalyticsPage';
 
@@ -76,6 +79,14 @@ import { CreateProformaPage } from './pages/finance/CreateProformaPage';
 import { CreditNoteListPage } from './pages/finance/CreditNoteListPage';
 import { CreateCreditNotePage } from './pages/finance/CreateCreditNotePage';
 import { FieldConfigurationPage } from './pages/admin/FieldConfigurationPage';
+
+import { PayrollDashboard } from './pages/payroll/PayrollDashboard';
+import { PayrollMastersPage } from './pages/payroll/PayrollMastersPage';
+import { EmployeePayrollPage } from './pages/payroll/EmployeePayrollPage';
+import { RunPayrollPage } from './pages/payroll/RunPayrollPage';
+import { PayslipHubPage } from './pages/payroll/PayslipHubPage';
+import { RecruiterIncentivePage } from './pages/payroll/RecruiterIncentivePage';
+import { InternalChatHubPage } from './pages/chat/InternalChatHubPage';
 
 import { NotFoundPage } from './pages/NotFoundPage';
 
@@ -127,17 +138,23 @@ export const router = createBrowserRouter([
       { path: '/recruiter/walkins',     Component: WalkInManagementPage },
       { path: '/recruiter/walkin-interview', Component: WalkInInterviewFormPage },
       { path: '/recruiter/jobs/:id/summary', Component: JRSummaryPage },
+      { path: '/recruiter/policy', Component: RecruiterPolicyPage },
+      { path: '/recruiter/eligible-tracker', Component: EligibleTrackerPage },
 
       // Team Lead
       { path: '/tl', Component: TLDashboard },
       { path: '/tl/my-team', Component: MyTeamPage },
       { path: '/tl/follow-ups', Component: TLFollowUpPage },
       { path: '/tl/performance-reviews', Component: PerformanceReviewPage },
+      { path: '/tl/policy', Component: RecruiterPolicyPage },
+      { path: '/tl/eligible-tracker', Component: EligibleTrackerPage },
 
       // Manager
       { path: '/manager', Component: ManagerDashboard },
       { path: '/manager/reports', Component: ReportsPage },
       { path: '/manager/performance-reviews', Component: PerformanceReviewPage },
+      { path: '/manager/policy', Component: RecruiterPolicyPage },
+      { path: '/manager/eligible-tracker', Component: EligibleTrackerPage },
 
       // Admin
       { path: '/admin', Component: AdminDashboard },
@@ -146,6 +163,7 @@ export const router = createBrowserRouter([
       { path: '/admin/logs', Component: SystemLogsPage },
       { path: '/admin/users', Component: UserManagementPage },
       { path: '/admin/candidates', Component: CandidateDatabasePage },
+      { path: '/admin/eligible-tracker', Component: EligibleTrackerPage },
       { path: '/admin/excel-import', Component: ExcelCandidateImportPage },
       { path: '/admin/ats-records',  Component: AtsDashboardPage },
       { path: '/admin/field-config', Component: FieldConfigurationPage },
@@ -156,12 +174,16 @@ export const router = createBrowserRouter([
       { path: '/admin/joining', Component: JoiningSubmissionsPage },
       { path: '/admin/tl-activity', Component: TLActivityPage },
       { path: '/admin/performance-reviews', Component: PerformanceReviewPage },
+      { path: '/admin/offer-letters', Component: OfferLettersPage },
       { path: '/manager/tl-activity', Component: TLActivityPage },
 
       // Shared
+      { path: '/business-development', Component: AdminDashboard },
+      { path: '/bd', Component: AdminDashboard },
       { path: '/email', Component: EmailCenterPage },
       { path: '/notifications', Component: NotificationsPage },
       { path: '/recruiter-portals', Component: RecruiterPortalsPage },
+      { path: '/chat', Component: InternalChatHubPage },
 
       // Analytics
       { path: '/analytics', Component: AnalyticsPage },
@@ -186,6 +208,17 @@ export const router = createBrowserRouter([
       { path: '/credit-notes', Component: CreditNoteListPage },
       { path: '/credit-notes/create', Component: CreateCreditNotePage },
       { path: '/credit-notes/view/:id', Component: CreateCreditNotePage },
+
+      // Payroll & Statutory Compliance Suite
+      { path: '/payroll', Component: PayrollDashboard },
+      { path: '/payroll/dashboard', Component: PayrollDashboard },
+      { path: '/payroll/masters', Component: PayrollMastersPage },
+      { path: '/payroll/employees', Component: EmployeePayrollPage },
+      { path: '/payroll/run', Component: RunPayrollPage },
+      { path: '/payroll/payslips', Component: PayslipHubPage },
+      { path: '/payroll/payslips/:id', Component: PayslipHubPage },
+      { path: '/payroll/incentives', Component: RecruiterIncentivePage },
+      { path: '/recruiter/incentives', Component: RecruiterIncentivePage },
     ],
   },
 

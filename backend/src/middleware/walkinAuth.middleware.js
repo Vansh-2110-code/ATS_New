@@ -11,11 +11,12 @@ const walkinAuth = (req, res, next) => {
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
 
-    if (!decoded.isWalkIn) {
+    if (!decoded.isWalkIn && decoded.role !== 'walkin') {
       return res.status(401).json({ message: 'Invalid token' });
     }
 
-    req.walkinId = decoded.walkinId;
+    req.walkinId = decoded.walkinId || decoded.id;
+    req.user = decoded;
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -32,8 +33,9 @@ const optionalWalkInAuth = (req, res, next) => {
 
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
-      if (decoded.isWalkIn) {
-        req.walkinId = decoded.walkinId;
+      if (decoded.isWalkIn || decoded.role === 'walkin') {
+        req.walkinId = decoded.walkinId || decoded.id;
+        req.user = decoded;
       }
     }
   } catch (error) {

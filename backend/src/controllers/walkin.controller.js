@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const WalkIn = require('../models/WalkIn');
 const Candidate = require('../models/Candidate');
 const User = require('../models/User');
@@ -384,7 +385,7 @@ exports.walkInSignup = async (req, res) => {
   }
 };
 
-// ─── Walk-In Login (Self-registration users) ───────────
+// ─── Walk-In Login (Self-registration candidates & Walk-in Desk Staff) ───────────
 exports.walkInLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -393,45 +394,73 @@ exports.walkInLogin = async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    // Find walk-in user
-    const walkin = await WalkIn.findOne({ email: email.toLowerCase() });
+    const cleanEmail = email.trim().toLowerCase();
 
-    if (!walkin) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+    // 1. Check WalkIn collection first (candidate self-registration)
+    const walkin = await WalkIn.findOne({ email: cleanEmail });
+
+    if (walkin && walkin.isAuthEnabled) {
+      const passwordMatch = await walkin.comparePassword(password);
+      if (passwordMatch) {
+        if (walkin.status === 'Rejected') {
+          return res.status(401).json({ message: 'Your account has been deactivated' });
+        }
+
+        const token = generateWalkInAuthToken(walkin._id);
+
+        return res.json({
+          message: 'Login successful',
+          token,
+          walkin: {
+            _id: walkin._id,
+            id: walkin._id,
+            name: walkin.name,
+            email: walkin.email,
+            phone: walkin.phone,
+            referenceId: walkin.referenceId,
+          },
+        });
+      }
     }
 
-    // Check if auth is enabled (registered via web form)
-    if (!walkin.isAuthEnabled) {
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    // Compare password
-    const passwordMatch = await walkin.comparePassword(password);
-
-    if (!passwordMatch) {
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    // Check if blocked
-    if (walkin.status === 'Rejected') {
-      return res.status(401).json({ message: 'Your account has been deactivated' });
-    }
-
-    // Generate token
-    const token = generateWalkInAuthToken(walkin._id);
-
-    res.json({
-      message: 'Login successful',
-      token,
-      walkin: {
-        _id: walkin._id,
-        id: walkin._id,
-        name: walkin.name,
-        email: walkin.email,
-        phone: walkin.phone,
-        referenceId: walkin.referenceId,
-      },
+    // 2. Check User collection (for walk-in desk users / employee accounts)
+    const user = await User.findOne({
+      $or: [
+        { email: cleanEmail },
+        { employeeId: email.trim() }
+      ]
     });
+
+    if (user) {
+      if (user.status === 'Suspended') {
+        return res.status(403).json({ message: 'Account suspended. Contact admin.' });
+      }
+
+      const userPasswordMatch = await user.comparePassword(password);
+      if (userPasswordMatch) {
+        const token = jwt.sign(
+          { id: user._id, walkinId: user._id, isWalkIn: true, role: user.role },
+          process.env.JWT_SECRET || 'secret',
+          { expiresIn: '30d' }
+        );
+
+        return res.json({
+          message: 'Login successful',
+          token,
+          walkin: {
+            _id: user._id,
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            phone: '',
+            referenceId: user.employeeId || 'WH-WALKIN',
+            role: user.role,
+          },
+        });
+      }
+    }
+
+    return res.status(401).json({ message: 'Invalid email or password' });
   } catch (error) {
     console.error('Walk-in login error:', error);
     res.status(500).json({ message: error.message || 'Login failed' });
@@ -625,9 +654,50 @@ exports.getWalkInStatus = async (req, res) => {
   try {
     const walkinId = req.params.id || req.walkinId;
 
-    const walkin = await WalkIn.findById(walkinId)
-      .populate('assignedTo', 'name email')
-      .populate('candidate', '_id status');
+    let walkin = null;
+    if (walkinId && mongoose.Types.ObjectId.isValid(walkinId)) {
+      walkin = await WalkIn.findById(walkinId)
+        .populate('assignedTo', 'name email')
+        .populate('candidate', '_id status');
+    }
+
+    // If not found by ID, check if walkinId belongs to a User (or user's email)
+    if (!walkin && walkinId) {
+      let user = null;
+      if (mongoose.Types.ObjectId.isValid(walkinId)) {
+        user = await User.findById(walkinId);
+      }
+      if (!user && req.user?.id && mongoose.Types.ObjectId.isValid(req.user.id)) {
+        user = await User.findById(req.user.id);
+      }
+
+      if (user) {
+        walkin = await WalkIn.findOne({ email: user.email.toLowerCase() })
+          .populate('assignedTo', 'name email')
+          .populate('candidate', '_id status');
+
+        if (!walkin) {
+          // Return valid application status for the desk/walkin user so dashboard loads cleanly
+          return res.json({
+            _id: user._id,
+            referenceId: user.employeeId || 'WH-WALKIN-DESK',
+            name: user.name,
+            email: user.email,
+            phone: '',
+            city: 'Bangalore',
+            state: 'Karnataka',
+            qualification: 'Walk-In Desk Coordinator',
+            experienceYears: 'N/A',
+            status: 'Walk-in Submitted',
+            statusUpdatedAt: user.updatedAt,
+            submittedAt: user.createdAt,
+            resumeUrl: null,
+            assignedRecruiter: null,
+            interviewDetails: null,
+          });
+        }
+      }
+    }
 
     if (!walkin) {
       return res.status(404).json({ message: 'Application not found' });

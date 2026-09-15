@@ -15,6 +15,17 @@ const companySchema = new mongoose.Schema({
   city: { type: String, trim: true },
   localArea: { type: String, trim: true },
 
+  // Multi-Company Payroll & Tenancy fields
+  code: { type: String, trim: true, uppercase: true },
+  logo: { type: String, default: '' },
+  pan: { type: String, trim: true, uppercase: true },
+  tan: { type: String, trim: true, uppercase: true },
+  epfCode: { type: String, trim: true },
+  esicCode: { type: String, trim: true },
+  isPayrollTenant: { type: Boolean, default: false },
+  enableATSIntegration: { type: Boolean, default: true },
+  isActive: { type: Boolean, default: true },
+
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 

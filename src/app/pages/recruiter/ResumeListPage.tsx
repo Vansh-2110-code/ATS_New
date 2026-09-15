@@ -84,6 +84,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
   const [statusFilter, setStatusFilter] = useState(() => lockedStatus || locationState?.statusFilter || 'All Status');
   const [recruiterFilter, setRecruiterFilter] = useState('All Recruiters');
   const [recruitersList, setRecruitersList] = useState<string[]>([]);
+  const [recruiterUsers, setRecruiterUsers] = useState<any[]>([]);
   const [customerFilter, setCustomerFilter] = useState('All Customers');
   const [customersList, setCustomersList] = useState<string[]>([]);
   const [cityFilter, setCityFilter] = useState('');
@@ -213,13 +214,17 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
 
   // Load dynamic lists for filter dropdowns (Recruiters & Customers)
   useEffect(() => {
-    api.getUsers({ limit: '500' }).then(res => {
+    api.getUsers({ limit: '1000' }).then(res => {
       const users = res.users || (Array.isArray(res) ? res : []);
-      const recNames = users
-        .filter((u: any) => ['recruiter', 'tl', 'admin', 'manager'].includes(u.role))
-        .map((u: any) => u.name)
-        .filter(Boolean);
-      setRecruitersList(Array.from(new Set(recNames)).sort());
+      const valid = users
+        .filter((u: any) => 
+          ['recruiter', 'tl', 'admin', 'manager', 'spoc'].includes(u.role) ||
+          (u.roles && u.roles.some((r: string) => ['recruiter', 'tl', 'admin', 'manager', 'spoc'].includes(r)))
+        )
+        .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
+      setRecruiterUsers(valid);
+      const recNames = valid.map((u: any) => u.name).filter(Boolean);
+      setRecruitersList(Array.from(new Set(recNames)));
     }).catch(() => {});
 
     api.getCompanies().then(res => {
@@ -1274,10 +1279,10 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:border-orange-400"
                 >
                   <option value="">— Select Recruiter —</option>
-                  {recruiterList.map((r: any) => {
+                  {recruiterUsers.map((r: any) => {
                     const rId = r._id || r.id;
                     const rName = r.name || r.userName || r.email || r;
-                    return <option key={rId} value={rId}>{rName}</option>;
+                    return <option key={rId} value={rId}>{rName} ({r.role})</option>;
                   })}
                 </select>
               </div>

@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router';
 import { UserPlus, Search, Edit3, Trash2, CheckCircle2, X, Shield, Wifi, Monitor, Eye, EyeOff, Loader2, ChevronRight, Mail, Calendar, Clock, Lock, Key } from 'lucide-react';
 import api from '../../services/api';
 
-type Role = 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin';
+type Role = 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin' | 'bd' | 'business_developer';
 
 interface SystemUser {
   id: string;
+  _id?: string;
+  employeeId?: string;
   name: string;
   email: string;
   role: Role;
@@ -43,6 +45,8 @@ const ROLE_COLORS: Record<Role, string> = {
   spoc: 'bg-sky-100 text-sky-700',
   walkin: 'bg-teal-100 text-teal-700',
   demo_walkin: 'bg-indigo-100 text-indigo-700',
+  bd: 'bg-cyan-100 text-cyan-700',
+  business_developer: 'bg-cyan-100 text-cyan-700',
 };
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -53,6 +57,8 @@ const ROLE_LABELS: Record<Role, string> = {
   spoc: 'SPOC',
   walkin: 'Walk-In',
   demo_walkin: 'Demo Walk-In',
+  bd: 'Business Developer',
+  business_developer: 'Business Developer',
 };
 
 interface AddUserForm {
@@ -108,6 +114,8 @@ export function UserManagementPage() {
         const data = await api.getUsers();
         const list = (data.users || data || []).map((u: any) => ({
           id: u.employeeId || u._id || u.id,
+          _id: u._id ? String(u._id) : undefined,
+          employeeId: u.employeeId || '',
           name: u.name || '',
           email: u.email || '',
           role: u.role || 'recruiter',
@@ -153,7 +161,7 @@ export function UserManagementPage() {
     return matchSearch && matchRole && matchStatus;
   });
 
-const ROLE_ORDER: Role[] = ['walkin', 'recruiter', 'spoc', 'tl', 'manager', 'admin'];
+const ROLE_ORDER: Role[] = ['walkin', 'recruiter', 'spoc', 'bd', 'business_developer', 'tl', 'manager', 'admin'];
 const getHighestRole = (roles: Role[]): Role => {
   if (!roles || roles.length === 0) return 'recruiter';
   let highest = roles[0];
@@ -170,7 +178,8 @@ const getHighestRole = (roles: Role[]): Role => {
     try {
       const computedRole = getHighestRole(form.roles);
       if (editUser) {
-        await api.updateUser(editUser.id, {
+        const updateTarget = editUser._id || editUser.id;
+        await api.updateUser(updateTarget, {
           name: form.name,
           email: form.email,
           role: computedRole,
@@ -182,7 +191,7 @@ const getHighestRole = (roles: Role[]): Role => {
           allowHomeLogin: form.allowHomeLogin,
           disableBiometric: form.disableBiometric,
         });
-        setUsers(prev => prev.map(u => u.id === editUser.id
+        setUsers(prev => prev.map(u => (u.id === editUser.id || (editUser._id && u._id === editUser._id))
           ? {
               ...u,
               name: form.name,
@@ -215,6 +224,7 @@ const getHighestRole = (roles: Role[]): Role => {
         });
         const newUser: SystemUser = {
           id: generatedEID || res.employeeId || res.user?.employeeId || res._id || '',
+          _id: res._id ? String(res._id) : undefined,
           name: form.name,
           email: form.email,
           role: computedRole,
@@ -238,9 +248,10 @@ const getHighestRole = (roles: Role[]): Role => {
         setEditUser(null);
         setForm({ ...EMPTY_FORM });
         setGeneratedEID('');
-      }, 1200);
-    } catch (err) {
+      }, 1000);
+    } catch (err: any) {
       console.error('Failed to save user:', err);
+      alert(err.message || 'Failed to save user changes. Please check details.');
     }
   };
 
@@ -348,14 +359,14 @@ const getHighestRole = (roles: Role[]): Role => {
           />
         </div>
         <div className="flex gap-1.5 flex-wrap">
-          {['All', 'recruiter', 'tl', 'manager', 'admin', 'spoc'].map(r => (
+          {['All', 'recruiter', 'tl', 'manager', 'admin', 'spoc', 'bd'].map(r => (
             <button
               key={r}
               onClick={() => setRoleFilter(r)}
               className={`px-3 py-1.5 text-xs rounded-lg capitalize transition-colors ${roleFilter === r ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
               style={{ fontWeight: roleFilter === r ? 600 : 400 }}
             >
-              {r === 'tl' ? 'Team Lead' : r === 'spoc' ? 'SPOC' : r.charAt(0).toUpperCase() + r.slice(1)}
+              {r === 'tl' ? 'Team Lead' : r === 'spoc' ? 'SPOC' : r === 'bd' ? 'Business Developer' : r.charAt(0).toUpperCase() + r.slice(1)}
             </button>
           ))}
         </div>
@@ -401,9 +412,13 @@ const getHighestRole = (roles: Role[]): Role => {
                   </td>
                   <td className="px-4 py-3.5 text-slate-500 text-sm">{user.id}</td>
                   <td className="px-4 py-3.5">
-                    <span className={`text-xs px-2.5 py-1 rounded-full ${ROLE_COLORS[user.role]}`} style={{ fontWeight: 500 }}>
-                      {ROLE_LABELS[user.role]}
-                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {(user.roles && user.roles.length > 0 ? user.roles : [user.role]).map(r => (
+                        <span key={r} className={`text-xs px-2.5 py-0.5 rounded-full ${ROLE_COLORS[r] || 'bg-slate-100 text-slate-700'}`} style={{ fontWeight: 500 }}>
+                          {ROLE_LABELS[r] || r}
+                        </span>
+                      ))}
+                    </div>
                   </td>
                   <td className="px-4 py-3.5">
                     {user.isWFH
@@ -664,7 +679,8 @@ const getHighestRole = (roles: Role[]): Role => {
                     { val: 'manager', label: 'Manager' },
                     { val: 'admin', label: 'Admin' },
                     { val: 'spoc', label: 'SPOC' },
-                    { val: 'walkin', label: 'Walk-In' }
+                    { val: 'walkin', label: 'Walk-In' },
+                    { val: 'bd', label: 'Business Developer' }
                   ] as const).map(({ val, label }) => {
                     const isChecked = form.roles?.includes(val);
                     return (
@@ -743,8 +759,11 @@ const getHighestRole = (roles: Role[]): Role => {
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm outline-none focus:border-green-400 bg-white"
                 >
                   <option value="enabled">Enabled (Requires face scan)</option>
-                  <option value="disabled">Disabled (Bypasses face scan)</option>
+                  <option value="disabled">Disabled (Bypasses face scan — for Desktop / No Camera)</option>
                 </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Select "Disabled" for Desktop PCs without webcams or to bypass biometric check-in.
+                </p>
               </div>
               {!editUser && (
                 <div>

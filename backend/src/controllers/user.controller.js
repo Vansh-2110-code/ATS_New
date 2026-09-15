@@ -3,7 +3,7 @@ const Employee = require('../models/Employee');
 const { createLog } = require('../utils/auditLogger');
 const { generateEmployeeId } = require('../utils/helpers');
 
-const ROLE_ORDER = ['walkin', 'recruiter', 'spoc', 'tl', 'manager', 'admin'];
+const ROLE_ORDER = ['walkin', 'recruiter', 'spoc', 'bd', 'business_developer', 'tl', 'manager', 'admin'];
 const getHighestRole = (roles) => {
   if (!roles || roles.length === 0) return 'recruiter';
   let highest = roles[0];
@@ -18,7 +18,7 @@ const getHighestRole = (roles) => {
 // GET /api/users
 exports.list = async (req, res, next) => {
   try {
-    const { search, role, status, page = 1, limit = 50 } = req.query;
+    const { search, role, status, page = 1, limit = 1000, sortBy = '-createdAt' } = req.query;
     const query = {};
     if (search) {
       query.$or = [
@@ -27,12 +27,24 @@ exports.list = async (req, res, next) => {
         { employeeId: { $regex: search, $options: 'i' } },
       ];
     }
-    if (role) query.role = role;
+    if (role) {
+      query.$or = [
+        { role: role },
+        { roles: role }
+      ];
+    }
     if (status) query.status = status;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const parsedLimit = limit === 'all' ? 0 : parseInt(limit) || 1000;
+    const skip = parsedLimit > 0 ? (parseInt(page) - 1) * parsedLimit : 0;
+
+    let findQuery = User.find(query).sort(sortBy);
+    if (parsedLimit > 0) {
+      findQuery = findQuery.skip(skip).limit(parsedLimit);
+    }
+
     const [users, total] = await Promise.all([
-      User.find(query).sort('-createdAt').skip(skip).limit(parseInt(limit)),
+      findQuery,
       User.countDocuments(query),
     ]);
 
@@ -45,7 +57,7 @@ exports.list = async (req, res, next) => {
 // POST /api/users
 exports.create = async (req, res, next) => {
   try {
-    const { name, email, role, roles, isWFH, password, noEmployeeId, loginStartTime, loginEndTime, allowHomeLogin } = req.body;
+    const { name, email, role, roles, isWFH, password, noEmployeeId, loginStartTime, loginEndTime, allowHomeLogin, disableBiometric } = req.body;
     if (!name || !email || !role || !password) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
@@ -67,7 +79,8 @@ exports.create = async (req, res, next) => {
       password,
       loginStartTime,
       loginEndTime,
-      allowHomeLogin
+      allowHomeLogin,
+      disableBiometric: Boolean(disableBiometric),
     });
 
     await createLog({
@@ -93,12 +106,27 @@ exports.update = async (req, res, next) => {
       updates.role = getHighestRole(updates.roles);
     }
 
+    if (updates.disableBiometric !== undefined) {
+      updates.disableBiometric = Boolean(updates.disableBiometric);
+    }
+
     let user;
     if (mongoose.Types.ObjectId.isValid(req.params.id)) {
       user = await User.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
     }
     if (!user) {
-      user = await User.findOneAndUpdate({ employeeId: req.params.id }, updates, { new: true, runValidators: true });
+      user = await User.findOneAndUpdate({
+        $or: [
+          { employeeId: req.params.id },
+          { employeeId: { $regex: new RegExp(`^${req.params.id}$`, 'i') } },
+          { email: req.params.id.toLowerCase() },
+          ...(updates.email ? [{ email: updates.email.toLowerCase() }] : [])
+        ]
+      }, updates, { new: true, runValidators: true });
+    }
+
+    if (!user && updates.email) {
+      user = await User.findOneAndUpdate({ email: updates.email.toLowerCase() }, updates, { new: true, runValidators: true });
     }
 
     if (!user) return res.status(404).json({ message: 'User not found' });
@@ -268,6 +296,22 @@ exports.resetAllFaces = async (req, res, next) => {
       target: 'all_users', ip: req.ip,
     });
     res.json({ message: `Biometric face data reset for all users successfully.` });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/users/reset-demo-data (Reset Corporate Demo Environment)
+exports.resetDemoData = async (req, res, next) => {
+  try {
+    const seedDemoAccount = require('../seeders/seed_demo_account');
+    await seedDemoAccount();
+    await createLog({
+      type: 'edit', user: req.user._id, userName: req.user.name,
+      role: req.user.role, action: `Reset corporate demo environment dataset`,
+      target: 'demo_environment', ip: req.ip,
+    });
+    res.json({ success: true, message: 'Corporate demo environment reset successfully! All temporary additions purged.' });
   } catch (err) {
     next(err);
   }

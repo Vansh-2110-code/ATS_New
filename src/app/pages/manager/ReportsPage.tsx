@@ -37,9 +37,10 @@ export function ReportsPage() {
     joinedCandidates?: any[];
     customerRevenue: any[];
     divisionRevenue: any[];
+    monthlyRevenue?: any[];
     totalExpectedRevenue: number;
     totalJoinedRevenue?: number;
-  }>({ joinedCandidates: [], customerRevenue: [], divisionRevenue: [], totalExpectedRevenue: 0 });
+  }>({ joinedCandidates: [], customerRevenue: [], divisionRevenue: [], monthlyRevenue: [], totalExpectedRevenue: 0 });
   const [leadPerformanceData, setLeadPerformanceData] = useState<any[]>([]);
 
   // Sub-filters for views
@@ -47,8 +48,9 @@ export function ReportsPage() {
   const [activeProfileFilter, setActiveProfileFilter] = useState<string>('All');
   const [divisionFilter, setDivisionFilter] = useState<string>('All Divisions');
   const [tlFilter, setTlFilter] = useState<string>('All Team Leads');
+  const [monthFilter, setMonthFilter] = useState<string>('All Months');
   const [tlsList, setTlsList] = useState<string[]>([]);
-  const [revenueSubView, setRevenueSubView] = useState<'customer' | 'division' | 'candidate'>('customer');
+  const [revenueSubView, setRevenueSubView] = useState<'month' | 'customer' | 'division' | 'candidate'>('month');
   const [expandedJR, setExpandedJR] = useState<string | null>(null);
 
   const fmt = (n: number) => {
@@ -61,7 +63,16 @@ export function ReportsPage() {
   const loadReports = async (from: string, to: string, div = divisionFilter, tl = tlFilter) => {
     try {
       setLoading(true);
-      const params: Record<string, string> = { from, to };
+      let cleanFrom = from;
+      let cleanTo = to;
+      if (cleanFrom && cleanTo && new Date(cleanFrom) > new Date(cleanTo)) {
+        const tmp = cleanFrom;
+        cleanFrom = cleanTo;
+        cleanTo = tmp;
+        setDateFrom(cleanFrom);
+        setDateTo(cleanTo);
+      }
+      const params: Record<string, string> = { from: cleanFrom, to: cleanTo };
       if (div && div !== 'All Divisions') params.division = div;
       if (tl && tl !== 'All Team Leads') params.tlId = tl;
 
@@ -200,10 +211,14 @@ export function ReportsPage() {
 
 const cleanRecruiterName = (name: string) => {
   if (!name) return 'Unassigned';
-  return name
+  const trimmed = name
     .replace(/\s*\((recruiter|tl|admin|manager)\)\s*/gi, '')
     .replace(/\s*\[(recruiter|tl|admin|manager)\]\s*/gi, '')
-    .trim() || 'Unassigned';
+    .trim();
+  if (['general pool', 'corporate demo admin', 'system administrator', 'demo admin', 'unassigned'].includes(trimmed.toLowerCase())) {
+    return 'Unassigned';
+  }
+  return trimmed || 'Unassigned';
 };
 
   // Generic CSV exporter for current view
@@ -222,8 +237,17 @@ const cleanRecruiterName = (name: string) => {
     } else if (activeView === 'expected-revenue') {
       filename = `expected_revenue_report_${revenueSubView}_${dateFrom}_${dateTo}.csv`;
       if (revenueSubView === 'candidate') {
-        csv = 'Candidate Name,Phone Number,Email ID,Customer / Client Name,Date of Joining,Offered CTC,Recruiter,Team Leader,Revenue Generated\n' +
-          (expectedRevenueData.joinedCandidates || []).map(c => `"${c.name}","${c.phone || '—'}","${c.email || '—'}","${c.customerName}","${c.doj || c.joinedDate || '—'}",${c.ctc || 0},"${cleanRecruiterName(c.recruiter)}","${cleanRecruiterName(c.teamLeader)}",${c.revenue || 0}`).join('\n');
+        const validJoinees = (expectedRevenueData.joinedCandidates || []).filter((c: any) => 
+          !c.isDemoData && 
+          !c.email?.includes('demo@') && 
+          c.recruiter !== 'Corporate Demo Admin' &&
+          (monthFilter === 'All Months' || c.month === monthFilter)
+        );
+        csv = 'Candidate Name,Phone Number,Email ID,Customer / Client Name,Month of Joining,Date of Joining,Offered CTC,Recruiter,Team Leader,Revenue Generated\n' +
+          validJoinees.map((c: any) => `"${c.name}","${c.phone || '—'}","${c.email || '—'}","${c.customerName}","${c.month || '—'}","${c.doj || c.joinedDate || '—'}",${c.ctc || 0},"${cleanRecruiterName(c.recruiter)}","${cleanRecruiterName(c.teamLeader)}",${c.revenue || 0}`).join('\n');
+      } else if (revenueSubView === 'month') {
+        csv = 'Month of Joining,Yet To Join Count,Joined Count,Expected Revenue,Actual Joined Revenue,Total Projected Revenue\n' +
+          (expectedRevenueData.monthlyRevenue || []).map((m: any) => `"${m.month}",${m.yetToJoinCount},${m.joinedCount},${m.expectedRevenue},${m.actualJoinedRevenue},${m.expectedRevenue + m.actualJoinedRevenue}`).join('\n');
       } else if (revenueSubView === 'customer') {
         csv = 'Customer Name,Yet To Join Count,Joined Count,Expected Revenue,Actual Joined Revenue\n' +
           expectedRevenueData.customerRevenue.map(c => `"${c.customerName}",${c.yetToJoinCount},${c.joinedCount},${c.expectedRevenue},${c.actualJoinedRevenue}`).join('\n');
@@ -293,6 +317,7 @@ const cleanRecruiterName = (name: string) => {
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             {[
+              { label: 'All Time', from: '2024-01-01', to: todayStr },
               { label: 'This Month', from: firstOfMonth, to: todayStr },
               { label: 'Last Month', from: new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0], to: new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0] },
               { label: 'Year To Date', from: `${today.getFullYear()}-01-01`, to: todayStr }
@@ -649,9 +674,9 @@ const cleanRecruiterName = (name: string) => {
         </div>
       )}
 
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ──────────────────────────────────────────────────────────── */}
       {/* 3. EXPECTED REVENUE REPORT VIEW */}
-      {/* ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ */}
+      {/* ──────────────────────────────────────────────────────────── */}
       {activeView === 'expected-revenue' && (
         <div className="space-y-4">
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4 flex flex-wrap items-center justify-between gap-3">
@@ -659,7 +684,15 @@ const cleanRecruiterName = (name: string) => {
               <h3 className="text-slate-800 font-bold text-sm">Expected Placement Revenue Report</h3>
               <p className="text-slate-500 text-xs mt-0.5">Projected revenue based on offered CTC and Yet to Join pipeline</p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setRevenueSubView('month')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  revenueSubView === 'month' ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Month Wise Summary
+              </button>
               <button
                 onClick={() => setRevenueSubView('customer')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
@@ -684,6 +717,19 @@ const cleanRecruiterName = (name: string) => {
               >
                 Candidate Wise Report
               </button>
+
+              {revenueSubView === 'candidate' && (expectedRevenueData.monthlyRevenue || []).length > 0 && (
+                <select
+                  value={monthFilter}
+                  onChange={e => setMonthFilter(e.target.value)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-700 outline-none focus:border-violet-500"
+                >
+                  <option value="All Months">All Months</option>
+                  {(expectedRevenueData.monthlyRevenue || []).map((m: any) => (
+                    <option key={m.month} value={m.month}>{m.month}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
@@ -694,7 +740,7 @@ const cleanRecruiterName = (name: string) => {
               </span>
               <span className="text-violet-700 font-extrabold text-base">
                 {revenueSubView === 'candidate'
-                  ? `${(expectedRevenueData.joinedCandidates || []).length} Joinees (${fmt(expectedRevenueData.totalJoinedRevenue || (expectedRevenueData.joinedCandidates || []).reduce((s, c) => s + (c.revenue || 0), 0))})`
+                  ? `${(expectedRevenueData.joinedCandidates || []).filter((c: any) => !c.isDemoData && !c.email?.includes('demo@') && c.recruiter !== 'Corporate Demo Admin' && (monthFilter === 'All Months' || c.month === monthFilter)).length} Joinees (${fmt((expectedRevenueData.joinedCandidates || []).filter((c: any) => !c.isDemoData && !c.email?.includes('demo@') && c.recruiter !== 'Corporate Demo Admin' && (monthFilter === 'All Months' || c.month === monthFilter)).reduce((s: number, c: any) => s + (c.revenue || 0), 0))})`
                   : fmt(expectedRevenueData.totalExpectedRevenue)}
               </span>
             </div>
@@ -708,11 +754,21 @@ const cleanRecruiterName = (name: string) => {
                       <th className="px-4 py-3 font-semibold">Phone Number</th>
                       <th className="px-4 py-3 font-semibold">Email ID</th>
                       <th className="px-4 py-3 font-semibold">Customer / Client Name</th>
+                      <th className="px-4 py-3 font-semibold">Month</th>
                       <th className="px-4 py-3 font-semibold">Date of Joining (DOJ)</th>
                       <th className="px-4 py-3 font-semibold">CTC Offered</th>
                       <th className="px-4 py-3 font-semibold">Recruiter</th>
                       <th className="px-4 py-3 font-semibold">Team Leader</th>
                       <th className="px-4 py-3 font-semibold text-right text-emerald-700">Revenue Generated</th>
+                    </tr>
+                  ) : revenueSubView === 'month' ? (
+                    <tr className="bg-slate-50 border-b border-slate-100 text-left text-slate-500 uppercase tracking-wide">
+                      <th className="px-5 py-3 font-semibold">Month of Joining</th>
+                      <th className="px-5 py-3 font-semibold text-center">Yet To Join Candidates</th>
+                      <th className="px-5 py-3 font-semibold text-center">Joined Candidates</th>
+                      <th className="px-5 py-3 font-semibold text-right text-violet-700">Expected Revenue (Projected)</th>
+                      <th className="px-5 py-3 font-semibold text-right text-emerald-700">Actual Joined Revenue</th>
+                      <th className="px-5 py-3 font-semibold text-right text-slate-900 font-bold">Total Revenue</th>
                     </tr>
                   ) : (
                     <tr className="bg-slate-50 border-b border-slate-100 text-left text-slate-500 uppercase tracking-wide">
@@ -726,20 +782,43 @@ const cleanRecruiterName = (name: string) => {
                 </thead>
                 <tbody className="divide-y divide-slate-50 text-slate-700">
                   {revenueSubView === 'candidate' ? (
-                    (expectedRevenueData.joinedCandidates || []).length === 0 ? (
-                      <tr><td colSpan={9} className="text-center py-10 text-slate-400">No joined candidates available for the selected period.</td></tr>
-                    ) : (
-                      (expectedRevenueData.joinedCandidates || []).map((c, i) => (
+                    (() => {
+                      const displayJoinees = (expectedRevenueData.joinedCandidates || []).filter((c: any) => 
+                        !c.isDemoData && 
+                        !c.email?.includes('demo@') && 
+                        c.recruiter !== 'Corporate Demo Admin' &&
+                        (monthFilter === 'All Months' || c.month === monthFilter)
+                      );
+                      if (displayJoinees.length === 0) {
+                        return <tr><td colSpan={10} className="text-center py-10 text-slate-400">No joined candidates available for the selected period.</td></tr>;
+                      }
+                      return displayJoinees.map((c: any, i: number) => (
                         <tr key={i} className="hover:bg-slate-50/60 transition-colors">
                           <td className="px-4 py-3.5 font-bold text-slate-900">{c.name}</td>
                           <td className="px-4 py-3.5 font-mono text-slate-600">{c.phone || '—'}</td>
                           <td className="px-4 py-3.5 text-slate-600 truncate max-w-[160px]" title={c.email}>{c.email || '—'}</td>
                           <td className="px-4 py-3.5 font-semibold text-blue-600">{c.customerName}</td>
+                          <td className="px-4 py-3.5 text-slate-600 font-medium">{c.month || '—'}</td>
                           <td className="px-4 py-3.5 text-slate-600">{c.doj || c.joinedDate || '—'}</td>
                           <td className="px-4 py-3.5 font-semibold text-slate-800">{c.ctc ? `₹${Number(c.ctc).toLocaleString('en-IN')}` : '—'}</td>
-                          <td className="px-4 py-3.5 text-slate-600">{c.recruiter}</td>
-                          <td className="px-4 py-3.5 font-medium text-slate-700">{c.teamLeader || 'Unassigned'}</td>
+                          <td className="px-4 py-3.5 text-slate-600">{cleanRecruiterName(c.recruiter)}</td>
+                          <td className="px-4 py-3.5 font-medium text-slate-700">{cleanRecruiterName(c.teamLeader)}</td>
                           <td className="px-4 py-3.5 text-right font-bold text-emerald-700">{fmt(c.revenue)}</td>
+                        </tr>
+                      ));
+                    })()
+                  ) : revenueSubView === 'month' ? (
+                    (expectedRevenueData.monthlyRevenue || []).length === 0 ? (
+                      <tr><td colSpan={6} className="text-center py-10 text-slate-400">No monthly revenue data available.</td></tr>
+                    ) : (
+                      (expectedRevenueData.monthlyRevenue || []).map((m: any, i: number) => (
+                        <tr key={i} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="px-5 py-3.5 font-bold text-slate-900">{m.month}</td>
+                          <td className="px-5 py-3.5 text-center font-semibold text-purple-600">{m.yetToJoinCount}</td>
+                          <td className="px-5 py-3.5 text-center font-semibold text-emerald-600">{m.joinedCount}</td>
+                          <td className="px-5 py-3.5 text-right font-bold text-violet-700">{fmt(m.expectedRevenue)}</td>
+                          <td className="px-5 py-3.5 text-right font-bold text-emerald-700">{fmt(m.actualJoinedRevenue)}</td>
+                          <td className="px-5 py-3.5 text-right font-extrabold text-slate-900">{fmt((m.expectedRevenue || 0) + (m.actualJoinedRevenue || 0))}</td>
                         </tr>
                       ))
                     )
@@ -761,13 +840,13 @@ const cleanRecruiterName = (name: string) => {
                     expectedRevenueData.divisionRevenue.length === 0 ? (
                       <tr><td colSpan={5} className="text-center py-10 text-slate-400">No division revenue data available.</td></tr>
                     ) : (
-                      expectedRevenueData.divisionRevenue.map((r, i) => (
+                      expectedRevenueData.divisionRevenue.map((d, i) => (
                         <tr key={i} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="px-5 py-3.5 font-bold text-slate-900">{r.division} Division</td>
-                          <td className="px-5 py-3.5 text-center font-semibold text-purple-600">{r.yetToJoinCount}</td>
-                          <td className="px-5 py-3.5 text-center font-semibold text-emerald-600">{r.joinedCount}</td>
-                          <td className="px-5 py-3.5 text-right font-bold text-violet-700">{fmt(r.expectedRevenue)}</td>
-                          <td className="px-5 py-3.5 text-right font-bold text-emerald-700">{fmt(r.actualJoinedRevenue)}</td>
+                          <td className="px-5 py-3.5 font-bold text-slate-900">{d.division} Division</td>
+                          <td className="px-5 py-3.5 text-center font-semibold text-purple-600">{d.yetToJoinCount}</td>
+                          <td className="px-5 py-3.5 text-center font-semibold text-emerald-600">{d.joinedCount}</td>
+                          <td className="px-5 py-3.5 text-right font-bold text-violet-700">{fmt(d.expectedRevenue)}</td>
+                          <td className="px-5 py-3.5 text-right font-bold text-emerald-700">{fmt(d.actualJoinedRevenue)}</td>
                         </tr>
                       ))
                     )

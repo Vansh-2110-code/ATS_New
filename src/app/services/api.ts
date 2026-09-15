@@ -187,6 +187,69 @@ class ApiService {
     return `${base}/api/candidates/export${query ? `?${query}` : ''}`;
   }
 
+  // ─── Eligible Tracker ───
+  async getEligibleTracker(params: Record<string, string> = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request<any>(`/candidates/eligible-tracker${query ? `?${query}` : ''}`);
+  }
+
+  async exportEligibleTrackerExcel(params: Record<string, string> = {}) {
+    const query = new URLSearchParams(params).toString();
+    const token = this.getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API_BASE}/candidates/eligible-tracker/export${query ? `?${query}` : ''}`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (res.status === 401) {
+      this.setToken(null);
+      localStorage.removeItem('ats_user');
+      window.location.href = '/login';
+      throw new Error('Session expired');
+    }
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ message: 'Export failed' }));
+      throw new Error(error.message || `HTTP ${res.status}`);
+    }
+
+    const contentDisposition = res.headers.get('content-disposition') || '';
+    let filename = `Eligible_Tracker_${Date.now()}.xlsx`;
+    const filenameMatch = contentDisposition.match(/filename="(.+?)"/);
+    if (filenameMatch) {
+      filename = filenameMatch[1];
+    }
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  }
+
+  async updateEligibleTrackerRow(id: string, data: Record<string, any>) {
+    return this.request<any>(`/candidates/eligible-tracker/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createEligibleTrackerCandidate(data: Record<string, any>) {
+    return this.request<any>('/candidates/eligible-tracker', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async importCandidates(file: File) {
     const fd = new FormData();
     fd.append('file', file);
@@ -219,6 +282,10 @@ class ApiService {
 
   async getRecruiters() {
     return this.request<any[]>('/users/recruiters');
+  }
+
+  async resetDemoData() {
+    return this.request<any>('/users/reset-demo-data', { method: 'POST' });
   }
 
   async updateCandidate(id: string, data: FormData | Record<string, any>) {
@@ -1019,6 +1086,19 @@ class ApiService {
     });
   }
 
+  async approveJoining(id: string) {
+    return this.request<any>(`/public/joining/${id}/approve`, {
+      method: 'POST',
+    });
+  }
+
+  async rejectJoining(id: string, remarks: string, rejectedDocuments?: string[]) {
+    return this.request<any>(`/public/joining/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ remarks, rejectedDocuments }),
+    });
+  }
+
   // ─── Comprehensive Joining Form ───
   async createOrUpdateJoiningForm(employeeId: string, formData: FormData) {
     const endpoint = employeeId ? `/candidates/${employeeId}/joining-form` : '/candidates/joining-form';
@@ -1320,8 +1400,9 @@ class ApiService {
     return this.request<any>(`/business-development${query ? `?${query}` : ''}`);
   }
 
-  async getBizDevStats() {
-    return this.request<any>('/business-development/stats');
+  async getBizDevStats(params: Record<string, string> = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request<any>(`/business-development/stats${query ? `?${query}` : ''}`);
   }
 
   async createBizDevRecord(data: Record<string, any>) {
@@ -1355,6 +1436,216 @@ class ApiService {
     const link     = document.createElement('a');
     link.href      = URL.createObjectURL(blob);
     link.download  = `Business_Development_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
+  // ─── Payroll & Multi-Company Modules ─────────────────────────────
+  async getPayrollCompanies() {
+    return this.request<any[]>('/payroll/companies');
+  }
+
+  async getPayrollBranches(companyId?: string) {
+    const q = companyId ? `?companyId=${companyId}` : '';
+    return this.request<any[]>(`/payroll/branches${q}`);
+  }
+
+  async getPayrollComponents(companyId?: string) {
+    const q = companyId ? `?companyId=${companyId}` : '';
+    return this.request<any[]>(`/payroll/components${q}`);
+  }
+
+  async savePayrollComponent(data: any) {
+    return this.request<any>('/payroll/components', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getPayrollStructures(companyId?: string) {
+    const q = companyId ? `?companyId=${companyId}` : '';
+    return this.request<any[]>(`/payroll/structures${q}`);
+  }
+
+  async savePayrollStructure(data: any) {
+    return this.request<any>('/payroll/structures', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getPayrollStatutory(companyId?: string) {
+    const q = companyId ? `?companyId=${companyId}` : '';
+    return this.request<any>(`/payroll/statutory${q}`);
+  }
+
+  async savePayrollStatutory(data: any) {
+    return this.request<any>('/payroll/statutory', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getPayrollEmployees(params: Record<string, string> = {}) {
+    const q = new URLSearchParams(params).toString();
+    return this.request<any[]>(`/payroll/employees${q ? `?${q}` : ''}`);
+  }
+
+  async updatePayrollEmployee(id: string, data: any) {
+    return this.request<any>(`/payroll/employees/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getPayrollDashboard(params: Record<string, string> = {}) {
+    const q = new URLSearchParams(params).toString();
+    return this.request<any>(`/payroll/dashboard${q ? `?${q}` : ''}`);
+  }
+
+  async calculatePayroll(data: any) {
+    return this.request<any>('/payroll/calculate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePayrollStatus(data: any) {
+    return this.request<any>('/payroll/status', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getPayrollRunRecords(runId: string) {
+    return this.request<any[]>(`/payroll/runs/${runId}/records`);
+  }
+
+  async getPayslips(params: Record<string, string> = {}) {
+    const q = new URLSearchParams(params).toString();
+    return this.request<{ records: any[]; count: number; totalDisbursed: number; totalGross: number }>(`/payroll/payslips${q ? `?${q}` : ''}`);
+  }
+
+  async getPayslipById(id: string) {
+    return this.request<any>(`/payroll/payslips/${id}`);
+  }
+
+  async markPayslipDownloaded(id: string) {
+    return this.request<any>(`/payroll/payslips/${id}/downloaded`, { method: 'POST' });
+  }
+
+  async getIncentives(params: Record<string, string> = {}) {
+    const q = new URLSearchParams(params).toString();
+    return this.request<{ incentives: any[]; summary: any }>(`/payroll/incentives${q ? `?${q}` : ''}`);
+  }
+
+  async syncIncentives() {
+    return this.request<any>('/payroll/incentives/sync', { method: 'POST' });
+  }
+
+  async updateIncentiveStatus(id: string, data: { status: string; notes?: string }) {
+    return this.request<any>(`/payroll/incentives/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ─── Internal Employee Chat Suite ───
+  async getChatRooms() {
+    return this.request<any[]>('/internal-chat/rooms');
+  }
+
+  async getOrCreateDirectChat(targetUserId: string) {
+    return this.request<any>('/internal-chat/rooms/direct', {
+      method: 'POST',
+      body: JSON.stringify({ targetUserId }),
+    });
+  }
+
+  async getChatMessages(roomId: string, limit = 100) {
+    return this.request<any[]>(`/internal-chat/rooms/${roomId}/messages?limit=${limit}`);
+  }
+
+  async sendChatMessage(roomId: string, data: { text?: string; attachments?: any[]; candidateId?: string }) {
+    return this.request<any>(`/internal-chat/rooms/${roomId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async markChatRoomRead(roomId: string) {
+    return this.request<any>(`/internal-chat/rooms/${roomId}/read`, {
+      method: 'POST',
+    });
+  }
+
+  async getChatColleagues() {
+    return this.request<any[]>('/internal-chat/colleagues');
+  }
+
+  async getChatUnreadTotal() {
+    return this.request<{ unreadTotal: number }>('/internal-chat/unread-total');
+  }
+
+  async uploadChatAttachment(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.request<{ name: string; url: string; fileType: string; size: number }>('/internal-chat/upload', {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  // ─── Offer Letters (Admin Only) ───
+  async getOfferTemplates() {
+    return this.request<{ success: boolean; templates: any[] }>('/offer-letters/templates');
+  }
+
+  async getOfferLetters(params: Record<string, string> = {}) {
+    const query = new URLSearchParams(params).toString();
+    return this.request<{ success: boolean; data: any[]; pagination: any }>(`/offer-letters${query ? `?${query}` : ''}`);
+  }
+
+  async getOfferLetter(id: string) {
+    return this.request<{ success: boolean; data: any }>(`/offer-letters/${id}`);
+  }
+
+  async createOfferLetter(data: any) {
+    return this.request<{ success: boolean; data: any }>('/offer-letters', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateOfferLetter(id: string, data: any) {
+    return this.request<{ success: boolean; data: any }>(`/offer-letters/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteOfferLetter(id: string) {
+    return this.request<{ success: boolean; message: string }>(`/offer-letters/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async sendOfferLetterEmail(id: string) {
+    return this.request<{ success: boolean; message: string }>(`/offer-letters/${id}/send-email`, {
+      method: 'POST',
+    });
+  }
+
+  async downloadOfferLetterDocx(id: string, filename: string) {
+    const url = `${API_BASE}/offer-letters/${id}/download-docx`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${this.getToken()}` },
+    });
+    if (!res.ok) throw new Error('Failed to download Word document');
+    const blob = await res.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename || 'Offer_Letter.docx';
     link.click();
     URL.revokeObjectURL(link.href);
   }

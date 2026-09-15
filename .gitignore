@@ -10,3 +10,4 @@ backend/uploads/*
 .DS_Store
 .claude
 ats-main/
+website_redesign/

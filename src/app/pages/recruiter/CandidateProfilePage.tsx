@@ -4,7 +4,7 @@ import {
   ArrowLeft, Phone, Mail, Briefcase, MapPin, Clock, CheckCircle2, XCircle,
   Calendar, FileText, ScanLine, Loader2, Send, ChevronDown, ChevronUp,
   Lock, Shield, AlertTriangle, Upload, Trash2, Eye, Download,
-  UserCheck, RefreshCw, FileCheck, Tag, ClipboardList, Zap, Save, X, Edit3,
+  UserCheck, RefreshCw, FileCheck, Tag, ClipboardList, Zap, Save, X, Edit3, FileSignature,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
@@ -278,7 +278,16 @@ export function CandidateProfilePage() {
       api.getCompanies().then(d => {
         setCompanies(d.companies || []);
         if (shouldFetchUsers) {
-          api.getUsers().then(du => setRecruiters(du.users?.filter((u: any) => ['recruiter', 'tl'].includes(u.role)) || [])).catch(() => {});
+          api.getUsers({ limit: '1000' }).then(du => {
+            const users = du.users || (Array.isArray(du) ? du : []);
+            const valid = users
+              .filter((u: any) => 
+                ['recruiter', 'tl', 'admin', 'manager', 'spoc'].includes(u.role) ||
+                (u.roles && u.roles.some((r: string) => ['recruiter', 'tl', 'admin', 'manager', 'spoc'].includes(r)))
+              )
+              .sort((a: any, b: any) => (a.name || '').localeCompare(b.name || ''));
+            setRecruiters(valid);
+          }).catch(() => {});
         }
       }).catch(() => {});
     }
@@ -616,18 +625,23 @@ export function CandidateProfilePage() {
     }
     setSavingJoining(true);
     try {
+      const calcRev = Math.round(ctcNum * (placementPercentage / 100));
       const updated = await api.updateCandidate(candidate._id, {
         clientName: joiningClientName,
         status: 'Joined',
-        joiningSalary: String(salaryNum),
+        joiningSalary: String(ctcNum),
+        offeredCTC: ctcNum,
+        placementPercentage,
+        revenueGenerated: calcRev,
+        dateOfJoining: joiningDate,
         offerDetails: {
           ...(candidate.offerDetails || {}),
           dateOfJoining: joiningDate,
-          joiningSalary: String(salaryNum),
+          joiningSalary: String(ctcNum),
           designationOffered: joiningDesignation,
           offeredCTC: ctcNum,
           placementPercentage,
-          revenueGenerated: Math.round(ctcNum * (placementPercentage / 100))
+          revenueGenerated: calcRev
         }
       });
       setCandidate(updated.candidate || updated);
@@ -696,12 +710,23 @@ export function CandidateProfilePage() {
           <ArrowLeft className="w-4 h-4" /> Back to Resumes
         </button>
         {(isAdmin || isTL || isManager || (isRecruiter && !isLockedForOtherRecruiter)) && (
-          <button
-            onClick={() => navigate(`/recruiter/add?id=${id}`)}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-xl transition-all shadow-sm font-semibold"
-          >
-            <Edit3 className="w-4 h-4" /> Edit Profile
-          </button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <button
+                onClick={() => navigate('/admin/offer-letters')}
+                className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-xl transition-all shadow-sm font-semibold"
+                title="Generate and issue official offer letter"
+              >
+                <FileSignature className="w-4 h-4" /> Issue Offer Letter
+              </button>
+            )}
+            <button
+              onClick={() => navigate(`/recruiter/add?id=${id}`)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-xl transition-all shadow-sm font-semibold"
+            >
+              <Edit3 className="w-4 h-4" /> Edit Profile
+            </button>
+          </div>
         )}
       </div>
 
@@ -865,8 +890,23 @@ export function CandidateProfilePage() {
               <div><p className="text-slate-400 text-xs mb-1">JR Number</p><p className="text-slate-700 font-mono" style={{ fontWeight: 500 }}>{candidate.jrNumber || 'N/A'}</p></div>
               <div><p className="text-slate-400 text-xs mb-1">Division</p><p className="text-slate-700 font-semibold">{candidate.division || 'BPO'}</p></div>
               <div><p className="text-slate-400 text-xs mb-1">Source</p><p className="text-slate-700" style={{ fontWeight: 500 }}>{candidate.source || 'N/A'}</p></div>
-              <div><p className="text-slate-400 text-xs mb-1">Added On</p><p className="text-slate-700" style={{ fontWeight: 500 }}>{candidate.createdAt ? new Date(candidate.createdAt).toLocaleDateString() : 'N/A'}</p></div>
-              <div><p className="text-slate-400 text-xs mb-1">Assigned To</p><p className="text-slate-700" style={{ fontWeight: 500 }}>{candidate.assignedRecruiterName && candidate.assignedRecruiterName !== 'General Pool' ? candidate.assignedRecruiterName : (candidate.assignedRecruiter?.name || 'Unassigned')}</p></div>
+              <div>
+                <p className="text-slate-400 text-xs mb-1 flex items-center justify-between">
+                  <span>Assigned To</span>
+                  {(isAdmin || isTL || isManager) && (
+                    <button
+                      type="button"
+                      onClick={() => setReassignOpen(true)}
+                      className="text-[11px] text-orange-600 hover:text-orange-700 font-semibold underline cursor-pointer"
+                    >
+                      {candidate.assignedRecruiterName && candidate.assignedRecruiterName !== 'General Pool' ? 'Change' : 'Assign'}
+                    </button>
+                  )}
+                </p>
+                <p className="text-slate-700" style={{ fontWeight: 500 }}>
+                  {candidate.assignedRecruiterName && candidate.assignedRecruiterName !== 'General Pool' ? candidate.assignedRecruiterName : (candidate.assignedRecruiter?.name || 'Unassigned')}
+                </p>
+              </div>
               {candidate.candidateAge && (
                 <div>
                   <p className="text-slate-400 text-xs mb-1 flex items-center gap-1">
@@ -1910,7 +1950,9 @@ export function CandidateProfilePage() {
               {reassignOpen && (
                 <div className="mt-4 space-y-3">
                   <p className="text-xs text-slate-500 bg-amber-50 border border-amber-100 rounded-lg p-2.5">
-                    Reassigning will reset all workflow stages (First Call, Second Call, Interview) and treat this as a fresh candidate. History will be preserved.
+                    {candidate.status === 'Joined' 
+                      ? 'Candidate status is "Joined". Assigning will update the mapped Recruiter and Team Leader while preserving Joined status and revenue details.' 
+                      : 'Assigning / Reassigning will map this candidate to the chosen recruiter and update team reports.'}
                   </p>
                   <div>
                     <label className="block text-xs text-slate-500 mb-1" style={{ fontWeight: 500 }}>Assign To *</label>

@@ -19,6 +19,7 @@ async function deploy() {
     const setupEnv = 'export PATH=$PATH:/home/whitehorsemanpower/.nvm/versions/node/v22.23.1/bin:~/.npm-global/bin';
 
     const filesToUpload = [
+      { local: 'index.html', remote: `${remoteBase}/index.html` },
       { local: 'backend/src/models/User.js', remote: `${remoteBase}/backend/src/models/User.js` },
       { local: 'backend/src/models/LeaveRequest.js', remote: `${remoteBase}/backend/src/models/LeaveRequest.js` },
       { local: 'backend/src/models/LeaveBalance.js', remote: `${remoteBase}/backend/src/models/LeaveBalance.js` },
@@ -36,6 +37,8 @@ async function deploy() {
       { local: 'backend/src/routes/leave.routes.js', remote: `${remoteBase}/backend/src/routes/leave.routes.js` },
       { local: 'backend/src/routes/finance.routes.js', remote: `${remoteBase}/backend/src/routes/finance.routes.js` },
       { local: 'backend/src/routes/candidate.routes.js', remote: `${remoteBase}/backend/src/routes/candidate.routes.js` },
+      { local: 'backend/src/controllers/walkin.controller.js', remote: `${remoteBase}/backend/src/controllers/walkin.controller.js` },
+      { local: 'backend/src/middleware/walkinAuth.middleware.js', remote: `${remoteBase}/backend/src/middleware/walkinAuth.middleware.js` },
       { local: 'backend/src/server.js', remote: `${remoteBase}/backend/src/server.js` },
       { local: 'src/app/services/api.ts', remote: `${remoteBase}/src/app/services/api.ts` },
       { local: 'src/app/routes.ts', remote: `${remoteBase}/src/app/routes.ts` },
@@ -56,11 +59,20 @@ async function deploy() {
       { local: 'src/app/pages/recruiter/CandidateProfilePage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/CandidateProfilePage.tsx` },
       { local: 'src/app/pages/recruiter/JobCreatePage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/JobCreatePage.tsx` },
       { local: 'src/app/pages/recruiter/JoiningFormPage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/JoiningFormPage.tsx` },
+      { local: 'src/app/pages/recruiter/RecruiterPolicyPage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/RecruiterPolicyPage.tsx` },
+      { local: 'src/app/pages/recruiter/EligibleTrackerPage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/EligibleTrackerPage.tsx` },
       { local: 'src/app/pages/recruiter/ResumeListPage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/ResumeListPage.tsx` },
       { local: 'src/app/pages/recruiter/WalkInManagementPage.tsx', remote: `${remoteBase}/src/app/pages/recruiter/WalkInManagementPage.tsx` },
-      { local: 'src/app/pages/shared/RecruiterPortalsPage.tsx', remote: `${remoteBase}/src/app/pages/shared/RecruiterPortalsPage.tsx` },
       { local: 'src/app/pages/tl/TLDashboard.tsx', remote: `${remoteBase}/src/app/pages/tl/TLDashboard.tsx` },
-      { local: 'src/app/pages/tl/TLCandidateViewModal.tsx', remote: `${remoteBase}/src/app/pages/tl/TLCandidateViewModal.tsx` }
+      { local: 'src/app/pages/tl/TLCandidateViewModal.tsx', remote: `${remoteBase}/src/app/pages/tl/TLCandidateViewModal.tsx` },
+      { local: 'backend/src/models/BusinessDevelopment.js', remote: `${remoteBase}/backend/src/models/BusinessDevelopment.js` },
+      { local: 'backend/src/controllers/businessDevelopment.controller.js', remote: `${remoteBase}/backend/src/controllers/businessDevelopment.controller.js` },
+      { local: 'backend/src/routes/businessDevelopment.routes.js', remote: `${remoteBase}/backend/src/routes/businessDevelopment.routes.js` },
+      { local: 'src/app/pages/auth/LoginPage.tsx', remote: `${remoteBase}/src/app/pages/auth/LoginPage.tsx` },
+      { local: 'src/app/components/layout/DashboardLayout.tsx', remote: `${remoteBase}/src/app/components/layout/DashboardLayout.tsx` },
+      { local: 'src/app/components/attendance/FaceVerificationModal.tsx', remote: `${remoteBase}/src/app/components/attendance/FaceVerificationModal.tsx` },
+      { local: 'backend/src/seeders/seed_demo_account.js', remote: `${remoteBase}/backend/src/seeders/seed_demo_account.js` },
+      { local: 'backend/src/seeders/seed_business_developers.js', remote: `${remoteBase}/backend/src/seeders/seed_business_developers.js` }
     ];
 
     console.log('\n2. Uploading modified files...');
@@ -70,18 +82,30 @@ async function deploy() {
     }
     console.log('All files uploaded successfully.');
 
-    console.log('\n3. Building frontend on server...');
+    console.log('\n3. Seeding Corporate Demo Account on server...');
+    const seedRes = await ssh.execCommand(`${setupEnv} && node src/seeders/seed_demo_account.js`, { cwd: `${remoteBase}/backend` });
+    console.log(seedRes.stdout);
+    if (seedRes.stderr) console.error(seedRes.stderr);
+
+    console.log('\n4. Building frontend on server...');
     const buildRes = await ssh.execCommand(`${setupEnv} && npm run build`, { cwd: remoteBase });
     console.log(buildRes.stdout);
     if (buildRes.stderr && !buildRes.stdout.includes('built in')) {
       console.error('Build warnings/errors:', buildRes.stderr);
     }
+    const findLatest = await ssh.execCommand('ls -t dist/assets/index-*.js | head -n 1', { cwd: remoteBase });
+    const latestJs = findLatest.stdout.trim();
+    if (latestJs) {
+      console.log(`Copying fallback alias: ${latestJs} -> dist/assets/index-u4-EBceP.js & dist/assets/index-DlaNMFSS.js`);
+      await ssh.execCommand(`cp ${latestJs} dist/assets/index-u4-EBceP.js`, { cwd: remoteBase });
+      await ssh.execCommand(`cp ${latestJs} dist/assets/index-DlaNMFSS.js`, { cwd: remoteBase });
+    }
 
-    console.log('\n4. Restarting backend PM2 process...');
+    console.log('\n5. Restarting backend PM2 process...');
     const pm2Res = await ssh.execCommand(`${setupEnv} && npx pm2 restart ats-backend`, { cwd: remoteBase });
     console.log(pm2Res.stdout);
 
-    console.log('\n5. Verifying server health post-deployment...');
+    console.log('\n6. Verifying server health post-deployment...');
     const healthRes = await ssh.execCommand(`${setupEnv} && curl -s http://localhost:5001/api/health`, { cwd: remoteBase });
     console.log('Health check response:', healthRes.stdout);
 

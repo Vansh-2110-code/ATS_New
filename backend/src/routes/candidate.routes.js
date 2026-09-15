@@ -13,6 +13,13 @@ router.get('/', ctrl.list);
 router.get('/callbacks', ctrl.getCallbacks);
 router.get('/check-duplicate', authorize('recruiter', 'tl', 'admin'), ctrl.checkDuplicate); // Must be before /:id
 router.get('/flagged', authorize('tl', 'admin'), ctrl.getFlagged);  // Must be before /:id
+
+// ─── Eligible Tracker Routes ───
+router.get('/eligible-tracker', authorize('admin', 'manager', 'tl', 'recruiter', 'spoc'), ctrl.getEligibleTracker);
+router.get('/eligible-tracker/export', authorize('admin', 'manager', 'tl', 'recruiter', 'spoc'), ctrl.exportEligibleTracker);
+router.post('/eligible-tracker', authorize('admin', 'manager', 'tl', 'recruiter', 'spoc'), ctrl.createEligibleCandidate);
+router.put('/eligible-tracker/:id', authorize('admin', 'manager', 'tl', 'recruiter', 'spoc'), ctrl.updateEligibleTracker);
+
 router.get('/:id([0-9a-fA-F]{24})', ctrl.getById);
 router.post('/', authorize('recruiter', 'tl', 'admin'), uploadResume.single('resume'), ctrl.create);
 router.put('/:id', authorize('recruiter', 'tl', 'admin', 'manager'), uploadResume.single('resume'), ctrl.update);

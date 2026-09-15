@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   User, Phone, Mail, Briefcase, Calendar, CheckCircle2,
   Hash, MapPin, CreditCard, Save, ArrowLeft, Loader2,
-  ChevronDown, Upload, X, Plus, AlertCircle, FileText, Trash2, Eye
+  ChevronDown, Upload, X, Plus, AlertCircle, FileText, Trash2, Eye, Clock
 } from 'lucide-react';
 import api from '../../services/api';
 import { LetterOfUndertaking } from '../../components/LetterOfUndertaking';
@@ -72,6 +72,9 @@ interface ReferenceEntry {
 }
 
 interface JoiningFormData {
+  _id?: string;
+  employeeId?: string;
+
   // Section 0: Resume Upload
   resume: File | null;
   isFresher: boolean;
@@ -119,6 +122,13 @@ interface JoiningFormData {
   // Section 6: References
   references: ReferenceEntry[];
   isApproved?: boolean;
+  approvalStatus?: 'draft' | 'pending' | 'approved' | 'rejected';
+  approvedBy?: string;
+  approvedByName?: string;
+  approvedAt?: string;
+  rejectionRemarks?: string;
+  rejectedDocuments?: string[];
+  submittedAt?: string;
 
   // KYC & Documents
   bloodGroup: string;
@@ -130,6 +140,17 @@ interface JoiningFormData {
   aadhaarCardPath?: string;
   highestDocumentFile: File | null;
   highestDocumentPath?: string;
+
+  // Bank & Account Details
+  bankName: string;
+  accountHolderName: string;
+  accountNumber: string;
+  confirmAccountNumber?: string;
+  ifscCode: string;
+  branchName: string;
+  accountType: 'Savings' | 'Salary' | 'Current' | '';
+  bankProofFile: File | null;
+  bankProofPath?: string;
 }
 
 // Helper function to calculate age from DOB
@@ -199,6 +220,15 @@ export function JoiningFormPage() {
     panCardFile: null,
     aadhaarCardFile: null,
     highestDocumentFile: null,
+    bankName: '',
+    accountHolderName: '',
+    accountNumber: '',
+    confirmAccountNumber: '',
+    ifscCode: '',
+    branchName: '',
+    accountType: 'Savings',
+    bankProofFile: null,
+    bankProofPath: '',
     educationQualifications: {
       sslc: { institution: '', yearOfPassing: '', gradePercentage: '' },
       hsc: { institution: '', yearOfPassing: '', gradePercentage: '' },
@@ -254,11 +284,15 @@ export function JoiningFormPage() {
   });
 
   const [form, setForm] = useState<JoiningFormData>(getInitialForm());
-  const isLocked = !!form.isApproved && user?.role !== 'admin';
+  const isApproved = (!!form.isApproved || form.approvalStatus === 'approved') && form.approvalStatus !== 'rejected';
+  const isRejected = form.approvalStatus === 'rejected';
+  const isPending = !isApproved && !isRejected && (form.approvalStatus === 'pending' || !!form._id || !!form.employeeId);
+  const isLocked = isApproved && user?.role !== 'admin';
   const [expandedSections, setExpandedSections] = useState({
     personal: true,
     address: false,
     kyc: false,
+    bank: false,
     education: false,
     employment: false,
     undertaking: false,
@@ -287,12 +321,44 @@ export function JoiningFormPage() {
     }
   };
 
+  const isDocRejected = (docKey: string) => {
+    if (form.approvalStatus !== 'rejected') return false;
+    if (form.rejectedDocuments && form.rejectedDocuments.includes(docKey)) return true;
+    const remarks = (form.rejectionRemarks || '').toLowerCase();
+    if (docKey === 'aadhaarCard' && (remarks.includes('aadhaar') || remarks.includes('aadhar'))) return true;
+    if (docKey === 'panCard' && remarks.includes('pan')) return true;
+    if (docKey === 'bankProof' && (remarks.includes('bank') || remarks.includes('cheque') || remarks.includes('passbook'))) return true;
+    if (docKey === 'highestDocument' && (remarks.includes('marksheet') || remarks.includes('degree') || remarks.includes('qualification'))) return true;
+    if (docKey === 'photo' && remarks.includes('photo')) return true;
+    if (docKey === 'resume' && remarks.includes('resume')) return true;
+    return false;
+  };
+
+  const applyRejectionExpansion = (data: any) => {
+    if (data.approvalStatus === 'rejected') {
+      const docs: string[] = data.rejectedDocuments || [];
+      const remarks = (data.rejectionRemarks || '').toLowerCase();
+      const hasKyc = docs.includes('aadhaarCard') || docs.includes('panCard') || remarks.includes('aadhaar') || remarks.includes('aadhar') || remarks.includes('pan');
+      const hasBank = docs.includes('bankProof') || remarks.includes('bank') || remarks.includes('cheque') || remarks.includes('passbook');
+      const hasEdu = docs.includes('highestDocument') || remarks.includes('marksheet') || remarks.includes('degree');
+      const hasPersonal = docs.includes('photo') || remarks.includes('photo');
+      setExpandedSections(prev => ({
+        ...prev,
+        kyc: hasKyc ? true : prev.kyc,
+        bank: hasBank ? true : prev.bank,
+        education: hasEdu ? true : prev.education,
+        personal: hasPersonal ? true : prev.personal,
+      }));
+    }
+  };
+
   const loadJoiningForm = async (empId: string) => {
     try {
       setLoading(true);
       const data = await api.getJoiningForm?.(empId);
       if (data) {
         setForm(data);
+        applyRejectionExpansion(data);
       }
     } catch (err) {
       console.error('Failed to load joining form:', err);
@@ -308,6 +374,7 @@ export function JoiningFormPage() {
         if (data.employeeId || data._id) {
           // If it is an existing submitted form, load the whole document
           setForm(data);
+          applyRejectionExpansion(data);
         } else {
           // Fallback data for new submission
           setForm(prev => ({
@@ -370,11 +437,12 @@ export function JoiningFormPage() {
       if (file.size > 10 * 1024 * 1024) {
         setErrors(prev => ({ ...prev, [field]: 'File size should be less than 10MB' }));
         return;
-      }
-      if (field === 'panCard') {
+      } else if (field === 'panCard') {
         set('panCardFile', file);
       } else if (field === 'aadhaarCard') {
         set('aadhaarCardFile', file);
+      } else if (field === 'bankProof') {
+        set('bankProofFile', file);
       } else if (field === 'highestDocument') {
         set('highestDocumentFile', file);
       } else if (field === 'marksheet') {
@@ -530,7 +598,11 @@ export function JoiningFormPage() {
     if (!form.panNumber || form.panNumber.trim().length !== 10) {
       newErrors.panNumber = 'Valid 10-character PAN number required (e.g. ABCDE1234F)';
     }
-    if (!form.panCardFile && !form.panCardPath) {
+    if (isDocRejected('panCard')) {
+      if (!form.panCardFile) {
+        newErrors.panCard = 'Please re-upload a clear replacement PAN card file';
+      }
+    } else if (!form.panCardFile && !form.panCardPath) {
       newErrors.panCard = 'PAN card document upload is mandatory';
     }
 
@@ -538,7 +610,11 @@ export function JoiningFormPage() {
     if (!form.aadhaarNumber || form.aadhaarNumber.replace(/\D/g, '').length !== 12) {
       newErrors.aadhaarNumber = 'Valid 12-digit Aadhaar number required';
     }
-    if (!form.aadhaarCardFile && !form.aadhaarCardPath) {
+    if (isDocRejected('aadhaarCard')) {
+      if (!form.aadhaarCardFile) {
+        newErrors.aadhaarCard = 'Please re-upload a clear replacement Aadhaar card file';
+      }
+    } else if (!form.aadhaarCardFile && !form.aadhaarCardPath) {
       newErrors.aadhaarCard = 'Aadhaar card document upload is mandatory';
     }
 
@@ -547,8 +623,22 @@ export function JoiningFormPage() {
       form.highestQualification?.marksheetFile || form.highestQualification?.marksheetPath || (form as any).marksheetPath ||
       form.highestQualification?.degreeCertificateFile || form.highestQualification?.degreeCertificatePath || (form as any).degreeCertificatePath;
 
-    if (!hasHighestDoc) {
+    if (isDocRejected('highestDocument')) {
+      if (!form.highestDocumentFile && !form.highestQualification?.marksheetFile && !form.highestQualification?.degreeCertificateFile) {
+        newErrors.highestDocument = 'Please re-upload corrected qualification document (Marksheet / Degree)';
+      }
+    } else if (!hasHighestDoc) {
       newErrors.highestDocument = 'Highest qualification document (Marksheet / Degree Certificate) is mandatory';
+    }
+
+    // 4. Bank Proof
+    if (isDocRejected('bankProof') && !form.bankProofFile) {
+      newErrors.bankProof = 'Please re-upload corrected Bank Proof (Cancelled Cheque / Passbook)';
+    }
+
+    // 5. Photo
+    if (isDocRejected('photo') && !form.photo) {
+      newErrors.photo = 'Please re-upload passport photograph';
     }
 
     // Employment history (only required for non-freshers)
@@ -575,6 +665,16 @@ export function JoiningFormPage() {
     if (!form.undertakingAccepted) newErrors.undertaking = 'Must accept Letter of Undertaking';
 
     // Automatically expand sections with validation errors
+    if (form.accountNumber && form.confirmAccountNumber && form.accountNumber !== form.confirmAccountNumber) {
+      newErrors.confirmAccountNumber = 'Account numbers do not match';
+    }
+    if (form.ifscCode && form.ifscCode.length > 0 && form.ifscCode.length !== 11) {
+      newErrors.ifscCode = 'IFSC must be an 11-character code (e.g. HDFC0001234)';
+    }
+
+    if (newErrors.bankName || newErrors.accountHolderName || newErrors.accountNumber || newErrors.confirmAccountNumber || newErrors.ifscCode || newErrors.bankProof) {
+      setExpandedSections(s => ({ ...s, bank: true }));
+    }
     if (newErrors.panNumber || newErrors.panCard || newErrors.aadhaarNumber || newErrors.aadhaarCard) {
       setExpandedSections(s => ({ ...s, kyc: true }));
     }
@@ -619,6 +719,8 @@ export function JoiningFormPage() {
           fd.append('panCard', form.panCardFile);
         } else if (key === 'aadhaarCardFile' && form.aadhaarCardFile) {
           fd.append('aadhaarCard', form.aadhaarCardFile);
+        } else if (key === 'bankProofFile' && form.bankProofFile) {
+          fd.append('bankProof', form.bankProofFile);
         } else if (key === 'highestDocumentFile' && form.highestDocumentFile) {
           fd.append('highestDocument', form.highestDocumentFile);
         } else if (key === 'educationQualifications') {
@@ -637,7 +739,7 @@ export function JoiningFormPage() {
         } else if (key === 'references') {
           fd.append(key, JSON.stringify(value));
         } else if (
-          !['_id', '__v', 'createdAt', 'updatedAt', 'photo', 'resume', 'panCardFile', 'aadhaarCardFile', 'highestDocumentFile'].includes(key) &&
+          !['_id', '__v', 'createdAt', 'updatedAt', 'photo', 'resume', 'panCardFile', 'aadhaarCardFile', 'highestDocumentFile', 'bankProofFile', 'confirmAccountNumber'].includes(key) &&
           (typeof value !== 'object' || value === null)
         ) {
           fd.append(key, String(value ?? ''));
@@ -702,15 +804,56 @@ export function JoiningFormPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {isLocked && (
-          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3 mb-4">
-            <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+        {/* Status Alert Banners */}
+        {isApproved ? (
+          <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex items-start gap-3 mb-4 shadow-xs">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
             <div>
-              <p className="text-amber-800 text-sm font-semibold">Approved & Locked</p>
-              <p className="text-slate-600 text-xs mt-0.5">Your joining form has been approved by the administrator and is locked for edits. Please contact Admin if you need to modify anything.</p>
+              <p className="text-emerald-900 text-sm font-bold">Joining Form & Documents Approved & Verified</p>
+              <p className="text-emerald-700 text-xs mt-0.5">
+                Your onboarding submission and uploaded KYC documents have been reviewed and verified by <strong>{form.approvedByName || 'Authorized Approver'}</strong> {form.approvedAt ? `on ${new Date(form.approvedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}. All details are locked. Please contact Admin if you need to modify anything.
+              </p>
             </div>
           </div>
-        )}
+        ) : isRejected ? (
+          <div className="bg-red-50 border border-red-200 p-5 rounded-2xl flex items-start gap-3.5 mb-4 shadow-xs">
+            <AlertCircle className="w-6 h-6 text-red-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-red-900 text-sm font-bold">Action Required: Document Revision Requested by Team Lead</p>
+              <p className="text-red-700 text-xs mt-0.5">
+                Reviewed by <strong>{form.approvedByName || 'Team Lead'}</strong> {form.approvedAt ? `on ${new Date(form.approvedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}:
+              </p>
+              {form.rejectionRemarks && (
+                <div className="mt-2 p-3 bg-white/95 border border-red-200 rounded-xl text-xs text-red-800 font-semibold shadow-2xs">
+                  "{form.rejectionRemarks}"
+                </div>
+              )}
+              {form.rejectedDocuments && form.rejectedDocuments.length > 0 && (
+                <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] text-red-800 font-bold">Document(s) needing re-upload:</span>
+                  {form.rejectedDocuments.map(d => (
+                    <span key={d} className="px-2.5 py-0.5 bg-red-100 border border-red-300 text-red-800 text-[11px] rounded-full font-bold">
+                      {d === 'aadhaarCard' ? 'Aadhaar Card' : d === 'panCard' ? 'PAN Card' : d === 'bankProof' ? 'Bank Proof' : d === 'highestDocument' ? 'Qualification Marksheet' : d === 'photo' ? 'Photo' : d === 'resume' ? 'Resume' : d}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 font-medium leading-relaxed">
+                💡 <strong>Good news:</strong> You do <strong>not</strong> need to re-fill your entire joining form! All your personal details, bank accounts, and previously approved documents have been saved. Please re-upload <strong>only</strong> the highlighted document(s) below and click <strong>"Re-Submit Corrected Form for Approval"</strong>.
+              </div>
+            </div>
+          </div>
+        ) : isPending ? (
+          <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3 mb-4 shadow-xs">
+            <Clock className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-amber-900 text-sm font-bold">Submitted — Pending Team Lead Verification</p>
+              <p className="text-amber-700 text-xs mt-0.5">
+                Your joining form and uploaded KYC documents have been submitted and are awaiting review and approval by your Team Lead. Once verified, your profile will be locked.
+              </p>
+            </div>
+          </div>
+        ) : null}
         
         <fieldset disabled={isLocked} className="space-y-4 contents">
 
@@ -965,6 +1108,7 @@ export function JoiningFormPage() {
                 error={errors.panCard}
                 onRemove={() => set('panCardFile', null)}
                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                isRejected={isDocRejected('panCard')}
               />
               <FileUploadField
                 label="Aadhaar Card Document / Image *"
@@ -974,6 +1118,117 @@ export function JoiningFormPage() {
                 error={errors.aadhaarCard}
                 onRemove={() => set('aadhaarCardFile', null)}
                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                isRejected={isDocRejected('aadhaarCard')}
+              />
+            </div>
+          </fieldset>
+        </CollapsibleSection>
+
+        {/* ── SECTION 2.6: Bank & Account Details ── */}
+        <CollapsibleSection
+          title="Bank & Account Details"
+          isOpen={expandedSections.bank}
+          onToggle={() => setExpandedSections(s => ({ ...s, bank: !s.bank }))}
+        >
+          <fieldset disabled={isLocked} className="space-y-4 border-none p-0 m-0">
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 600 }}>Bank Name *</label>
+                <input
+                  type="text"
+                  value={form.bankName || ''}
+                  onChange={e => set('bankName', e.target.value)}
+                  placeholder="e.g. HDFC Bank, SBI, ICICI"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm outline-none bg-white ${errors.bankName ? 'border-red-400' : 'border-slate-200 focus:border-green-400'}`}
+                />
+                {errors.bankName && <p className="text-xs text-red-600 mt-1">{errors.bankName}</p>}
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 600 }}>Account Holder Name *</label>
+                <input
+                  type="text"
+                  value={form.accountHolderName || ''}
+                  onChange={e => set('accountHolderName', e.target.value)}
+                  placeholder="As per bank records"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm outline-none bg-white ${errors.accountHolderName ? 'border-red-400' : 'border-slate-200 focus:border-green-400'}`}
+                />
+                {errors.accountHolderName && <p className="text-xs text-red-600 mt-1">{errors.accountHolderName}</p>}
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 600 }}>Account Type</label>
+                <select
+                  value={form.accountType || 'Savings'}
+                  onChange={e => set('accountType', e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-green-400 bg-white"
+                >
+                  <option value="Savings">Savings Account</option>
+                  <option value="Salary">Salary Account</option>
+                  <option value="Current">Current Account</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 600 }}>Account Number *</label>
+                <input
+                  type="text"
+                  value={form.accountNumber || ''}
+                  onChange={e => set('accountNumber', e.target.value.replace(/\D/g, ''))}
+                  placeholder="Bank account number"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm outline-none bg-white ${errors.accountNumber ? 'border-red-400' : 'border-slate-200 focus:border-green-400'}`}
+                />
+                {errors.accountNumber && <p className="text-xs text-red-600 mt-1">{errors.accountNumber}</p>}
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 600 }}>Confirm Account Number *</label>
+                <input
+                  type="text"
+                  value={form.confirmAccountNumber || ''}
+                  onChange={e => set('confirmAccountNumber', e.target.value.replace(/\D/g, ''))}
+                  placeholder="Re-enter account number"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm outline-none bg-white ${errors.confirmAccountNumber ? 'border-red-400' : 'border-slate-200 focus:border-green-400'}`}
+                />
+                {errors.confirmAccountNumber && <p className="text-xs text-red-600 mt-1">{errors.confirmAccountNumber}</p>}
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 600 }}>IFSC Code *</label>
+                <input
+                  type="text"
+                  value={form.ifscCode || ''}
+                  onChange={e => set('ifscCode', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
+                  placeholder="11-character IFSC (e.g. HDFC0001234)"
+                  maxLength={11}
+                  className={`w-full px-3 py-2 border rounded-lg text-sm outline-none bg-white ${errors.ifscCode ? 'border-red-400' : 'border-slate-200 focus:border-green-400'}`}
+                />
+                {errors.ifscCode && <p className="text-xs text-red-600 mt-1">{errors.ifscCode}</p>}
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1.5" style={{ fontWeight: 600 }}>Branch Name / City</label>
+                <input
+                  type="text"
+                  value={form.branchName || ''}
+                  onChange={e => set('branchName', e.target.value)}
+                  placeholder="e.g. Indiranagar Branch, Bangalore"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-green-400 bg-white"
+                />
+              </div>
+            </div>
+
+            {/* Bank Proof / Cancelled Cheque Upload */}
+            <div className="pt-4 border-t border-slate-200">
+              <FileUploadField
+                label="Bank Proof Document / Cancelled Cheque / Passbook Image *"
+                file={form.bankProofFile}
+                existingPath={form.bankProofPath}
+                onUpload={(e: any) => handleDocumentUpload(e, 'bankProof')}
+                error={errors.bankProof}
+                onRemove={() => set('bankProofFile', null)}
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                isRejected={isDocRejected('bankProof')}
               />
             </div>
           </fieldset>
@@ -1089,6 +1344,7 @@ export function JoiningFormPage() {
                     error={errors.highestDocument}
                     onRemove={() => set('highestDocumentFile', null)}
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    isRejected={isDocRejected('highestDocument')}
                   />
                   <FileUploadField
                     label="Marksheet (Optional if doc above)"
@@ -1098,6 +1354,7 @@ export function JoiningFormPage() {
                     error={errors.marksheet}
                     onRemove={() => set('highestQualification', { ...form.highestQualification, marksheetFile: null })}
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    isRejected={isDocRejected('highestDocument')}
                   />
                   <FileUploadField
                     label="Degree Certificate (Optional)"
@@ -1107,6 +1364,7 @@ export function JoiningFormPage() {
                     error={errors.degreeCertificate}
                     onRemove={() => set('highestQualification', { ...form.highestQualification, degreeCertificateFile: null })}
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    isRejected={isDocRejected('highestDocument')}
                   />
                 </div>
               </div>
@@ -1315,14 +1573,30 @@ export function JoiningFormPage() {
           >
             Cancel
           </button>
-          {!isLocked && (
+          {isLocked ? (
+            <div className="flex items-center gap-2 px-5 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-sm font-bold shadow-2xs">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Form Approved & Locked
+            </div>
+          ) : (
             <button
               type="submit"
               disabled={submitting}
-              className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm" style={{ fontWeight: 600 }}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-white text-sm font-bold shadow-xs transition-colors disabled:opacity-50 ${
+                isRejected ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+              }`}
             >
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {submitting ? 'Submitting...' : 'Submit Comprehensive Form'}
+              {submitting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : isRejected ? (
+                <CheckCircle2 className="w-4 h-4" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              {submitting
+                ? 'Submitting...'
+                : isRejected
+                ? 'Re-Submit Corrected Form for Approval'
+                : 'Submit Comprehensive Form'}
             </button>
           )}
         </div>
@@ -1348,33 +1622,64 @@ function CollapsibleSection({ title, isOpen, onToggle, children }: any) {
   );
 }
 
-function FileUploadField({ label, file, existingPath, onUpload, error, onRemove, accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png' }: any) {
+function FileUploadField({
+  label,
+  file,
+  existingPath,
+  onUpload,
+  error,
+  onRemove,
+  accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png',
+  isRejected = false,
+}: any) {
   const inputRef = useRef<HTMLInputElement>(null);
   return (
     <div>
-      <label className="block text-xs text-slate-500 mb-2" style={{ fontWeight: 600 }}>{label}</label>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className="block text-xs text-slate-700 font-semibold">{label}</label>
+        {isRejected && !file && (
+          <span className="text-[10px] bg-red-100 text-red-700 font-bold px-2 py-0.5 rounded-full border border-red-200 animate-pulse">
+            ⚠️ Re-upload Required
+          </span>
+        )}
+        {!isRejected && existingPath && !file && (
+          <span className="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+            ✓ Preserved on File
+          </span>
+        )}
+      </div>
       <div
-        className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
-          error ? 'border-red-300 bg-red-50/30' : 'border-slate-300 hover:border-green-400'
+        className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all ${
+          error || (isRejected && !file)
+            ? 'border-red-400 bg-red-50/50 hover:bg-red-50/80 shadow-xs'
+            : existingPath && !file
+            ? 'border-emerald-300 bg-emerald-50/20 hover:border-emerald-400'
+            : 'border-slate-300 hover:border-green-400 bg-white'
         }`}
         onClick={() => inputRef.current?.click()}
       >
         {file ? (
           <div className="space-y-1">
-            <FileText className="w-6 h-6 text-green-600 mx-auto" />
-            <p className="text-xs text-slate-600 font-semibold">{file.name}</p>
-            <p className="text-xs text-slate-400">{(file.size / 1024).toFixed(1)} KB</p>
+            <CheckCircle2 className="w-6 h-6 text-green-600 mx-auto" />
+            <p className="text-xs text-slate-800 font-bold">{file.name}</p>
+            <p className="text-[11px] text-green-700 font-semibold">New file selected (Ready to submit)</p>
+          </div>
+        ) : isRejected ? (
+          <div className="space-y-1">
+            <AlertTriangle className="w-6 h-6 text-red-600 mx-auto" />
+            <p className="text-xs text-red-700 font-bold">⚠️ Rejected Document: Re-upload Needed</p>
+            <p className="text-[11px] text-red-600">Click to select a clear, new file to replace it</p>
           </div>
         ) : existingPath ? (
           <div className="space-y-1">
             <CheckCircle2 className="w-6 h-6 text-emerald-600 mx-auto" />
-            <p className="text-xs text-emerald-700 font-semibold">Document on File</p>
-            <p className="text-[11px] text-slate-400">Click to replace file</p>
+            <p className="text-xs text-emerald-800 font-bold">Document on File (Retained)</p>
+            <p className="text-[11px] text-slate-400">No action needed · Click if you want to replace</p>
           </div>
         ) : (
           <div className="space-y-1">
             <Upload className="w-6 h-6 text-slate-400 mx-auto" />
-            <p className="text-xs text-slate-600">Click to upload</p>
+            <p className="text-xs text-slate-600 font-medium">Click to upload</p>
             <p className="text-xs text-slate-400">PDF, JPG, PNG, DOCX (Max 10MB)</p>
           </div>
         )}
@@ -1386,7 +1691,7 @@ function FileUploadField({ label, file, existingPath, onUpload, error, onRemove,
           onClick={onRemove}
           className="mt-2 flex items-center gap-1 px-3 py-1 text-red-600 text-xs hover:bg-red-50 rounded"
         >
-          <X className="w-3 h-3" /> Remove
+          <X className="w-3 h-3" /> Remove new file
         </button>
       )}
       {existingPath && !file && (

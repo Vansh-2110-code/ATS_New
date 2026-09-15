@@ -39,6 +39,10 @@ const reviewRoutes = require('./routes/reviewRoutes');
 const supportRoutes = require('./routes/support.routes');
 const businessDevelopmentRoutes = require('./routes/businessDevelopment.routes');
 const leaveRoutes = require('./routes/leave.routes');
+const payrollRoutes = require('./routes/payroll.routes');
+const internalChatRoutes = require('./routes/chat.routes');
+const offerLetterRoutes = require('./routes/offerLetter.routes');
+const { seedDefaultChannels } = require('./controllers/chat.controller');
 
 const { errorHandler } = require('./middleware/error.middleware');
 
@@ -53,7 +57,8 @@ const uploadDir = path.join(__dirname, '..', process.env.UPLOAD_DIR || 'uploads'
 const resumeDir = path.join(uploadDir, 'resumes');
 const jdDir = path.join(uploadDir, 'jd');
 const docsDir = path.join(uploadDir, 'docs');
-[uploadDir, resumeDir, jdDir, docsDir].forEach(dir => {
+const chatDir = path.join(uploadDir, 'chat');
+[uploadDir, resumeDir, jdDir, docsDir, chatDir].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
@@ -105,6 +110,9 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/business-development', businessDevelopmentRoutes);
 app.use('/api/leaves', leaveRoutes);
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/internal-chat', internalChatRoutes);
+app.use('/api/offer-letters', offerLetterRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -121,6 +129,9 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://naveenecerljit_db_
 mongoose.connect(MONGODB_URI)
   .then(async () => {
     console.log('MongoDB connected successfully');
+
+    // Seed default internal chat channels
+    seedDefaultChannels().catch(e => console.error('Chat seeding error:', e));
     
     // Seed recruiter portals if empty
     try {

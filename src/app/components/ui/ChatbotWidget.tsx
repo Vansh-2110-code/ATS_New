@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, X, Send, Loader2, Bot, User as UserIcon } from 'lucide-react';
+import { MessageCircle, X, Send, Loader2, Bot, User as UserIcon, GripVertical } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { useDraggableFloating } from '../../utils/useDraggableFloating';
 
 interface Message {
   id: string;
@@ -40,6 +41,19 @@ export function ChatbotWidget({ mode }: ChatbotWidgetProps) {
   const [awaitingEmail, setAwaitingEmail] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const widgetContainerRef = useRef<HTMLDivElement>(null);
+
+  const { pos, isDragging, isDraggingRef, startDrag, clampToBounds } = useDraggableFloating({
+    storageKey: 'ats_chatbot_pos',
+    defaultRight: 24,
+    defaultBottom: 84,
+  });
+
+  useEffect(() => {
+    if (isOpen) {
+      clampToBounds(384, 560);
+    }
+  }, [isOpen, clampToBounds]);
 
   // Initial greeting
   useEffect(() => {
@@ -125,24 +139,38 @@ export function ChatbotWidget({ mode }: ChatbotWidgetProps) {
   const [error, setError] = useState('');
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+    <div 
+      ref={widgetContainerRef}
+      style={{
+        bottom: `${pos.bottom}px`,
+        right: `${pos.right}px`,
+      }}
+      className={`fixed z-50 flex flex-col items-end font-sans ${isDragging ? 'opacity-90' : ''}`}
+    >
       {/* Chat Window */}
       {isOpen && (
-        <div className="w-96 max-w-[calc(100vw-2rem)] h-[500px] bg-white border border-slate-200/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden mb-4 animate-in slide-in-from-bottom-5 fade-in duration-200">
-          {/* Header */}
-          <div className="px-4 py-3.5 bg-gradient-to-r from-green-600 to-emerald-700 text-white flex items-center justify-between shadow-sm">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
+        <div className="w-96 max-w-[calc(100vw-2rem)] h-[500px] bg-white border border-slate-200/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden mb-3 animate-in slide-in-from-bottom-5 fade-in duration-200">
+          {/* Header - Draggable */}
+          <div 
+            onPointerDown={(e) => startDrag(e, widgetContainerRef)}
+            className="px-3.5 py-3 bg-gradient-to-r from-indigo-600 to-violet-700 text-white flex items-center justify-between shadow-sm cursor-grab active:cursor-grabbing select-none touch-none border-b border-indigo-700/50"
+            title="Drag header to move Copilot"
+          >
+            <div className="flex items-center gap-2 pointer-events-none">
+              <GripVertical className="w-4 h-4 text-indigo-200/60 shrink-0" />
+              <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center shrink-0">
                 <Bot className="w-4.5 h-4.5 text-white" />
               </div>
               <div>
-                <h4 className="text-sm font-bold text-white leading-tight">White Horse Assistant</h4>
-                <span className="text-[10px] text-green-100 font-semibold uppercase tracking-wider">Support Copilot</span>
+                <h4 className="text-sm font-bold text-white leading-tight">White Horse AI Copilot</h4>
+                <span className="text-[10px] text-indigo-200 font-semibold uppercase tracking-wider">Support & Knowledge</span>
               </div>
             </div>
             <button 
+              type="button"
               onClick={() => setIsOpen(false)}
               className="p-1 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-colors"
+              title="Close Copilot"
             >
               <X className="w-4 h-4" />
             </button>
@@ -258,10 +286,20 @@ export function ChatbotWidget({ mode }: ChatbotWidgetProps) {
 
       {/* Floating Toggle Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-14 h-14 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-full flex items-center justify-center shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 active:scale-95"
+        type="button"
+        onPointerDown={(e) => startDrag(e, widgetContainerRef)}
+        onClick={(e) => {
+          if (isDraggingRef.current) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          setIsOpen(!isOpen);
+        }}
+        title="Drag to reposition anywhere, click to toggle AI Assistant"
+        className="drag-launcher-btn w-11 h-11 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200 cursor-grab active:cursor-grabbing touch-none select-none group relative"
       >
-        {isOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6 animate-pulse" />}
+        {isOpen ? <X className="w-5 h-5" /> : <Bot className="w-5 h-5 group-hover:rotate-12 transition-transform" />}
       </button>
     </div>
   );

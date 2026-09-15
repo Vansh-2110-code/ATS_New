@@ -278,6 +278,20 @@ exports.tlDashboard = async (req, res, next) => {
         }
       ];
 
+      if (division && division !== 'All') {
+        andConditions.push({ division });
+      }
+      if (clientFilter && clientFilter !== 'All Companies') {
+        const companyRegex = new RegExp(`^${clientFilter.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&')}$`, 'i');
+        andConditions.push({
+          $or: [
+            { clientName: companyRegex },
+            { company: companyRegex },
+            { client: companyRegex },
+          ]
+        });
+      }
+
       const recruiterBaseNoDate = { $and: andConditions };
 
       const recruiterBaseMatch = selectedRange === 'all'
@@ -291,10 +305,7 @@ exports.tlDashboard = async (req, res, next) => {
         return {
           ...recruiterBaseNoDate,
           status: { $in: statuses },
-          $or: [
-            { updatedAt: dateFilter },
-            { createdAt: dateFilter }
-          ]
+          createdAt: dateFilter
         };
       };
 
@@ -310,7 +321,9 @@ exports.tlDashboard = async (req, res, next) => {
             status: 'Joined',
             $or: [
               { dateOfJoining: dateFilter },
-              { updatedAt: dateFilter },
+              { 'offerDetails.dateOfJoining': dateFilter },
+              { 'offerDetails.expectedDateOfJoining': dateFilter },
+              { expectedDateOfJoining: dateFilter },
               { createdAt: dateFilter }
             ]
           };
@@ -416,10 +429,7 @@ exports.tlDashboard = async (req, res, next) => {
         return {
           ...baseSummaryMatch,
           status: { $in: statuses },
-          $or: [
-            { updatedAt: dateFilter },
-            { createdAt: dateFilter }
-          ]
+          createdAt: dateFilter
         };
       };
 
@@ -435,19 +445,33 @@ exports.tlDashboard = async (req, res, next) => {
               status: 'Joined',
               $or: [
                 { dateOfJoining: dateFilter },
-                { updatedAt: dateFilter },
+                { 'offerDetails.dateOfJoining': dateFilter },
+                { 'offerDetails.expectedDateOfJoining': dateFilter },
+                { expectedDateOfJoining: dateFilter },
                 { createdAt: dateFilter }
               ]
             }
       );
-      summary.totalCalls = await Candidate.countDocuments({
-        ...baseSummaryMatch,
-        $or: [
-          { firstCallDate: { $ne: null, $ne: '' } },
-          { firstCallStatus: { $ne: null, $ne: '' } },
-          { 'notes.0': { $exists: true } }
-        ]
-      });
+      summary.totalCalls = await Candidate.countDocuments(
+        selectedRange === 'all'
+          ? {
+              ...baseSummaryMatch,
+              $or: [
+                { firstCallDate: { $ne: null, $ne: '' } },
+                { firstCallStatus: { $ne: null, $ne: '' } },
+                { 'notes.0': { $exists: true } }
+              ]
+            }
+          : {
+              ...baseSummaryMatch,
+              $or: [
+                { firstCallDate: dateFilter },
+                { 'notes.date': dateFilter },
+                { createdAt: dateFilter },
+                { updatedAt: dateFilter }
+              ]
+            }
+      );
     }
 
     // Pending corrections (filtered by team members)
@@ -1127,6 +1151,18 @@ exports.advancedReports = async (req, res, next) => {
       }
     });
 
+    const cleanRecName = (name) => {
+      if (!name) return 'Unassigned';
+      const trimmed = name
+        .replace(/\s*\((recruiter|tl|admin|manager)\)\s*/gi, '')
+        .replace(/\s*\[(recruiter|tl|admin|manager)\]\s*/gi, '')
+        .trim();
+      if (['general pool', 'corporate demo admin', 'system administrator', 'demo admin', 'unassigned'].includes(trimmed.toLowerCase())) {
+        return 'Unassigned';
+      }
+      return trimmed || 'Unassigned';
+    };
+
     const divisionMatch = (division && division !== 'All' && division !== 'All Divisions') ? { division } : {};
 
     // 1. Recruiter performance
@@ -1364,7 +1400,7 @@ exports.advancedReports = async (req, res, next) => {
     };
 
     const activeProfilesCandidates = await Candidate.find(activeProfilesQuery)
-      .select('name phone email positionApplied clientName status jrNumber assignedRecruiter assignedRecruiterName updatedAt createdAt division')
+      .select('name phone email positionApplied clientName status jrNumber assignedRecruiter assignedRecruiterName sourcedBy updatedAt createdAt division')
       .lean();
 
     const masterStatusesSet = new Set([
@@ -1388,8 +1424,13 @@ exports.advancedReports = async (req, res, next) => {
       else if (rawStatus === 'HR Shortlist' || rawStatus === 'SPOC Shortlisted' || rawStatus === 'HR Round Scheduled') displayStatus = 'Eligible';
       else if (rawStatus === 'Selected' || rawStatus === 'L1/Final') displayStatus = 'Final Select';
 
+      const resolvedRecruiter = (c.assignedRecruiterName && !['general pool', 'unassigned', 'corporate demo admin', 'system administrator'].includes(c.assignedRecruiterName.trim().toLowerCase()))
+        ? c.assignedRecruiterName
+        : (c.sourcedBy || 'Unassigned');
+
       const tlName = (c.assignedRecruiter && recruiterToTlMap[c.assignedRecruiter.toString()]) || 
                      (c.assignedRecruiterName && recruiterNameToTlMap[c.assignedRecruiterName]) || 
+                     (resolvedRecruiter && recruiterNameToTlMap[resolvedRecruiter]) ||
                      'Unassigned';
 
       return {
@@ -1401,8 +1442,8 @@ exports.advancedReports = async (req, res, next) => {
         clientName: c.clientName || '—',
         status: displayStatus,
         jrNumber: c.jrNumber || '—',
-        recruiter: c.assignedRecruiterName || 'Unassigned',
-        teamLeader: tlName,
+        recruiter: cleanRecName(resolvedRecruiter),
+        teamLeader: cleanRecName(tlName),
         division: c.division || 'BPO',
         daysPending,
         updatedAt: c.updatedAt || c.createdAt
@@ -1427,42 +1468,56 @@ exports.advancedReports = async (req, res, next) => {
 
     const joinedCandidatesRaw = await Candidate.find({
       status: 'Joined',
+      isDemoData: { $ne: true },
       ...divisionMatch,
       ...joinedCandidatesDateFilter
-    }).select('name phone email positionApplied clientName companyName division joiningSalary placementPercentage revenueGenerated offerDetails dateOfJoining expectedDateOfJoining assignedRecruiter assignedRecruiterName updatedAt createdAt').lean();
+    }).select('name phone email positionApplied clientName companyName division joiningSalary placementPercentage revenueGenerated offerDetails dateOfJoining expectedDateOfJoining assignedRecruiter assignedRecruiterName sourcedBy isDemoData updatedAt createdAt').lean();
 
-    const joinedCandidatesList = joinedCandidatesRaw.map(c => {
-      let ctc = parseFloat(c.joiningSalary) || parseFloat(c.offerDetails?.joiningSalary) || parseFloat(c.offerDetails?.offeredCTC) || 0;
-      let rev = parseFloat(c.revenueGenerated) || 0;
-      if (!rev && ctc) {
-        const pct = parseFloat(c.placementPercentage) || parseFloat(c.offerDetails?.placementPercentage) || 8.33;
-        rev = (ctc * pct) / 100;
-      }
-      if (!rev) rev = 25000;
+    const joinedCandidatesList = joinedCandidatesRaw
+      .filter(c => !c.isDemoData && !c.email?.includes('demo@') && c.assignedRecruiterName !== 'Corporate Demo Admin')
+      .map(c => {
+        let ctc = parseFloat(c.joiningSalary) || parseFloat(c.offerDetails?.joiningSalary) || parseFloat(c.offerDetails?.offeredCTC) || 0;
+        let rev = parseFloat(c.revenueGenerated) || 0;
+        if (!rev && ctc) {
+          const pct = parseFloat(c.placementPercentage) || parseFloat(c.offerDetails?.placementPercentage) || 8.33;
+          rev = (ctc * pct) / 100;
+        }
+        if (!rev) rev = 25000;
 
-      const doj = c.offerDetails?.dateOfJoining || c.dateOfJoining || c.expectedDateOfJoining || c.updatedAt || c.createdAt;
-      const dojStr = doj ? new Date(doj).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+        const doj = c.offerDetails?.dateOfJoining || c.dateOfJoining || c.expectedDateOfJoining || c.updatedAt || c.createdAt;
+        const dojStr = doj ? new Date(doj).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+        const monthStr = doj ? new Date(doj).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : '—';
 
-      return {
-        _id: c._id,
-        name: c.name,
-        phone: c.phone || '—',
-        email: c.email || '—',
-        positionApplied: c.positionApplied || '—',
-        customerName: c.clientName || c.companyName || 'General / Unspecified',
-        division: c.division || 'BPO',
-        ctc,
-        doj: dojStr,
-        rawDoj: doj,
-        revenue: rev,
-        recruiter: c.assignedRecruiterName || 'Unassigned',
-        teamLeader: (c.assignedRecruiter && recruiterToTlMap[c.assignedRecruiter.toString()]) || 
-                    (c.assignedRecruiterName && recruiterNameToTlMap[c.assignedRecruiterName]) || 
-                    'Unassigned',
-        joinedDate: dojStr,
-        status: c.status || 'Joined'
-      };
-    });
+        const rawRecruiter = (c.assignedRecruiterName && !['general pool', 'unassigned', 'corporate demo admin', 'system administrator'].includes(c.assignedRecruiterName.trim().toLowerCase()))
+          ? c.assignedRecruiterName
+          : (c.sourcedBy || 'Unassigned');
+        const sanitizedRecruiter = cleanRecName(rawRecruiter);
+
+        const rawTl = (c.assignedRecruiter && recruiterToTlMap[c.assignedRecruiter.toString()]) || 
+                     (c.assignedRecruiterName && recruiterNameToTlMap[c.assignedRecruiterName]) || 
+                     (rawRecruiter && recruiterNameToTlMap[rawRecruiter]) ||
+                     'Unassigned';
+        const sanitizedTl = cleanRecName(rawTl);
+
+        return {
+          _id: c._id,
+          name: c.name,
+          phone: c.phone || '—',
+          email: c.email || '—',
+          positionApplied: c.positionApplied || '—',
+          customerName: c.clientName || c.companyName || 'General / Unspecified',
+          division: c.division || 'BPO',
+          ctc,
+          doj: dojStr,
+          month: monthStr,
+          rawDoj: doj,
+          revenue: rev,
+          recruiter: sanitizedRecruiter,
+          teamLeader: sanitizedTl,
+          joinedDate: dojStr,
+          status: c.status || 'Joined'
+        };
+      });
 
     const totalJoinedRevenue = joinedCandidatesList.reduce((sum, c) => sum + c.revenue, 0);
 
@@ -1482,15 +1537,17 @@ exports.advancedReports = async (req, res, next) => {
       status: { $in: ['Yet To Join', 'Offer Accept', 'Offer Accepted', 'Waiting for Offer', 'Joining Date Confirmed', 'Joining Postponed'] },
       ...divisionMatch,
       ...yetToJoinDateFilter
-    }).select('clientName companyName division joiningSalary placementPercentage revenueGenerated offerDetails').lean();
+    }).select('clientName companyName division joiningSalary placementPercentage revenueGenerated offerDetails dateOfJoining expectedDateOfJoining createdAt').lean();
 
     const customerRevMap = {};
     const divisionRevMap = {};
+    const monthlyRevMap = {};
 
     // Process joined candidates into maps
     joinedCandidatesList.forEach(c => {
       const cust = c.customerName;
       const div = c.division;
+      const mStr = c.month && c.month !== '—' ? c.month : (c.rawDoj ? new Date(c.rawDoj).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : 'Unknown');
 
       if (!customerRevMap[cust]) {
         customerRevMap[cust] = { customerName: cust, yetToJoinCount: 0, joinedCount: 0, expectedRevenue: 0, actualJoinedRevenue: 0 };
@@ -1503,6 +1560,12 @@ exports.advancedReports = async (req, res, next) => {
       }
       divisionRevMap[div].joinedCount += 1;
       divisionRevMap[div].actualJoinedRevenue += c.revenue;
+
+      if (!monthlyRevMap[mStr]) {
+        monthlyRevMap[mStr] = { month: mStr, yetToJoinCount: 0, joinedCount: 0, expectedRevenue: 0, actualJoinedRevenue: 0, rawDate: c.rawDoj ? new Date(c.rawDoj) : new Date(0) };
+      }
+      monthlyRevMap[mStr].joinedCount += 1;
+      monthlyRevMap[mStr].actualJoinedRevenue += c.revenue;
     });
 
     // Process Yet To Join candidates for projected revenue
@@ -1510,6 +1573,8 @@ exports.advancedReports = async (req, res, next) => {
     yetToJoinRaw.forEach(c => {
       const cust = c.clientName || c.companyName || 'General / Unspecified';
       const div = c.division || 'BPO';
+      const doj = c.offerDetails?.dateOfJoining || c.dateOfJoining || c.expectedDateOfJoining || c.offerDetails?.expectedDateOfJoining || c.createdAt;
+      const mStr = doj ? new Date(doj).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }) : 'Unknown';
 
       let ctc = parseFloat(c.joiningSalary) || parseFloat(c.offerDetails?.joiningSalary) || parseFloat(c.offerDetails?.offeredCTC) || 0;
       let projRev = parseFloat(c.revenueGenerated) || 0;
@@ -1531,22 +1596,34 @@ exports.advancedReports = async (req, res, next) => {
       }
       divisionRevMap[div].yetToJoinCount += 1;
       divisionRevMap[div].expectedRevenue += projRev;
+
+      if (!monthlyRevMap[mStr]) {
+        monthlyRevMap[mStr] = { month: mStr, yetToJoinCount: 0, joinedCount: 0, expectedRevenue: 0, actualJoinedRevenue: 0, rawDate: doj ? new Date(doj) : new Date(0) };
+      }
+      monthlyRevMap[mStr].yetToJoinCount += 1;
+      monthlyRevMap[mStr].expectedRevenue += projRev;
     });
 
     const customerJoinedRevenue = Object.values(customerRevMap).sort((a, b) => (b.actualJoinedRevenue + b.expectedRevenue) - (a.actualJoinedRevenue + a.expectedRevenue));
     const divisionJoinedRevenue = Object.values(divisionRevMap).sort((a, b) => (b.actualJoinedRevenue + b.expectedRevenue) - (a.actualJoinedRevenue + a.expectedRevenue));
+    const monthlyJoinedRevenue = Object.values(monthlyRevMap).sort((a, b) => b.rawDate - a.rawDate);
 
     const expectedRevenueReport = {
       joinedCandidates: joinedCandidatesList,
       customerRevenue: customerJoinedRevenue,
       divisionRevenue: divisionJoinedRevenue,
+      monthlyRevenue: monthlyJoinedRevenue,
       totalJoinedRevenue,
       totalJoinedCount: joinedCandidatesList.length,
       totalExpectedRevenue: totalJoinedRevenue + totalExpectedFromYTJ,
     };
 
     // 9. Lead and Recruiter Performance Report (Flat List & Team-Wise Hierarchy)
-    const usersList = await User.find({ role: { $in: ['recruiter', 'tl', 'manager', 'admin'] } }).select('name role employeeId').lean();
+    const usersList = await User.find({ 
+      role: { $in: ['recruiter', 'tl', 'manager', 'admin'] },
+      status: { $ne: 'Suspended' },
+      name: { $nin: ['Corporate Demo Admin', 'General Pool', 'System Administrator'] }
+    }).select('name role employeeId').lean();
 
     const getMetricsForUser = async (u) => {
       const candidateMatch = selectedRange === 'all'
@@ -1579,8 +1656,8 @@ exports.advancedReports = async (req, res, next) => {
     const leadRecruiterPerformanceReport = await Promise.all(usersList.map(u => getMetricsForUser(u)));
 
     const activeLeadRecruiterPerformance = leadRecruiterPerformanceReport
-      .filter(r => r.submitted > 0 || r.selects > 0 || r.joinees > 0)
-      .sort((a, b) => b.joinees - a.joinees || b.selects - a.selects || b.submitted - a.submitted);
+      .filter(r => r.name && !['Corporate Demo Admin', 'General Pool', 'System Administrator'].includes(r.name))
+      .sort((a, b) => b.joinees - a.joinees || b.selects - a.selects || b.submitted - a.submitted || a.name.localeCompare(b.name));
 
     // Build Team-Wise hierarchy (Team Lead -> Members)
     const allTls = await User.find({ role: 'tl' }).select('name role employeeId').lean();

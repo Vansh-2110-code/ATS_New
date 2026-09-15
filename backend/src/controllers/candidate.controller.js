@@ -8,7 +8,7 @@ const ExcelJS = require('exceljs');
 const notificationService = require('../utils/notification.service');
 const validator = require('validator');
 
-// 14 Statuses where the 30-Day Lock is removed and any recruiter can tag the candidate to their name
+// Statuses where the 30-Day Lock is removed and any recruiter can tag the candidate to their name
 const UNLOCKED_REASSIGN_STATUSES = [
   'Not Eligible',
   'No Response',
@@ -23,11 +23,32 @@ const UNLOCKED_REASSIGN_STATUSES = [
   'L1 Reject',
   'L2 Reject',
   'Final Reject',
-  'Offer Reject'
+  'Offer Reject',
+  'Rejected',
+  'Rejected – Interview Round',
+  'Rejected – Second Round',
+  'Rejected – Communication',
+  'Rejected – Experience Mismatch',
+  'Rejected – Salary Mismatch',
+  'Rejected – Location Constraint',
+  'Rejected – Notice Period',
+  'Duplicate-Client',
+  'Client Duplicate'
 ];
+
+function isRejectionStatus(status) {
+  if (!status) return false;
+  const clean = String(status).trim().toLowerCase();
+  return clean === 'rejected' ||
+         clean.includes('reject') ||
+         clean.includes('not eligible') ||
+         clean.includes('not interested') ||
+         clean.includes('candidate drop');
+}
 
 function isStatusUnlockedForReassignment(status) {
   if (!status) return false;
+  if (isRejectionStatus(status)) return true;
   const clean = String(status).trim().toLowerCase();
   return UNLOCKED_REASSIGN_STATUSES.some(s => s.toLowerCase() === clean);
 }
@@ -418,6 +439,11 @@ const mapSubStatusToGlobalStatus = (subStatus) => {
     'Eligible Candidates': 'Eligible',
     'Selected': 'Final Select',
     'Joined': 'Joined',
+    'Rejected': 'Rejected',
+    'Final Reject': 'Final Reject',
+    'L1 Reject': 'L1 Reject',
+    'L2 Reject': 'L2 Reject',
+    'Not Eligible': 'Not Eligible',
     'Rejected – Communication': 'Not Eligible',
     'Rejected – Experience Mismatch': 'Not Eligible',
     'Rejected – Salary Mismatch': 'Not Eligible',
@@ -459,6 +485,12 @@ const mapSubStatusToGlobalStatus = (subStatus) => {
 exports.create = async (req, res, next) => {
   try {
     const data = { ...req.body };
+
+    // Mandatory JR validation: candidates cannot be added without selecting a JR
+    const isWalkIn = data.isWalkIn === true || data.isWalkIn === 'true' || data.source === 'Walk-In';
+    if (!isWalkIn && (!data.jrNumber || !String(data.jrNumber).trim())) {
+      return res.status(400).json({ message: 'Job Requirement (JR) is mandatory. Please select a JR before adding a candidate.' });
+    }
 
     // Parse skills if sent as string
     if (typeof data.skills === 'string') {
@@ -503,14 +535,15 @@ exports.create = async (req, res, next) => {
     }
 
     if (existing) {
-      const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status);
+      const isExpiredOwnership = existing.ownershipStatus === 'Expired' || !existing.assignedAt || new Date(existing.assignedAt).getTime() === 0;
+      const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status) || isExpiredOwnership;
       const lastActivity = existing.assignedAt || existing.createdAt;
       const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
       const recruiterName = existing.assignedRecruiterName || 'another recruiter';
 
       // Strict 30-day duplicate rule for ALL USERS (including Admin & Recruiters)
-      // If candidate is under active 30-day validity AND NOT in one of the 14 unlocked waived statuses:
-      if (!isUnlockedStatus && daysSinceAssignment < 30) {
+      // If candidate is under active 30-day validity AND NOT in one of the unlocked waived statuses AND not expired:
+      if (!isUnlockedStatus && !isExpiredOwnership && daysSinceAssignment < 30) {
         return res.status(409).json({
           message: `Candidate already exists in the system! This profile (${existing.name}, Phone: ${existing.phone}) is already assigned to ${recruiterName} under active 30-day validity (Status: "${existing.status}"). Duplicate candidates cannot be added.`,
           existingId: existing._id,
@@ -536,7 +569,7 @@ exports.create = async (req, res, next) => {
         });
       }
 
-      // If unlocked status or expired (>= 30 days), tag / re-assign the candidate to current recruiter
+      // If unlocked status or expired (>= 30 days or rejected by TL), tag / re-assign the candidate to current recruiter
       const oldRecruiter = existing.assignedRecruiterName || 'Unknown';
       const oldStatus = existing.status || 'Unknown';
       const oldJob = existing.positionApplied || 'None';
@@ -694,11 +727,12 @@ exports.checkDuplicate = async (req, res, next) => {
       return res.json({ duplicate: false });
     }
 
-    const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status);
+    const isExpiredOwnership = existing.ownershipStatus === 'Expired' || !existing.assignedAt || new Date(existing.assignedAt).getTime() === 0;
+    const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status) || isExpiredOwnership;
     const lastActivity = existing.assignedAt || existing.createdAt;
     const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
-    const is30DayLocked = !isUnlockedStatus && daysSinceAssignment < 30;
-    const daysRemaining = isUnlockedStatus ? 0 : Math.max(0, 30 - daysSinceAssignment);
+    const is30DayLocked = !isUnlockedStatus && !isExpiredOwnership && daysSinceAssignment < 30;
+    const daysRemaining = (isUnlockedStatus || isExpiredOwnership) ? 0 : Math.max(0, 30 - daysSinceAssignment);
 
     return res.json({
       duplicate: true,
@@ -751,29 +785,45 @@ if (typeof data.skills === 'string') {
       if (mappedStatus) data.status = mappedStatus;
     }
 
+    // Immediate 30-day validity vanishing if candidate is rejected (by Team Leader, Admin, or status update)
+    const isBeingRejected = (data.status && isRejectionStatus(data.status)) ||
+                            (data.finalInterviewStatus && isRejectionStatus(data.finalInterviewStatus)) ||
+                            (data.interviewStatus && isRejectionStatus(data.interviewStatus)) ||
+                            (data.secondCallStatus && isRejectionStatus(data.secondCallStatus));
+
+    if (isBeingRejected) {
+      data.ownershipStatus = 'Expired';
+      data.assignedAt = new Date(0); // 30-day validity timer vanishes immediately
+      if (data.finalInterviewStatus === 'Rejected' && !data.status) {
+        data.status = 'Rejected';
+      }
+    }
+
     // ── Submission lock enforcement ──────────────────────────
     const existing = await Candidate.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Candidate not found' });
 
-    // Joined Status Lock: Once candidate has status 'Joined', it cannot be changed back to any other status
+    // Joined Status Lock: Once candidate has status 'Joined', it can only be updated to 'Joined and Abort', 'Exited', or 'Black List'
+    const ALLOWED_AFTER_JOINED = ['Joined', 'Joined and Abort', 'Exited', 'Black List', 'Blacklist'];
     if (existing.status === 'Joined') {
-      if (data.status && data.status !== 'Joined') {
-        return res.status(403).json({ message: 'Candidate status is "Joined" and cannot be changed back to any other status.' });
+      if (data.status && !ALLOWED_AFTER_JOINED.includes(data.status)) {
+        return res.status(403).json({ message: 'Candidate status is "Joined" and can only be updated to "Joined and Abort", "Exited", or "Black List".' });
       }
       let newMapped = null;
       if (data.candidateStatusPostOffer) newMapped = mapSubStatusToGlobalStatus(data.candidateStatusPostOffer);
       else if (data.finalInterviewStatus) newMapped = mapSubStatusToGlobalStatus(data.finalInterviewStatus);
       else if (data.interviewStatus) newMapped = mapSubStatusToGlobalStatus(data.interviewStatus);
       else if (data.firstCallStatus) newMapped = mapSubStatusToGlobalStatus(data.firstCallStatus);
-      if (newMapped && newMapped !== 'Joined') {
-        return res.status(403).json({ message: 'Candidate status is "Joined" and cannot be changed back to any other status.' });
+      if (newMapped && !ALLOWED_AFTER_JOINED.includes(newMapped)) {
+        return res.status(403).json({ message: 'Candidate status is "Joined" and can only be updated to "Joined and Abort", "Exited", or "Black List".' });
       }
     }
 
     // Ownership check: recruiters can only edit their own candidates (or expired / unlocked candidates)
+    const isExistingExpiredOwnership = existing.ownershipStatus === 'Expired' || !existing.assignedAt || new Date(existing.assignedAt).getTime() === 0;
     const lastActivity = existing.assignedAt || existing.createdAt;
     const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
-    const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status);
+    const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status) || isExistingExpiredOwnership;
 
     if (req.user.role === 'recruiter') {
       const candRecId = existing.assignedRecruiter ? String(existing.assignedRecruiter) : '';
@@ -785,22 +835,22 @@ if (typeof data.skills === 'string') {
                       (candRecName && reqUserName && candRecName === reqUserName);
 
       const isAssignedToOther = (Boolean(existing.assignedRecruiter) || Boolean(existing.assignedRecruiterName)) && !isOwner;
-      if (isAssignedToOther && daysSinceAssignment < 30 && !isUnlockedStatus) {
+      if (isAssignedToOther && !isExistingExpiredOwnership && daysSinceAssignment < 30 && !isUnlockedStatus) {
         return res.status(403).json({
           message: `Candidate is assigned to ${existing.assignedRecruiterName || 'another recruiter'}. You cannot edit or change the status of this candidate.`
         });
       }
     }
 
-    // Auto-assign to recruiter if candidate is unassigned, expired, or general data
+    // Auto-assign to recruiter if candidate is unassigned, expired, unlocked status, or general data
     if (req.user.role === 'recruiter') {
       const isOwner = String(existing.assignedRecruiter || '') === String(req.user._id);
-      const isExpired = !existing.assignedRecruiter || daysSinceAssignment >= 30;
+      const isExpired = !existing.assignedRecruiter || daysSinceAssignment >= 30 || isExistingExpiredOwnership;
       const isGeneral = existing.ownershipStatus === 'General Data';
 
-      if (!isOwner && (isExpired || isGeneral)) {
+      if (!isOwner && (isExpired || isGeneral || isUnlockedStatus)) {
         data.assignedRecruiter = req.user._id;
-        data.assignedRecruiterName = req.user.name;
+        data.assignedRecruiterName = cleanRecruiterName(req.user.name);
         data.ownershipStatus = 'Assigned';
         data.assignedAt = new Date();
       }
@@ -859,6 +909,32 @@ if (typeof data.skills === 'string') {
             return res.status(403).json({ message: 'All positions for this JR are already filled' });
           }
         }
+      }
+    }
+
+    // Synchronize Joining & Offer Details with top-level fields
+    if (data.offerDetails || data.joiningSalary || data.offeredCTC) {
+      const salNum = data.joiningSalary ? parseInt(String(data.joiningSalary).replace(/\D/g, ''), 10) : (data.offerDetails?.joiningSalary ? parseInt(String(data.offerDetails.joiningSalary).replace(/\D/g, ''), 10) : null);
+      const ctcNum = data.offeredCTC !== undefined ? (parseInt(String(data.offeredCTC).replace(/\D/g, ''), 10) || 0) : (data.offerDetails?.offeredCTC !== undefined ? (parseInt(String(data.offerDetails.offeredCTC).replace(/\D/g, ''), 10) || 0) : (salNum || 0));
+      const pctNum = data.placementPercentage !== undefined ? parseFloat(data.placementPercentage) : (data.offerDetails?.placementPercentage !== undefined ? parseFloat(data.offerDetails.placementPercentage) : (existing.placementPercentage || 8.33));
+      const effectiveCtc = (ctcNum && ctcNum >= 10000) ? ctcNum : (salNum && salNum >= 10000 ? salNum : 0);
+      const revNum = effectiveCtc > 0 ? Math.round(effectiveCtc * (pctNum / 100)) : (data.revenueGenerated || data.offerDetails?.revenueGenerated || 0);
+
+      if (effectiveCtc > 0) {
+        data.offeredCTC = effectiveCtc;
+        data.joiningSalary = String(effectiveCtc);
+        data.placementPercentage = pctNum;
+        data.revenueGenerated = revNum;
+
+        data.offerDetails = {
+          ...(existing.offerDetails || {}),
+          ...(data.offerDetails || {}),
+          offeredCTC: effectiveCtc,
+          joiningSalary: String(effectiveCtc),
+          placementPercentage: pctNum,
+          revenueGenerated: revNum,
+          dateOfJoining: data.offerDetails?.dateOfJoining || data.dateOfJoining || existing.offerDetails?.dateOfJoining || existing.dateOfJoining
+        };
       }
     }
 
@@ -985,9 +1061,10 @@ exports.updateStatus = async (req, res, next) => {
       return res.status(404).json({ message: 'Candidate not found' });
     }
 
-    // Joined Status Lock: Once candidate has status 'Joined', it cannot be changed back to any other status
-    if (candidate.status === 'Joined' && status !== 'Joined') {
-      return res.status(403).json({ message: 'Candidate status is "Joined" and cannot be changed back to any other status.' });
+    // Joined Status Lock: Once candidate has status 'Joined', it can only be updated to 'Joined and Abort', 'Exited', or 'Black List'
+    const ALLOWED_AFTER_JOINED = ['Joined', 'Joined and Abort', 'Exited', 'Black List', 'Blacklist'];
+    if (candidate.status === 'Joined' && !ALLOWED_AFTER_JOINED.includes(status)) {
+      return res.status(403).json({ message: 'Candidate status is "Joined" and can only be updated to "Joined and Abort", "Exited", or "Black List".' });
     }
 
     if (candidate.isDuplicate && req.user.role !== 'admin') {
@@ -996,6 +1073,7 @@ exports.updateStatus = async (req, res, next) => {
 
     // Ownership check for recruiters
     if (req.user.role === 'recruiter') {
+      const isExpiredOwnership = candidate.ownershipStatus === 'Expired' || !candidate.assignedAt || new Date(candidate.assignedAt).getTime() === 0;
       const lastActivity = candidate.assignedAt || candidate.createdAt;
       const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
       
@@ -1007,9 +1085,9 @@ exports.updateStatus = async (req, res, next) => {
       const isOwner = (candRecId && reqUserId && candRecId === reqUserId) ||
                       (candRecName && reqUserName && candRecName === reqUserName);
 
-      const isExpired = (!candidate.assignedRecruiter && !candidate.assignedRecruiterName) || daysSinceAssignment >= 30;
+      const isExpired = (!candidate.assignedRecruiter && !candidate.assignedRecruiterName) || daysSinceAssignment >= 30 || isExpiredOwnership;
       const isGeneral = candidate.ownershipStatus === 'General Data';
-      const isUnlockedStatus = isStatusUnlockedForReassignment(candidate.status);
+      const isUnlockedStatus = isStatusUnlockedForReassignment(candidate.status) || isExpiredOwnership;
 
       // If candidate is assigned to ANOTHER recruiter within 30 days and NOT in an unlocked status
       if (!isOwner && !isExpired && !isGeneral && !isUnlockedStatus) {
@@ -1028,6 +1106,10 @@ exports.updateStatus = async (req, res, next) => {
 
     const oldStatus = candidate.status;
     candidate.status = status;
+    if (isRejectionStatus(status)) {
+      candidate.ownershipStatus = 'Expired';
+      candidate.assignedAt = new Date(0);
+    }
     if (req.body.expectedDateOfJoining) {
       candidate.expectedDateOfJoining = new Date(req.body.expectedDateOfJoining);
     }
@@ -1254,6 +1336,11 @@ exports.secondCallSubmit = async (req, res, next) => {
     candidate.tlCallSubmitted = true;
     candidate.lastContactDate = new Date();
 
+    if (secondCallStatus && isRejectionStatus(secondCallStatus)) {
+      candidate.ownershipStatus = 'Expired';
+      candidate.assignedAt = new Date(0);
+    }
+
     // Preserve stage history
     candidate.stageHistory.push({
       stage: candidate.currentStage || 'Screening',
@@ -1304,25 +1391,33 @@ exports.reassign = async (req, res, next) => {
       notes: `First call: ${candidate.firstCallStatus || 'N/A'} | Second call: ${candidate.secondCallStatus || 'N/A'} | Interview: ${candidate.interviewStatus || 'N/A'}`,
     });
 
-    // Reset workflow
-    candidate.firstCallStatus = undefined;
-    candidate.firstCallOtherReason = undefined;
-    candidate.firstCallDate = undefined;
-    candidate.firstCallTime = undefined;
-    candidate.firstCallEmail = undefined;
-    candidate.firstCallSubmitted = false;
-    candidate.secondCallStatus = undefined;
-    candidate.secondCallNotes = undefined;
-    candidate.secondCallDate = undefined;
-    candidate.secondCallTime = undefined;
-    candidate.secondCallEmail = undefined;
-    candidate.tlCallSubmitted = false;
-    candidate.interviewStatus = undefined;
-    candidate.finalRoundStatus = undefined;
-    candidate.finalInterviewStatus = undefined;
-    candidate.finalInterviewLocked = false;
-    candidate.currentStage = 'Applied';
-    candidate.status = 'New';
+    // If candidate is Joined or keepStatus is passed, preserve status and stage
+    if (candidate.status === 'Joined') {
+      candidate.currentStage = 'Joining';
+      candidate.status = 'Joined';
+    } else if (req.body.keepStatus && candidate.status) {
+      // keep current status and stage
+    } else {
+      // Reset workflow for fresh candidate reassignment
+      candidate.firstCallStatus = undefined;
+      candidate.firstCallOtherReason = undefined;
+      candidate.firstCallDate = undefined;
+      candidate.firstCallTime = undefined;
+      candidate.firstCallEmail = undefined;
+      candidate.firstCallSubmitted = false;
+      candidate.secondCallStatus = undefined;
+      candidate.secondCallNotes = undefined;
+      candidate.secondCallDate = undefined;
+      candidate.secondCallTime = undefined;
+      candidate.secondCallEmail = undefined;
+      candidate.tlCallSubmitted = false;
+      candidate.interviewStatus = undefined;
+      candidate.finalRoundStatus = undefined;
+      candidate.finalInterviewStatus = undefined;
+      candidate.finalInterviewLocked = false;
+      candidate.currentStage = 'Applied';
+      candidate.status = 'New';
+    }
     candidate.candidateActiveStatus = 'Active';
     candidate.inactiveSince = undefined;
     candidate.isDuplicate = false;
@@ -2306,6 +2401,13 @@ exports.createOrUpdateJoiningForm = async (req, res, next) => {
     delete updateData.createdAt;
     delete updateData.updatedAt;
 
+    // Ensure approval workflow status is set to pending on submit/re-submit
+    updateData.approvalStatus = 'pending';
+    updateData.isApproved = false;
+    updateData.submittedAt = new Date();
+    updateData.rejectionRemarks = '';
+    updateData.rejectedDocuments = [];
+
     // Clean empty string values for dates and numbers to prevent Mongoose CastErrors
     if (!updateData.joiningDate || updateData.joiningDate === '') {
       updateData.joiningDate = new Date();
@@ -2334,6 +2436,14 @@ exports.createOrUpdateJoiningForm = async (req, res, next) => {
       if (req.files.highestDocument) updateData.highestDocumentPath = `/uploads/docs/${req.files.highestDocument[0].filename}`;
       if (req.files.marksheet) updateData.marksheetPath = `/uploads/docs/${req.files.marksheet[0].filename}`;
       if (req.files.degreeCertificate) updateData.degreeCertificatePath = `/uploads/docs/${req.files.degreeCertificate[0].filename}`;
+      if (req.files.bankProof) updateData.bankProofPath = `/uploads/docs/${req.files.bankProof[0].filename}`;
+
+    // Format Bank Details
+    if (updateData.ifscCode) updateData.ifscCode = updateData.ifscCode.toUpperCase().trim();
+    if (updateData.accountNumber) updateData.accountNumber = updateData.accountNumber.trim();
+    if (updateData.bankName) updateData.bankName = updateData.bankName.trim();
+    if (updateData.accountHolderName) updateData.accountHolderName = updateData.accountHolderName.trim();
+    if (updateData.branchName) updateData.branchName = updateData.branchName.trim();
 
       // Handle relieving letters in employment history
       if (updateData.employmentHistory && Array.isArray(updateData.employmentHistory)) {
@@ -2380,6 +2490,18 @@ exports.createOrUpdateJoiningForm = async (req, res, next) => {
         if (cand) {
           cand.status = 'Joined';
           cand.candidateActiveStatus = 'Active';
+          if (employee.bankProofPath) {
+            cand.documents = cand.documents || [];
+            const hasBankDoc = cand.documents.some(d => d.type === 'Bank Details / Cancelled Cheque');
+            if (!hasBankDoc) {
+              cand.documents.push({
+                type: 'Bank Details / Cancelled Cheque',
+                fileName: 'Bank_Proof',
+                filePath: employee.bankProofPath,
+                uploadedAt: new Date(),
+              });
+            }
+          }
           await cand.save();
         }
       }
@@ -2481,3 +2603,610 @@ exports.bulkEmail = async (req, res, next) => {
     next(err);
   }
 };
+
+// ─── ELIGIBLE TRACKER MODULE ─────────────────────────────────────
+
+function formatTrackerDate(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function mapCandidateToEligibleRow(c, index = 0) {
+  const parts = (c.name || '').trim().split(/\s+/);
+  const firstName = c.firstName || parts[0] || '';
+  const lastName = c.lastName || parts.slice(1).join(' ') || '';
+  const skillsStr = Array.isArray(c.skills) ? c.skills.join(', ') : (c.skills || '');
+  const skillNameVal = c.skillName || c.positionApplied || (Array.isArray(c.skills) && c.skills[0]) || '';
+
+  return {
+    _id: c._id ? c._id.toString() : '',
+    slNo: index + 1,
+    status: c.status || 'Eligible',
+    recruiter: cleanRecruiterName(c.assignedRecruiterName || ''),
+    skillName: skillNameVal,
+    jobLevel: c.jobLevel || '',
+    vendorSPOC: c.vendorSPOC || '',
+    companySPOC: c.companySPOC || '',
+    jobId: c.jrNumber || '',
+    dob: formatTrackerDate(c.dateOfBirth),
+    candidateId: c.candidateId || '',
+    whiteHorseSource: c.whiteHorseSource || c.source || 'White Horse Manpower',
+    date: formatTrackerDate(c.createdAt),
+    candidateFirstName: firstName,
+    candidateLastName: lastName,
+    contact: c.phone || '',
+    email: c.email || '',
+    gender: c.gender || '',
+    education: c.qualification || c.ugDegree || '',
+    totalExperience: c.experience || '',
+    relevantExperience: c.relevantExperience || '',
+    company: c.clientName || c.company || c.currentCompany || '',
+    skills: skillsStr,
+    ctc: c.currentCTC || '',
+    ectc: c.expectedCTC || '',
+    noticePeriod: c.noticePeriod || '',
+    currentLocation: c.currentLocation || c.city || c.location || '',
+    preferredLocation: c.preferredLocation || '',
+    cibilScore: c.cibilScore || '',
+    panCardNumber: c.panCardNumber || '',
+    assignedRecruiter: c.assignedRecruiter,
+    assignedRecruiterName: c.assignedRecruiterName,
+    rawCreatedAt: c.createdAt,
+  };
+}
+
+// GET /api/candidates/eligible-tracker
+exports.getEligibleTracker = async (req, res, next) => {
+  try {
+    const { search, status, recruiter, jrNumber, company, location, fromDate, toDate, page = 1, limit = 50 } = req.query;
+
+    const query = {};
+
+    // 1. Status Filter
+    if (status && status !== 'all') {
+      query.status = status;
+    } else if (!status) {
+      // Default: show Eligible and candidates in eligible tracking
+      query.$or = [
+        { status: { $in: ['Eligible', 'Eligible Candidates', 'SPOC Shortlisted'] } },
+        { isEligibleTracker: true }
+      ];
+    }
+
+    // 2. Search text filter
+    if (search && search.trim()) {
+      const s = search.trim();
+      const searchRegex = { $regex: s, $options: 'i' };
+      const searchClauses = [
+        { name: searchRegex },
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { email: searchRegex },
+        { phone: searchRegex },
+        { candidateId: searchRegex },
+        { panCardNumber: searchRegex },
+        { jrNumber: searchRegex },
+        { clientName: searchRegex },
+        { currentCompany: searchRegex },
+        { skillName: searchRegex },
+        { skills: { $elemMatch: searchRegex } },
+        { currentLocation: searchRegex },
+        { city: searchRegex },
+      ];
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: searchClauses }];
+        delete query.$or;
+      } else {
+        query.$or = searchClauses;
+      }
+    }
+
+    // 3. Recruiter filter
+    if (recruiter && recruiter !== 'all') {
+      const recRegex = { assignedRecruiterName: { $regex: recruiter, $options: 'i' } };
+      if (query.$and) {
+        query.$and.push(recRegex);
+      } else if (query.$or) {
+        query.$and = [{ $or: query.$or }, recRegex];
+        delete query.$or;
+      } else {
+        query.assignedRecruiterName = { $regex: recruiter, $options: 'i' };
+      }
+    }
+
+    // 4. JR Number filter
+    if (jrNumber) {
+      query.jrNumber = { $regex: jrNumber, $options: 'i' };
+    }
+
+    // 5. Company / Client filter
+    if (company) {
+      query.clientName = { $regex: company, $options: 'i' };
+    }
+
+    // 6. Location filter
+    if (location) {
+      query.currentLocation = { $regex: location, $options: 'i' };
+    }
+
+    // 7. Date range filter
+    if (fromDate || toDate) {
+      query.createdAt = {};
+      if (fromDate) query.createdAt.$gte = new Date(fromDate);
+      if (toDate) {
+        const to = new Date(toDate);
+        to.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = to;
+      }
+    }
+
+    // 8. Role-based scoping
+    if (req.user.role === 'recruiter') {
+      const recClause = [
+        { assignedRecruiter: req.user._id },
+        { assignedRecruiterName: { $regex: req.user.name, $options: 'i' } }
+      ];
+      if (query.$and) {
+        query.$and.push({ $or: recClause });
+      } else if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: recClause }];
+        delete query.$or;
+      } else {
+        query.$or = recClause;
+      }
+    } else if (req.user.role === 'tl') {
+      const TeamMember = require('../models/TeamMember');
+      const members = await TeamMember.find({ teamLeaderId: req.user._id, removedAt: null }).select('memberId');
+      const memberIds = members.map(m => m.memberId);
+      memberIds.push(req.user._id);
+      const tlClause = { assignedRecruiter: { $in: memberIds } };
+      if (query.$and) {
+        query.$and.push(tlClause);
+      } else {
+        query.$and = [tlClause];
+      }
+    }
+
+    const totalCount = await Candidate.countDocuments(query);
+
+    let candidatesQuery = Candidate.find(query).sort({ createdAt: -1 });
+    if (limit !== 'all') {
+      const p = Math.max(1, parseInt(page, 10) || 1);
+      const l = Math.max(1, parseInt(limit, 10) || 50);
+      candidatesQuery = candidatesQuery.skip((p - 1) * l).limit(l);
+    }
+
+    const candidates = await candidatesQuery;
+    const rows = candidates.map((c, idx) => mapCandidateToEligibleRow(c, idx));
+
+    // Stats breakdown
+    const totalEligible = await Candidate.countDocuments({ status: { $in: ['Eligible', 'Eligible Candidates'] } });
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const addedToday = await Candidate.countDocuments({
+      status: { $in: ['Eligible', 'Eligible Candidates'] },
+      createdAt: { $gte: todayStart }
+    });
+
+    res.json({
+      success: true,
+      totalCount,
+      page: parseInt(page, 10) || 1,
+      limit: limit === 'all' ? totalCount : (parseInt(limit, 10) || 50),
+      totalPages: limit === 'all' ? 1 : Math.ceil(totalCount / (parseInt(limit, 10) || 50)),
+      stats: {
+        totalEligible,
+        addedToday,
+        filteredCount: totalCount
+      },
+      candidates: rows
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/candidates/eligible-tracker/export
+exports.exportEligibleTracker = async (req, res, next) => {
+  try {
+    const { search, status, recruiter, jrNumber, company, location, fromDate, toDate } = req.query;
+
+    const query = {};
+
+    if (status && status !== 'all') {
+      query.status = status;
+    } else if (!status) {
+      query.$or = [
+        { status: { $in: ['Eligible', 'Eligible Candidates', 'SPOC Shortlisted'] } },
+        { isEligibleTracker: true }
+      ];
+    }
+
+    if (search && search.trim()) {
+      const s = search.trim();
+      const searchRegex = { $regex: s, $options: 'i' };
+      const searchClauses = [
+        { name: searchRegex },
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+        { email: searchRegex },
+        { phone: searchRegex },
+        { candidateId: searchRegex },
+        { panCardNumber: searchRegex },
+        { jrNumber: searchRegex },
+        { clientName: searchRegex },
+        { currentCompany: searchRegex },
+        { skillName: searchRegex },
+        { skills: { $elemMatch: searchRegex } },
+        { currentLocation: searchRegex },
+        { city: searchRegex },
+      ];
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: searchClauses }];
+        delete query.$or;
+      } else {
+        query.$or = searchClauses;
+      }
+    }
+
+    if (recruiter && recruiter !== 'all') {
+      const recRegex = { assignedRecruiterName: { $regex: recruiter, $options: 'i' } };
+      if (query.$and) {
+        query.$and.push(recRegex);
+      } else if (query.$or) {
+        query.$and = [{ $or: query.$or }, recRegex];
+        delete query.$or;
+      } else {
+        query.assignedRecruiterName = { $regex: recruiter, $options: 'i' };
+      }
+    }
+
+    if (jrNumber) query.jrNumber = { $regex: jrNumber, $options: 'i' };
+    if (company) query.clientName = { $regex: company, $options: 'i' };
+    if (location) query.currentLocation = { $regex: location, $options: 'i' };
+
+    if (fromDate || toDate) {
+      query.createdAt = {};
+      if (fromDate) query.createdAt.$gte = new Date(fromDate);
+      if (toDate) {
+        const to = new Date(toDate);
+        to.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = to;
+      }
+    }
+
+    if (req.user.role === 'recruiter') {
+      const recClause = [
+        { assignedRecruiter: req.user._id },
+        { assignedRecruiterName: { $regex: req.user.name, $options: 'i' } }
+      ];
+      if (query.$and) {
+        query.$and.push({ $or: recClause });
+      } else if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: recClause }];
+        delete query.$or;
+      } else {
+        query.$or = recClause;
+      }
+    } else if (req.user.role === 'tl') {
+      const TeamMember = require('../models/TeamMember');
+      const members = await TeamMember.find({ teamLeaderId: req.user._id, removedAt: null }).select('memberId');
+      const memberIds = members.map(m => m.memberId);
+      memberIds.push(req.user._id);
+      const tlClause = { assignedRecruiter: { $in: memberIds } };
+      if (query.$and) {
+        query.$and.push(tlClause);
+      } else {
+        query.$and = [tlClause];
+      }
+    }
+
+    const candidates = await Candidate.find(query).sort({ createdAt: -1 });
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Eligible Tracker');
+
+    // Exact 29 Column Headers matching screenshot
+    const columns = [
+      { header: 'Sl No.', key: 'slNo', width: 8 },
+      { header: 'Status', key: 'status', width: 16 },
+      { header: 'Recruiter', key: 'recruiter', width: 22 },
+      { header: 'Skill name', key: 'skillName', width: 24 },
+      { header: 'Job Level', key: 'jobLevel', width: 14 },
+      { header: 'Vendor SPOC', key: 'vendorSPOC', width: 20 },
+      { header: 'Company SPOC', key: 'companySPOC', width: 20 },
+      { header: 'JOB ID', key: 'jobId', width: 16 },
+      { header: 'DOB', key: 'dob', width: 14 },
+      { header: 'Candidate ID', key: 'candidateId', width: 18 },
+      { header: 'White Horse Manpower Source', key: 'whiteHorseSource', width: 28 },
+      { header: 'Date', key: 'date', width: 14 },
+      { header: 'Candidate first Name', key: 'candidateFirstName', width: 22 },
+      { header: 'Candidate last name', key: 'candidateLastName', width: 22 },
+      { header: 'Contact', key: 'contact', width: 16 },
+      { header: 'Email', key: 'email', width: 28 },
+      { header: 'Gender', key: 'gender', width: 12 },
+      { header: 'Education', key: 'education', width: 24 },
+      { header: 'Total Experience', key: 'totalExperience', width: 16 },
+      { header: 'Relevant experience', key: 'relevantExperience', width: 18 },
+      { header: 'Company', key: 'company', width: 24 },
+      { header: 'Skills', key: 'skills', width: 28 },
+      { header: 'CTC', key: 'ctc', width: 14 },
+      { header: 'ECTC', key: 'ectc', width: 14 },
+      { header: 'Notice Period', key: 'noticePeriod', width: 16 },
+      { header: 'Current Location', key: 'currentLocation', width: 20 },
+      { header: 'Preferred Location', key: 'preferredLocation', width: 20 },
+      { header: 'CIBIL Score', key: 'cibilScore', width: 14 },
+      { header: 'Pan Card Number', key: 'panCardNumber', width: 18 },
+    ];
+
+    worksheet.columns = columns;
+
+    // Apply header style: #8eaadb blue fill, bold text, centered, thin black borders
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 32;
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF8EAADB' } // Exact Blue from screenshot
+      };
+      cell.font = {
+        name: 'Calibri',
+        size: 11,
+        bold: true,
+        color: { argb: 'FF000000' }
+      };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+        wrapText: true
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } }
+      };
+    });
+
+    // Populate data rows
+    candidates.forEach((c, index) => {
+      const rowData = mapCandidateToEligibleRow(c, index);
+      const newRow = worksheet.addRow({
+        slNo: rowData.slNo,
+        status: rowData.status,
+        recruiter: rowData.recruiter,
+        skillName: rowData.skillName,
+        jobLevel: rowData.jobLevel,
+        vendorSPOC: rowData.vendorSPOC,
+        companySPOC: rowData.companySPOC,
+        jobId: rowData.jobId,
+        dob: rowData.dob,
+        candidateId: rowData.candidateId,
+        whiteHorseSource: rowData.whiteHorseSource,
+        date: rowData.date,
+        candidateFirstName: rowData.candidateFirstName,
+        candidateLastName: rowData.candidateLastName,
+        contact: rowData.contact,
+        email: rowData.email,
+        gender: rowData.gender,
+        education: rowData.education,
+        totalExperience: rowData.totalExperience,
+        relevantExperience: rowData.relevantExperience,
+        company: rowData.company,
+        skills: rowData.skills,
+        ctc: rowData.ctc,
+        ectc: rowData.ectc,
+        noticePeriod: rowData.noticePeriod,
+        currentLocation: rowData.currentLocation,
+        preferredLocation: rowData.preferredLocation,
+        cibilScore: rowData.cibilScore,
+        panCardNumber: rowData.panCardNumber,
+      });
+
+      newRow.height = 22;
+      newRow.eachCell((cell, colNumber) => {
+        cell.font = { name: 'Calibri', size: 10 };
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: [1, 2, 8, 9, 10, 12, 15, 17, 25, 28, 29].includes(colNumber) ? 'center' : 'left'
+        };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+          left: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+          bottom: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+          right: { style: 'thin', color: { argb: 'FFD3D3D3' } }
+        };
+      });
+    });
+
+    // Auto-filter on row 1
+    worksheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: columns.length }
+    };
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="Eligible_Tracker_${Date.now()}.xlsx"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+    await createLog({
+      type: 'export',
+      user: req.user._id,
+      userName: req.user.name,
+      role: req.user.role,
+      action: `Exported ${candidates.length} eligible tracker candidates to Excel`,
+      ip: req.ip,
+    }).catch(() => {});
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PUT /api/candidates/eligible-tracker/:id
+exports.updateEligibleTracker = async (req, res, next) => {
+  try {
+    const candidateId = req.params.id;
+    const body = req.body;
+    const candidate = await Candidate.findById(candidateId);
+    if (!candidate) {
+      return res.status(404).json({ message: 'Candidate not found' });
+    }
+
+    const fieldMap = {
+      status: 'status',
+      skillName: 'skillName',
+      jobLevel: 'jobLevel',
+      vendorSPOC: 'vendorSPOC',
+      companySPOC: 'companySPOC',
+      jobId: 'jrNumber',
+      jrNumber: 'jrNumber',
+      dob: 'dateOfBirth',
+      dateOfBirth: 'dateOfBirth',
+      candidateId: 'candidateId',
+      whiteHorseSource: 'whiteHorseSource',
+      firstName: 'firstName',
+      candidateFirstName: 'firstName',
+      lastName: 'lastName',
+      candidateLastName: 'lastName',
+      contact: 'phone',
+      phone: 'phone',
+      email: 'email',
+      gender: 'gender',
+      education: 'qualification',
+      qualification: 'qualification',
+      totalExperience: 'experience',
+      experience: 'experience',
+      relevantExperience: 'relevantExperience',
+      company: 'clientName',
+      clientName: 'clientName',
+      skills: 'skills',
+      ctc: 'currentCTC',
+      currentCTC: 'currentCTC',
+      ectc: 'expectedCTC',
+      expectedCTC: 'expectedCTC',
+      noticePeriod: 'noticePeriod',
+      currentLocation: 'currentLocation',
+      preferredLocation: 'preferredLocation',
+      cibilScore: 'cibilScore',
+      panCardNumber: 'panCardNumber',
+      recruiter: 'assignedRecruiterName',
+    };
+
+    Object.keys(body).forEach(key => {
+      const modelField = fieldMap[key];
+      if (modelField) {
+        if (modelField === 'skills') {
+          candidate.skills = Array.isArray(body[key])
+            ? body[key]
+            : String(body[key]).split(',').map(s => s.trim()).filter(Boolean);
+        } else if (modelField === 'dateOfBirth') {
+          if (body[key]) candidate.dateOfBirth = new Date(body[key]);
+        } else {
+          candidate[modelField] = body[key];
+        }
+      }
+    });
+
+    if (body.firstName || body.candidateFirstName || body.lastName || body.candidateLastName) {
+      const f = candidate.firstName || '';
+      const l = candidate.lastName || '';
+      candidate.name = [f, l].filter(Boolean).join(' ').trim();
+    }
+
+    candidate.isEligibleTracker = true;
+    await candidate.save();
+
+    await createLog({
+      type: 'edit',
+      user: req.user._id,
+      userName: req.user.name,
+      role: req.user.role,
+      action: `Updated eligible tracker row for candidate: ${candidate.name}`,
+      target: candidate._id.toString(),
+      ip: req.ip,
+    }).catch(() => {});
+
+    const mapped = mapCandidateToEligibleRow(candidate, 0);
+    res.json({ success: true, candidate: mapped });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/candidates/eligible-tracker
+exports.createEligibleCandidate = async (req, res, next) => {
+  try {
+    const body = req.body;
+    const parts = (body.name || '').trim().split(/\s+/);
+    const firstName = body.candidateFirstName || body.firstName || parts[0] || 'Candidate';
+    const lastName = body.candidateLastName || body.lastName || parts.slice(1).join(' ') || '';
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+
+    const candidateData = {
+      name: fullName,
+      firstName,
+      lastName,
+      phone: body.contact || body.phone,
+      email: body.email || '',
+      status: body.status || 'Eligible',
+      skillName: body.skillName || '',
+      jobLevel: body.jobLevel || '',
+      vendorSPOC: body.vendorSPOC || '',
+      companySPOC: body.companySPOC || '',
+      jrNumber: body.jobId || body.jrNumber || '',
+      dateOfBirth: body.dob ? new Date(body.dob) : (body.dateOfBirth ? new Date(body.dateOfBirth) : undefined),
+      whiteHorseSource: body.whiteHorseSource || body.source || 'White Horse Manpower',
+      source: body.whiteHorseSource || body.source || 'White Horse Manpower',
+      gender: body.gender || '',
+      qualification: body.education || body.qualification || '',
+      experience: body.totalExperience || body.experience || '',
+      relevantExperience: body.relevantExperience || '',
+      clientName: body.company || body.clientName || '',
+      skills: Array.isArray(body.skills) ? body.skills : (body.skills ? String(body.skills).split(',').map(s => s.trim()).filter(Boolean) : []),
+      currentCTC: body.ctc || body.currentCTC || '',
+      expectedCTC: body.ectc || body.expectedCTC || '',
+      noticePeriod: body.noticePeriod || '',
+      currentLocation: body.currentLocation || '',
+      preferredLocation: body.preferredLocation || '',
+      cibilScore: body.cibilScore || '',
+      panCardNumber: body.panCardNumber || '',
+      assignedRecruiter: req.user._id,
+      assignedRecruiterName: req.user.name,
+      isEligibleTracker: true,
+    };
+
+    if (!candidateData.phone) {
+      return res.status(400).json({ message: 'Contact / Phone number is required' });
+    }
+
+    if (!candidateData.jrNumber || !String(candidateData.jrNumber).trim()) {
+      return res.status(400).json({ message: 'Job Requirement (JR) is mandatory. Please select or provide a JR.' });
+    }
+
+    const candidate = await Candidate.create(candidateData);
+
+    await createLog({
+      type: 'create',
+      user: req.user._id,
+      userName: req.user.name,
+      role: req.user.role,
+      action: `Added eligible candidate ${candidate.name} via Eligible Tracker`,
+      target: candidate._id.toString(),
+      ip: req.ip,
+    }).catch(() => {});
+
+    const mapped = mapCandidateToEligibleRow(candidate, 0);
+    res.status(201).json({ success: true, candidate: mapped });
+  } catch (err) {
+    next(err);
+  }
+};
+

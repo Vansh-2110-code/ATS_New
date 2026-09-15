@@ -1,5 +1,6 @@
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
 const storage = multer.diskStorage({
@@ -96,11 +97,44 @@ const uploadJoining = multer({
   { name: 'highestDocument', maxCount: 1 },
   { name: 'marksheet', maxCount: 1 },
   { name: 'degreeCertificate', maxCount: 1 },
+  { name: 'bankProof', maxCount: 1 },
   { name: 'relievingLetter0', maxCount: 1 },
   { name: 'relievingLetter1', maxCount: 1 },
   { name: 'relievingLetter2', maxCount: 1 },
   { name: 'relievingLetter3', maxCount: 1 },
-  { name: 'relievingLetter4', maxCount: 1 },
 ]);
 
-module.exports = { uploadResume, uploadJD, uploadDoc, uploadImport, uploadJoining };
+// ── Internal Chat File Attachments (Images, PDFs, Word, Excel, CSV, etc.) ──
+const chatStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../../uploads/chat');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const sanitizedBase = path.basename(file.originalname, ext)
+      .replace(/[^a-zA-Z0-9_\-\.]/g, '_')
+      .slice(0, 50);
+    cb(null, `chat-${Date.now()}-${uuidv4().slice(0, 8)}-${sanitizedBase}${ext}`);
+  },
+});
+
+const chatFileFilter = (req, file, cb) => {
+  // Disallow hazardous executables/scripts for security
+  const blockedExts = ['.exe', '.bat', '.sh', '.bin', '.cmd', '.msi', '.vbs', '.js', '.jar', '.com'];
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (blockedExts.includes(ext)) {
+    return cb(new Error('Executable file extensions are not permitted for security reasons'), false);
+  }
+  cb(null, true);
+};
+
+const uploadChatAttachment = multer({
+  storage: chatStorage,
+  fileFilter: chatFileFilter,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max size
+});
+
+module.exports = { uploadResume, uploadJD, uploadDoc, uploadImport, uploadJoining, uploadChatAttachment };
+

@@ -59,9 +59,18 @@ exports.login = async (req, res, next) => {
     user.lastLogin = loginTime;
     await user.save();
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '24h',
-    });
+    const token = jwt.sign(
+      {
+        id: user._id,
+        role: user.role,
+        isWalkIn: user.role === 'walkin' || user.role === 'demo_walkin',
+        walkinId: user._id,
+      },
+      process.env.JWT_SECRET,
+      {
+        expiresIn: process.env.JWT_EXPIRES_IN || '24h',
+      }
+    );
 
     // Detect late login (after 09:30 on a working day)
     const localLoginTime = getKolkataDate(loginTime);
@@ -93,6 +102,8 @@ exports.login = async (req, res, next) => {
         avatar: user.avatar,
         faceDescriptor: user.faceDescriptor,
         disableBiometric: user.disableBiometric || false,
+        employeeId: user.employeeId,
+        isDemoAccount: user.isDemoAccount || false,
       },
     });
   } catch (err) {
@@ -238,6 +249,7 @@ exports.me = async (req, res, next) => {
         faceDescriptor: user.faceDescriptor,
         disableBiometric: user.disableBiometric || false,
         employeeId: user.employeeId,
+        isDemoAccount: user.isDemoAccount || false,
       }
     });
   } catch (err) {

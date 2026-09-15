@@ -122,6 +122,7 @@ const candidateSchema = new mongoose.Schema({
   isPriority: { type: Boolean, default: false },
   isDuplicate: { type: Boolean, default: false },
   duplicateOf: { type: mongoose.Schema.Types.ObjectId, ref: 'Candidate' },
+  isDemoData: { type: Boolean, default: false },
 
   // Ownership & 30-Day Validity
   ownershipStatus: { 
@@ -298,6 +299,19 @@ const candidateSchema = new mongoose.Schema({
   industry: { type: String, trim: true },
   companySize: { type: String, trim: true },
 
+  // ─── Eligible Tracker Fields ────────────────────────────────────
+  firstName: { type: String, trim: true },
+  lastName: { type: String, trim: true },
+  skillName: { type: String, trim: true },
+  jobLevel: { type: String, trim: true },
+  vendorSPOC: { type: String, trim: true },
+  companySPOC: { type: String, trim: true },
+  whiteHorseSource: { type: String, trim: true },
+  relevantExperience: { type: String, trim: true },
+  cibilScore: { type: String, trim: true },
+  panCardNumber: { type: String, trim: true },
+  isEligibleTracker: { type: Boolean, default: false },
+
   // ─── Import Tracking ────────────────────────────────────────────
   importedFrom: {
     type: String,
@@ -375,6 +389,30 @@ candidateSchema.pre('save', async function(next) {
     if (age >= 0) {
       this.candidateAge = age;
     }
+  }
+
+  // ─── Eligible Tracker Auto-sync ──────────────────────────────────
+  if (this.firstName || this.lastName) {
+    const full = [this.firstName, this.lastName].filter(Boolean).join(' ').trim();
+    if (full && !this.name) {
+      this.name = full;
+    }
+  } else if (this.name && (!this.firstName || !this.lastName)) {
+    const parts = (this.name || '').trim().split(/\s+/);
+    if (!this.firstName) this.firstName = parts[0] || '';
+    if (!this.lastName) this.lastName = parts.slice(1).join(' ') || '';
+  }
+
+  if (!this.skillName) {
+    if (this.positionApplied) {
+      this.skillName = this.positionApplied;
+    } else if (Array.isArray(this.skills) && this.skills.length > 0) {
+      this.skillName = this.skills[0];
+    }
+  }
+
+  if (!this.whiteHorseSource && this.source) {
+    this.whiteHorseSource = this.source;
   }
 
   // Automatic workflow movement

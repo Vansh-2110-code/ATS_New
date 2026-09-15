@@ -118,11 +118,8 @@ const getDateRange = (range, customStart, customEnd) => {
       end.setDate(end.getDate() + 1);
       break;
     case 'week':
-      start = new Date(now);
-      start.setDate(now.getDate() - now.getDay());
-      start.setHours(0, 0, 0, 0);
-      end = new Date(start);
-      end.setDate(end.getDate() + 7);
+      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7);
+      end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
       break;
     case 'month':
       start = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -140,11 +137,24 @@ const getDateRange = (range, customStart, customEnd) => {
     case 'custom':
       start = customStart ? new Date(customStart) : new Date(now.getFullYear(), now.getMonth(), 1);
       end = customEnd ? new Date(customEnd) : new Date();
+      if (isNaN(start.getTime())) start = new Date(now.getFullYear(), 0, 1);
+      if (isNaN(end.getTime())) end = new Date();
+      if (start > end) {
+        const temp = start;
+        start = end;
+        end = temp;
+      }
       end.setDate(end.getDate() + 1);
       break;
     default: // 'all'
       start = new Date(2020, 0, 1);
       end = new Date(2030, 0, 1);
+  }
+
+  if (start > end) {
+    const temp = start;
+    start = end;
+    end = temp;
   }
 
   return { start, end };

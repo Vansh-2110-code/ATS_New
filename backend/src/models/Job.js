@@ -20,6 +20,7 @@ const jobSchema = new mongoose.Schema({
   priority: { type: String, enum: JOB_PRIORITIES, default: 'Medium' },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   division: { type: String, enum: ['IT', 'BPO', 'Lateral'], default: 'BPO' },
+  isDemoData: { type: Boolean, default: false },
 
   portfolioDepartment: { type: String, enum: ['BPO', 'ITES', 'IT', 'Non-IT', 'Healthcare', 'Sales', 'Finance'], default: 'BPO' },
   client: { type: String, trim: true },
