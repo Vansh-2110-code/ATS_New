@@ -212,6 +212,49 @@ export function CandidateProfilePage() {
   const [revenueGenerated, setRevenueGenerated] = useState<number>(0);
   const [savingJoining, setSavingJoining] = useState(false);
 
+  // ── Tag to New JR Modal State ──
+  const [tagJrModalOpen, setTagJrModalOpen] = useState(false);
+  const [openJobsList, setOpenJobsList] = useState<any[]>([]);
+  const [selectedJrNumber, setSelectedJrNumber] = useState('');
+  const [tagJrNotes, setTagJrNotes] = useState('');
+  const [taggingJr, setTaggingJr] = useState(false);
+  const [tagJrError, setTagJrError] = useState('');
+
+  const handleOpenTagJrModal = async () => {
+    setSelectedJrNumber('');
+    setTagJrNotes('');
+    setTagJrError('');
+    setTagJrModalOpen(true);
+    try {
+      const res = await api.getJobs({ status: 'Open', limit: '500' });
+      const jobs = res.jobs || (Array.isArray(res) ? res : []);
+      setOpenJobsList(jobs);
+    } catch (err) {
+      console.error('Failed to load open jobs:', err);
+    }
+  };
+
+  const handleTagJrSubmit = async () => {
+    if (!selectedJrNumber || !candidate) return;
+    try {
+      setTaggingJr(true);
+      setTagJrError('');
+      const res = await api.tagCandidateToNewJr(candidate._id, {
+        newJrNumber: selectedJrNumber,
+        notes: tagJrNotes,
+      });
+      setTagJrModalOpen(false);
+      if (res.candidate) {
+        setCandidate(res.candidate);
+        setStatus(res.candidate.status || 'Eligible');
+      }
+    } catch (err: any) {
+      setTagJrError(err.message || 'Failed to tag candidate to new JR');
+    } finally {
+      setTaggingJr(false);
+    }
+  };
+
   useEffect(() => {
     if (!id) return;
     const fetchData = async () => {
@@ -885,6 +928,62 @@ export function CandidateProfilePage() {
                 </div>
               </div>
             </div>
+
+            {/* ── Permanent Original JR Heritage Banner ── */}
+            {candidate.originalJrNumber && (
+              <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-amber-50/90 via-orange-50/60 to-amber-50/90 border border-amber-200/90 text-xs text-amber-900 shadow-sm">
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🏷️</span>
+                    <div>
+                      <span className="font-bold text-sm text-slate-800">Original Job Requisition: {candidate.originalJrNumber}</span>
+                      {candidate.originalJobTitle && <span className="text-slate-600 font-medium ml-1.5">({candidate.originalJobTitle})</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded bg-green-100 text-green-800 font-bold text-[11px] border border-green-200">
+                      Screened: Eligible
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleOpenTagJrModal}
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <Tag className="w-3.5 h-3.5" />
+                      Assign to New JR
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-2 border-t border-amber-200/60 text-slate-700">
+                  <div>
+                    <span className="text-slate-400">Original Client:</span>{' '}
+                    <strong>{candidate.originalClientName || candidate.clientName || 'N/A'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Screened On:</span>{' '}
+                    <strong>{candidate.originalScreenedAt ? new Date(candidate.originalScreenedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Screened'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">General Pool Availability:</span>{' '}
+                    <strong className="text-amber-800">
+                      {candidate.ownershipStatus === 'General Data' || !candidate.availableInGeneralPoolAfter || new Date() >= new Date(candidate.availableInGeneralPoolAfter)
+                        ? 'Available for new JRs (Fast-Tracked)'
+                        : `Lock Active (${Math.max(0, Math.ceil((new Date(candidate.availableInGeneralPoolAfter).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days remaining)`}
+                    </strong>
+                  </div>
+                </div>
+                {candidate.tlRejectionReason && (
+                  <div className="mt-2 text-slate-600 bg-white/70 p-2 rounded border border-amber-200/40 flex items-center justify-between">
+                    <div>
+                      <span className="font-semibold text-slate-700">Team Leader Review:</span> {candidate.tlRejectionReason}
+                      {candidate.tlRejectedAt && <span className="text-slate-400 ml-1">({new Date(candidate.tlRejectedAt).toLocaleDateString('en-IN')})</span>}
+                    </div>
+                    <span className="text-[10px] text-amber-700 font-medium">30-Day Auto Release to General Pool</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-3 gap-4 text-sm">
               <div><p className="text-slate-400 text-xs mb-1">Client / Company</p><p className="text-blue-600 font-semibold">{candidate.clientName || candidate.company || candidate.companyName || candidate.client || 'N/A'}</p></div>
               <div><p className="text-slate-400 text-xs mb-1">JR Number</p><p className="text-slate-700 font-mono" style={{ fontWeight: 500 }}>{candidate.jrNumber || 'N/A'}</p></div>
@@ -1510,6 +1609,51 @@ export function CandidateProfilePage() {
             </div>
           )}
 
+          {/* ── Permanent Job Requisition History & Audit Trail ── */}
+          {candidate.jrHistory && candidate.jrHistory.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-amber-600" />
+                  <h2 className="text-slate-800 text-sm" style={{ fontWeight: 600 }}>Job Requisition History (Audit Trail)</h2>
+                </div>
+                <span className="text-[11px] text-slate-400 italic">
+                  Permanent record — retained even if JR is closed or deleted
+                </span>
+              </div>
+              <div className="space-y-3">
+                {[...candidate.jrHistory].reverse().map((jh: any, idx: number) => (
+                  <div key={idx} className="p-3 bg-slate-50/80 rounded-xl border border-slate-100 text-xs space-y-1">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">
+                        {jh.jrNumber}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-700">
+                        {jh.screeningStatus || 'Screened'}
+                      </span>
+                      {jh.tlDecision && (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${jh.tlDecision === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                          TL: {jh.tlDecision}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 pt-1 text-slate-600">
+                      <div><span className="text-slate-400">Role:</span> {jh.jobTitle || 'N/A'}</div>
+                      <div><span className="text-slate-400">Client:</span> {jh.clientName || 'N/A'}</div>
+                      <div><span className="text-slate-400">Recruiter:</span> {jh.assignedRecruiterName || 'Unassigned'}</div>
+                    </div>
+                    {jh.tlNotes && (
+                      <p className="text-slate-500 pt-0.5"><span className="text-slate-400">TL Notes:</span> {jh.tlNotes}</p>
+                    )}
+                    {jh.notes && (
+                      <p className="text-slate-400 text-[11px] pt-0.5 italic">{jh.notes}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Stage History (Admin / TL) */}
           {isTLOrAdmin && candidate.stageHistory && candidate.stageHistory.length > 0 && (
             <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-6">
@@ -2102,6 +2246,105 @@ export function CandidateProfilePage() {
                   Confirm Joining
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Tag Candidate to New JR Modal ── */}
+      {tagJrModalOpen && candidate && (
+        <div className="fixed inset-0 bg-slate-950/45 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Tag className="w-5 h-5 text-amber-600" />
+                <div>
+                  <h3 className="text-slate-800" style={{ fontWeight: 700 }}>Tag to New Job Requisition</h3>
+                  <p className="text-slate-500 text-xs mt-0.5">Assign candidate to new JR while permanently retaining original screening</p>
+                </div>
+              </div>
+              <button onClick={() => setTagJrModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-sm text-slate-800">{candidate.name}</p>
+                  <span className="text-[11px] px-2 py-0.5 bg-green-100 text-green-800 font-semibold rounded">
+                    Screened: Eligible
+                  </span>
+                </div>
+                {candidate.originalJrNumber && (
+                  <p className="text-amber-800 font-medium">
+                    🏷️ Original JR: <strong>{candidate.originalJrNumber}</strong> {candidate.originalJobTitle ? `(${candidate.originalJobTitle})` : ''}
+                  </p>
+                )}
+                <p className="text-slate-600">
+                  Current JR: <strong className="text-slate-700">{candidate.jrNumber || 'None'}</strong> · Client: <strong className="text-slate-700">{candidate.clientName || 'N/A'}</strong>
+                </p>
+                <div className="mt-2 pt-2 border-t border-amber-200/60 text-[11px] text-amber-800">
+                  ✨ <strong>Audit Guarantee:</strong> The candidate will retain original JR reference and complete screening history permanently even if previous JRs are deleted or closed.
+                </div>
+              </div>
+
+              {tagJrError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
+                  {tagJrError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">Select Active Job Requisition (JR) *</label>
+                <select
+                  value={selectedJrNumber}
+                  onChange={e => setSelectedJrNumber(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:border-amber-500 font-medium text-slate-800"
+                >
+                  <option value="">— Choose Open Job Requirement —</option>
+                  {openJobsList.map((j: any) => (
+                    <option key={j._id || j.jrNumber} value={j.jrNumber}>
+                      {j.jrNumber} — {j.jobTitle} ({j.companyName || j.client || 'Client'}) [{j.division || 'BPO'}]
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">Notes / Re-tagging Justification (Optional)</label>
+                <textarea
+                  rows={2}
+                  value={tagJrNotes}
+                  onChange={e => setTagJrNotes(e.target.value)}
+                  placeholder="e.g., Fast-tracking from general pool for new client requirement..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-amber-500 bg-slate-50 resize-none"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-2 justify-end flex-shrink-0">
+              <button
+                disabled={taggingJr}
+                onClick={() => setTagJrModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={taggingJr || !selectedJrNumber}
+                onClick={handleTagJrSubmit}
+                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {taggingJr ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    Tagging...
+                  </>
+                ) : (
+                  <>
+                    <Tag className="w-4 h-4" />
+                    Tag to JR & Fast-Track
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

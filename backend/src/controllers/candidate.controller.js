@@ -109,6 +109,9 @@ exports.list = async (req, res, next) => {
         { resumeOriginalName: { $regex: search, $options: 'i' } },
         { positionApplied: { $regex: search, $options: 'i' } },
         { assignedRecruiterName: { $regex: search, $options: 'i' } },
+        { jrNumber: { $regex: search, $options: 'i' } },
+        { originalJrNumber: { $regex: search, $options: 'i' } },
+        { originalJobTitle: { $regex: search, $options: 'i' } },
       ];
     }
     if (source) query.source = source;
@@ -188,6 +191,38 @@ exports.list = async (req, res, next) => {
     if (req.query.tlFollowUpRequired === 'true') {
       query.firstCallStatus = 'Eligible';
       query.tlCallSubmitted = false;
+    }
+
+    // General Pool filter: Candidates available for re-assignment
+    if (req.query.generalPool === 'true') {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const poolCond = [
+        { ownershipStatus: 'General Data' },
+        { ownershipStatus: 'Unassigned' },
+        { ownershipStatus: 'Expired' },
+        { availableInGeneralPoolAfter: { $lte: new Date() } },
+        { tlRejectedAt: { $lte: thirtyDaysAgo } }
+      ];
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: poolCond }];
+        delete query.$or;
+      } else {
+        query.$or = poolCond;
+      }
+    }
+
+    // Previously Screened filter: Candidates screened under a prior JR
+    if (req.query.previouslyScreened === 'true') {
+      const screenedCond = [
+        { isPreviouslyScreened: true },
+        { originalJrNumber: { $exists: true, $ne: '' } }
+      ];
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, { $or: screenedCond }];
+        delete query.$or;
+      } else {
+        query.$or = screenedCond;
+      }
     }
 
     if (fromDate || toDate || req.query.range || req.query.dateRange) {
@@ -417,8 +452,9 @@ exports.getById = async (req, res, next) => {
     const lastActivity = candidate.assignedAt || candidate.createdAt;
     const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
     const isExpired = daysSinceAssignment >= 30 || candidate.ownershipStatus === 'Expired';
+    const isTlRejected30Days = candidate.tlRejectedAt && (Date.now() - new Date(candidate.tlRejectedAt).getTime() >= 30 * 24 * 60 * 60 * 1000);
 
-    if (daysSinceAssignment >= 30 && candidate.ownershipStatus !== 'General Data') {
+    if ((daysSinceAssignment >= 30 || isTlRejected30Days) && candidate.ownershipStatus !== 'General Data') {
       candidate.ownershipStatus = 'General Data';
       candidate.assignedRecruiter = undefined;
       candidate.assignedRecruiterName = 'Unassigned';
@@ -652,6 +688,25 @@ exports.create = async (req, res, next) => {
           return res.status(403).json({ message: 'All positions for this JR are already filled' });
         }
       }
+
+      // Permanent Original JR Heritage Initialization
+      data.originalJrNumber = data.jrNumber;
+      data.originalJobTitle = data.positionApplied || (job ? job.jobTitle : '') || '';
+      data.originalClientName = data.clientName || (job ? job.companyName : '') || '';
+      data.originalScreenedAt = new Date();
+      data.originalScreenerStatus = 'Eligible';
+      data.isPreviouslyScreened = true;
+      data.jrHistory = [{
+        jrNumber: data.jrNumber,
+        jobTitle: data.originalJobTitle,
+        clientName: data.originalClientName,
+        screenedAt: new Date(),
+        screeningStatus: 'Eligible',
+        assignedRecruiter: req.user._id,
+        assignedRecruiterName: req.user.name,
+        assignedAt: new Date(),
+        notes: 'Initial JR assignment & screening',
+      }];
     }
 
     const candidate = await Candidate.create(data);
@@ -909,6 +964,55 @@ if (typeof data.skills === 'string') {
             return res.status(403).json({ message: 'All positions for this JR are already filled' });
           }
         }
+
+        // Archive prior JR to jrHistory and permanently preserve originalJrNumber
+        if (!existing.originalJrNumber && existing.jrNumber) {
+          existing.originalJrNumber = existing.jrNumber;
+          existing.originalJobTitle = existing.positionApplied || '';
+          existing.originalClientName = existing.clientName || '';
+          existing.originalScreenedAt = existing.createdAt;
+        }
+        if (!data.jrHistory) data.jrHistory = existing.jrHistory || [];
+        data.jrHistory.push({
+          jrNumber: existing.jrNumber || existing.originalJrNumber || 'N/A',
+          jobTitle: existing.positionApplied || existing.originalJobTitle || '',
+          clientName: existing.clientName || existing.originalClientName || '',
+          screenedAt: existing.originalScreenedAt || existing.createdAt,
+          screeningStatus: existing.status || 'Eligible',
+          tlDecision: existing.secondCallStatus || existing.finalInterviewStatus || (existing.tlRejectedAt ? 'Rejected' : 'Completed'),
+          tlNotes: existing.secondCallNotes || existing.tlRejectionReason || '',
+          tlDecidedAt: existing.tlRejectedAt,
+          tlDecidedByName: existing.tlRejectedByName,
+          assignedRecruiter: existing.assignedRecruiter,
+          assignedRecruiterName: existing.assignedRecruiterName,
+          assignedAt: existing.assignedAt,
+          notes: `Re-assigned to new JR ${data.jrNumber}`
+        });
+
+        // Ensure original JR heritage is preserved forever
+        data.originalJrNumber = existing.originalJrNumber || existing.jrNumber;
+        data.originalJobTitle = existing.originalJobTitle || existing.positionApplied;
+        data.originalClientName = existing.originalClientName || existing.clientName;
+        data.originalScreenedAt = existing.originalScreenedAt || existing.createdAt;
+        data.isPreviouslyScreened = true;
+      }
+    }
+
+    // Capture TL Rejection timestamps if TL updates status/interview
+    if (['tl', 'admin', 'manager'].includes(req.user.role)) {
+      if (data.secondCallStatus && isRejectionStatus(data.secondCallStatus)) {
+        data.tlRejectedAt = new Date();
+        data.tlRejectedBy = req.user._id;
+        data.tlRejectedByName = req.user.name;
+        data.tlRejectionReason = data.secondCallNotes || data.secondCallStatus;
+        data.availableInGeneralPoolAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      }
+      if (data.finalInterviewStatus === 'Rejected' || (data.finalRoundStatus && isRejectionStatus(data.finalRoundStatus))) {
+        data.tlRejectedAt = new Date();
+        data.tlRejectedBy = req.user._id;
+        data.tlRejectedByName = req.user.name;
+        data.tlRejectionReason = data.finalRoundStatus || 'Final Round Rejected';
+        data.availableInGeneralPoolAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       }
     }
 
@@ -1109,6 +1213,42 @@ exports.updateStatus = async (req, res, next) => {
     if (isRejectionStatus(status)) {
       candidate.ownershipStatus = 'Expired';
       candidate.assignedAt = new Date(0);
+
+      // Track TL Rejection and 30-Day General Pool release
+      if (['tl', 'admin', 'manager'].includes(req.user.role)) {
+        candidate.tlRejectedAt = new Date();
+        candidate.tlRejectedBy = req.user._id;
+        candidate.tlRejectedByName = req.user.name;
+        candidate.tlRejectionReason = req.body.rejectionReason || status;
+        candidate.availableInGeneralPoolAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+        if (!candidate.jrHistory) candidate.jrHistory = [];
+        const curJr = candidate.jrNumber || candidate.originalJrNumber || 'N/A';
+        const existingJrEntry = candidate.jrHistory.find(h => h.jrNumber === curJr);
+        if (existingJrEntry) {
+          existingJrEntry.tlDecision = 'Rejected';
+          existingJrEntry.tlNotes = req.body.rejectionReason || status;
+          existingJrEntry.tlDecidedAt = new Date();
+          existingJrEntry.tlDecidedByName = req.user.name;
+        } else {
+          candidate.jrHistory.push({
+            jrNumber: curJr,
+            jobTitle: candidate.positionApplied || candidate.originalJobTitle || '',
+            clientName: candidate.clientName || candidate.originalClientName || '',
+            screenedAt: candidate.originalScreenedAt || candidate.createdAt,
+            screeningStatus: 'Eligible',
+            tlDecision: 'Rejected',
+            tlNotes: req.body.rejectionReason || status,
+            tlDecidedAt: new Date(),
+            tlDecidedByName: req.user.name,
+            assignedRecruiter: candidate.assignedRecruiter,
+            assignedRecruiterName: candidate.assignedRecruiterName,
+            assignedAt: candidate.assignedAt,
+            movedToGeneralPoolAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            notes: `Rejected with status "${status}". Becomes available in General Pool after 30 days.`
+          });
+        }
+      }
     }
     if (req.body.expectedDateOfJoining) {
       candidate.expectedDateOfJoining = new Date(req.body.expectedDateOfJoining);
@@ -1339,6 +1479,38 @@ exports.secondCallSubmit = async (req, res, next) => {
     if (secondCallStatus && isRejectionStatus(secondCallStatus)) {
       candidate.ownershipStatus = 'Expired';
       candidate.assignedAt = new Date(0);
+      candidate.tlRejectedAt = new Date();
+      candidate.tlRejectedBy = req.user._id;
+      candidate.tlRejectedByName = req.user.name;
+      candidate.tlRejectionReason = secondCallNotes || secondCallStatus;
+      candidate.availableInGeneralPoolAfter = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      if (!candidate.jrHistory) candidate.jrHistory = [];
+      const curJr = candidate.jrNumber || candidate.originalJrNumber || 'N/A';
+      const existingJrEntry = candidate.jrHistory.find(h => h.jrNumber === curJr);
+      if (existingJrEntry) {
+        existingJrEntry.tlDecision = 'Rejected';
+        existingJrEntry.tlNotes = secondCallNotes || secondCallStatus;
+        existingJrEntry.tlDecidedAt = new Date();
+        existingJrEntry.tlDecidedByName = req.user.name;
+      } else {
+        candidate.jrHistory.push({
+          jrNumber: curJr,
+          jobTitle: candidate.positionApplied || candidate.originalJobTitle || '',
+          clientName: candidate.clientName || candidate.originalClientName || '',
+          screenedAt: candidate.originalScreenedAt || candidate.createdAt,
+          screeningStatus: 'Eligible',
+          tlDecision: 'Rejected',
+          tlNotes: secondCallNotes || secondCallStatus,
+          tlDecidedAt: new Date(),
+          tlDecidedByName: req.user.name,
+          assignedRecruiter: candidate.assignedRecruiter,
+          assignedRecruiterName: candidate.assignedRecruiterName,
+          assignedAt: candidate.assignedAt,
+          movedToGeneralPoolAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          notes: 'TL rejected candidate on second call. Eligible for General Pool in 30 days.'
+        });
+      }
     }
 
     // Preserve stage history
@@ -3205,6 +3377,145 @@ exports.createEligibleCandidate = async (req, res, next) => {
 
     const mapped = mapCandidateToEligibleRow(candidate, 0);
     res.status(201).json({ success: true, candidate: mapped });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// ─── POST /api/candidates/:id/tag-new-jr ─────────────────────────
+// Allows tagging a candidate from General Pool to a new JR without repeating full screening
+exports.tagNewJr = async (req, res, next) => {
+  try {
+    const { newJrNumber, notes } = req.body;
+    if (!newJrNumber || !String(newJrNumber).trim()) {
+      return res.status(400).json({ message: 'newJrNumber is required' });
+    }
+
+    const candidate = await Candidate.findById(req.params.id);
+    if (!candidate) return res.status(404).json({ message: 'Candidate not found' });
+
+    const Job = require('../models/Job');
+    const job = await Job.findOne({ jrNumber: newJrNumber.trim() });
+    if (!job) {
+      return res.status(404).json({ message: `Job Requisition "${newJrNumber}" not found` });
+    }
+    if (job.status === 'Closed') {
+      return res.status(403).json({ message: `Job Requisition "${newJrNumber}" is already closed` });
+    }
+
+    // Check positions filled
+    const joinedCount = await Candidate.countDocuments({ jrNumber: job.jrNumber, status: 'Joined' });
+    if (joinedCount >= (job.positions || 1)) {
+      return res.status(403).json({ message: `All positions for JR "${newJrNumber}" are already filled` });
+    }
+
+    // Verify availability: must be admin/tl/manager OR in General Data/Expired/>30 days
+    const is30DaysElapsed = candidate.availableInGeneralPoolAfter && new Date() >= new Date(candidate.availableInGeneralPoolAfter);
+    const isGeneralPool = candidate.ownershipStatus === 'General Data' || 
+                          candidate.ownershipStatus === 'Unassigned' ||
+                          candidate.ownershipStatus === 'Expired' ||
+                          is30DaysElapsed;
+    
+    if (req.user.role === 'recruiter' && !isGeneralPool && candidate.assignedRecruiter && String(candidate.assignedRecruiter) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Candidate is currently locked to another recruiter and has not completed the 30-day release period.' });
+    }
+
+    // Archive current assignment into jrHistory before moving
+    if (!candidate.jrHistory) candidate.jrHistory = [];
+    const prevJr = candidate.jrNumber || candidate.originalJrNumber || 'N/A';
+    
+    candidate.jrHistory.push({
+      jrNumber: prevJr,
+      jobTitle: candidate.positionApplied || candidate.originalJobTitle || '',
+      clientName: candidate.clientName || candidate.originalClientName || '',
+      screenedAt: candidate.originalScreenedAt || candidate.createdAt,
+      screeningStatus: candidate.status || 'Eligible',
+      tlDecision: candidate.secondCallStatus || candidate.finalInterviewStatus || (candidate.tlRejectedAt ? 'Rejected' : 'Completed'),
+      tlNotes: candidate.secondCallNotes || candidate.tlRejectionReason || '',
+      tlDecidedAt: candidate.tlRejectedAt || undefined,
+      tlDecidedByName: candidate.tlRejectedByName || '',
+      assignedRecruiter: candidate.assignedRecruiter,
+      assignedRecruiterName: candidate.assignedRecruiterName,
+      assignedAt: candidate.assignedAt,
+      movedToGeneralPoolAt: candidate.tlRejectedAt ? new Date(new Date(candidate.tlRejectedAt).getTime() + 30 * 24 * 60 * 60 * 1000) : new Date(),
+      notes: `Archived prior to re-tagging to ${job.jrNumber}. ${notes || ''}`
+    });
+
+    // PERMANENT JR HERITAGE:
+    // Ensure originalJrNumber is preserved and NEVER overwritten
+    if (!candidate.originalJrNumber && candidate.jrNumber) {
+      candidate.originalJrNumber = candidate.jrNumber;
+      candidate.originalJobTitle = candidate.positionApplied || '';
+      candidate.originalClientName = candidate.clientName || '';
+      candidate.originalScreenedAt = candidate.originalScreenedAt || candidate.createdAt;
+    }
+
+    // Apply new JR
+    candidate.jrNumber = job.jrNumber;
+    candidate.clientName = job.companyName || candidate.clientName;
+    candidate.company = job.companyName || candidate.company;
+    candidate.positionApplied = job.jobTitle || candidate.positionApplied;
+    candidate.division = job.division || candidate.division || 'BPO';
+
+    // Assign to current user (recruiter)
+    candidate.assignedRecruiter = req.user._id;
+    candidate.assignedRecruiterName = cleanRecruiterName(req.user.name);
+    candidate.assignedAt = new Date();
+    candidate.ownershipStatus = 'Assigned';
+
+    // Candidate was previously screened and marked Eligible:
+    // Fast-track them: status is Eligible for the new JR without repeating complete initial screening!
+    candidate.status = 'Eligible';
+    candidate.currentStage = 'Screening';
+    candidate.isPreviouslyScreened = true;
+    
+    // Reset round-specific sub-statuses for fresh evaluation under new JR
+    candidate.tlCallSubmitted = false;
+    candidate.secondCallStatus = undefined;
+    candidate.secondCallNotes = undefined;
+    candidate.secondCallDate = undefined;
+    candidate.tlRejectedAt = undefined;
+    candidate.availableInGeneralPoolAfter = undefined;
+    candidate.interviewStatus = undefined;
+    candidate.finalRoundStatus = undefined;
+    candidate.finalInterviewStatus = undefined;
+    candidate.finalInterviewLocked = false;
+
+    // Push new assignment to jrHistory
+    candidate.jrHistory.push({
+      jrNumber: job.jrNumber,
+      jobTitle: job.jobTitle,
+      clientName: job.companyName,
+      screenedAt: new Date(),
+      screeningStatus: 'Eligible (Fast-Tracked from ' + (candidate.originalJrNumber || prevJr) + ')',
+      assignedRecruiter: req.user._id,
+      assignedRecruiterName: req.user.name,
+      assignedAt: new Date(),
+      notes: `Re-tagged to new JR ${job.jrNumber}. Preserved original screening from ${candidate.originalJrNumber || prevJr}. ${notes || ''}`
+    });
+
+    candidate.stageHistory.push({
+      stage: 'Screening',
+      subStatus: `Tagged to new JR ${job.jrNumber} (Previously screened under ${candidate.originalJrNumber || prevJr})`,
+      changedAt: new Date(),
+      changedBy: req.user._id,
+      notes: notes || 'Assigned to new JR from General Pool',
+    });
+
+    await candidate.save();
+
+    await createLog({
+      type: 'edit', user: req.user._id, userName: req.user.name,
+      role: req.user.role,
+      action: `Tagged candidate ${candidate.name} to new JR ${job.jrNumber} (Original: ${candidate.originalJrNumber || prevJr})`,
+      target: candidate._id.toString(), ip: req.ip,
+    });
+
+    res.json({
+      success: true,
+      message: `Candidate successfully tagged to new JR ${job.jrNumber} with original screening history preserved.`,
+      candidate
+    });
   } catch (err) {
     next(err);
   }

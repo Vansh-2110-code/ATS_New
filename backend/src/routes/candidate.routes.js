@@ -32,9 +32,25 @@ router.put('/:id/second-call', authorize('tl', 'admin'), ctrl.secondCallSubmit);
 router.post('/:id/reassign', authorize('admin', 'tl', 'manager'), ctrl.reassign);
 router.post('/:id/mark-duplicate', authorize('admin'), ctrl.markDuplicate);
 router.post('/:id/request-reassign', authorize('recruiter', 'tl', 'manager'), ctrl.requestReassign);
+router.post('/:id/tag-new-jr', authorize('recruiter', 'tl', 'admin', 'manager'), ctrl.tagNewJr);
 router.post('/:id/documents', authorize('admin'), uploadDoc.single('file'), ctrl.uploadDocument);
 router.patch('/:id/documents/:docId/status', authorize('admin'), ctrl.updateDocumentStatus);
 router.delete('/:id/documents/:docId', authorize('admin'), ctrl.deleteDocument);
+
+// ─── Company Policy: Candidate Deletion Block ────────────────────
+// "No one can delete the data even 1 number duplicate or wrong number."
+router.delete('/:id', (req, res) => {
+  return res.status(403).json({
+    success: false,
+    message: 'Candidate records cannot be deleted per company policy, even for duplicate or wrong numbers.'
+  });
+});
+router.delete('/', (req, res) => {
+  return res.status(403).json({
+    success: false,
+    message: 'Candidate records cannot be deleted per company policy, even for duplicate or wrong numbers.'
+  });
+});
 
 // ─── Comprehensive Joining Form ───
 router.get('/joining-form/autofill', authorize('recruiter', 'tl', 'admin'), ctrl.getJoiningFormAutoFillData);

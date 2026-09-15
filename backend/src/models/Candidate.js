@@ -186,6 +186,40 @@ const candidateSchema = new mongoose.Schema({
   sourcedBy: { type: String },
   sourceStatus: { type: String, enum: ['Active', 'Non-Active'], default: 'Active' },
 
+  // ─── Permanent Original JR Heritage & Tracking (Never Cleared/Removed) ───
+  originalJrNumber: { type: String, trim: true, index: true },
+  originalJobTitle: { type: String, trim: true },
+  originalClientName: { type: String, trim: true },
+  originalScreenedAt: { type: Date },
+  originalScreenerStatus: { type: String, default: 'Eligible' },
+  isPreviouslyScreened: { type: Boolean, default: false },
+
+  // Team Leader Rejection Tracking & 30-Day General Pool
+  tlRejectedAt: { type: Date },
+  tlRejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  tlRejectedByName: { type: String },
+  tlRejectionReason: { type: String },
+  availableInGeneralPoolAfter: { type: Date },
+
+  // Immutable JR History Audit Trail
+  jrHistory: [{
+    jrNumber: { type: String, trim: true },
+    jobTitle: { type: String, trim: true },
+    clientName: { type: String, trim: true },
+    screenedAt: { type: Date },
+    screeningStatus: { type: String },
+    tlDecision: { type: String },
+    tlNotes: { type: String },
+    tlDecidedAt: { type: Date },
+    tlDecidedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    tlDecidedByName: { type: String },
+    assignedRecruiter: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    assignedRecruiterName: { type: String },
+    assignedAt: { type: Date },
+    movedToGeneralPoolAt: { type: Date },
+    notes: { type: String },
+  }],
+
   // Recruiter assignment change tracking
   recruiterChangedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   recruiterChangedAt: { type: Date },
@@ -424,6 +458,45 @@ candidateSchema.pre('save', async function(next) {
     else if (['Joined', 'Joining', 'Yet To Join', 'Joining Date Confirmed', 'Joining Postponed'].includes(s)) this.currentStage = 'Joining';
   }
 
+  // ─── Permanent Original JR Tagging & History ───────────────────
+  if (this.jrNumber && !this.originalJrNumber) {
+    this.originalJrNumber = this.jrNumber;
+    if (this.positionApplied && !this.originalJobTitle) this.originalJobTitle = this.positionApplied;
+    if (this.clientName && !this.originalClientName) this.originalClientName = this.clientName;
+  }
+
+  const isEligibleNow = this.status === 'Eligible' || 
+                        this.status === 'Eligible Candidates' || 
+                        this.firstCallStatus === 'Eligible' || 
+                        this.screenerStatus === 'Eligible';
+
+  if (isEligibleNow) {
+    this.isPreviouslyScreened = true;
+    if (!this.originalScreenedAt) {
+      this.originalScreenedAt = new Date();
+    }
+  }
+
+  // Ensure initial entry in jrHistory if empty and jrNumber exists
+  if (this.jrNumber && (!this.jrHistory || this.jrHistory.length === 0)) {
+    this.jrHistory = [{
+      jrNumber: this.jrNumber,
+      jobTitle: this.positionApplied || this.originalJobTitle || '',
+      clientName: this.clientName || this.originalClientName || '',
+      screenedAt: this.originalScreenedAt || new Date(),
+      screeningStatus: isEligibleNow ? 'Eligible' : (this.status || 'New'),
+      assignedRecruiter: this.assignedRecruiter,
+      assignedRecruiterName: this.assignedRecruiterName,
+      assignedAt: this.assignedAt || new Date(),
+      notes: 'Initial JR assignment',
+    }];
+  }
+
+  // Automatic 30-Day General Pool availability calculation
+  if (this.tlRejectedAt && !this.availableInGeneralPoolAfter) {
+    this.availableInGeneralPoolAfter = new Date(new Date(this.tlRejectedAt).getTime() + 30 * 24 * 60 * 60 * 1000);
+  }
+
   next();
 });
 
@@ -534,5 +607,21 @@ candidateSchema.statics.POST_OFFER_STATUSES = POST_OFFER_STATUSES;
 candidateSchema.statics.INTERVIEW_TYPES = INTERVIEW_TYPES_ENUM;
 candidateSchema.statics.SECOND_CALL_STATUSES = SECOND_CALL_STATUSES;
 candidateSchema.statics.DOCUMENT_TYPES = DOCUMENT_TYPES;
+// ─── Company Policy: Strict Deletion Prevention ───────────────────
+// "No one can delete the data even 1 number duplicate or wrong number."
+const DELETION_BLOCKED_ERR = 'Candidate records cannot be deleted per company policy, even for duplicate or wrong numbers.';
+
+candidateSchema.pre('deleteOne', function(next) {
+  return next(new Error(DELETION_BLOCKED_ERR));
+});
+candidateSchema.pre('deleteMany', function(next) {
+  return next(new Error(DELETION_BLOCKED_ERR));
+});
+candidateSchema.pre('findOneAndDelete', function(next) {
+  return next(new Error(DELETION_BLOCKED_ERR));
+});
+candidateSchema.pre('findByIdAndDelete', function(next) {
+  return next(new Error(DELETION_BLOCKED_ERR));
+});
 
 module.exports = mongoose.model('Candidate', candidateSchema);

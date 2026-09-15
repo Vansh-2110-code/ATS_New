@@ -1006,6 +1006,13 @@ class ApiService {
     });
   }
 
+  async tagCandidateToNewJr(id: string, data: { newJrNumber: string; notes?: string }) {
+    return this.request<any>(`/candidates/${id}/tag-new-jr`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async uploadCandidateDocument(id: string, formData: FormData) {
     return this.request<any>(`/candidates/${id}/documents`, {
       method: 'POST',
