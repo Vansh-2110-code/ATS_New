@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useParams } from 'react-router';
 import {
-  ArrowLeft, Phone, Mail, Briefcase, MapPin, Clock, CheckCircle2, XCircle,
+  ArrowLeft, Phone, Mail, Briefcase, MapPin, Clock, CheckCircle, CheckCircle2, XCircle,
   Calendar, FileText, ScanLine, Loader2, Send, ChevronDown, ChevronUp,
   Lock, Shield, AlertTriangle, Upload, Trash2, Eye, Download,
   UserCheck, RefreshCw, FileCheck, Tag, ClipboardList, Zap, Save, X, Edit3, FileSignature,
@@ -182,8 +182,18 @@ export function CandidateProfilePage() {
   const isOwner = (assignedId && currentUserId && assignedId === currentUserId) ||
                   (assignedName && currentUserName && assignedName === currentUserName);
 
-  const isAssignedToOther = isRecruiter && Boolean(assignedId || assignedName) && !isOwner;
-  const isLockedForOtherRecruiter = isAssignedToOther && !isUnlockedStatus && !isAdmin && !isTL && !isManager;
+  const is30DaysElapsed = Boolean(candidate?.availableInGeneralPoolAfter && new Date() >= new Date(candidate.availableInGeneralPoolAfter)) ||
+                          Boolean(candidate?.assignedAt && (Date.now() - new Date(candidate.assignedAt).getTime() >= 30 * 24 * 60 * 60 * 1000)) ||
+                          Boolean(candidate?.tlRejectedAt && (Date.now() - new Date(candidate.tlRejectedAt).getTime() >= 30 * 24 * 60 * 60 * 1000));
+
+  const isCandidateGeneralPool = candidate?.ownershipStatus === 'General Data' || 
+                                candidate?.ownershipStatus === 'Expired' || 
+                                candidate?.ownershipStatus === 'Unassigned' ||
+                                (!assignedId && (!assignedName || assignedName === 'unassigned' || assignedName === 'general pool')) ||
+                                is30DaysElapsed;
+
+  const isAssignedToOther = isRecruiter && Boolean(assignedId || (assignedName && assignedName !== 'unassigned' && assignedName !== 'general pool')) && !isOwner && !isCandidateGeneralPool;
+  const isLockedForOtherRecruiter = isAssignedToOther && !isUnlockedStatus && !isCandidateGeneralPool && !isAdmin && !isTL && !isManager;
   const isLockedForRecruiter = isLockedForOtherRecruiter;
 
   // ── Interview Status state ────────────────────────────────────
@@ -219,6 +229,48 @@ export function CandidateProfilePage() {
   const [tagJrNotes, setTagJrNotes] = useState('');
   const [taggingJr, setTaggingJr] = useState(false);
   const [tagJrError, setTagJrError] = useState('');
+
+  // ── Claim Candidate Modal State ──
+  const [claimModalOpen, setClaimModalOpen] = useState(false);
+  const [claimJrNumber, setClaimJrNumber] = useState('');
+  const [claimNotes, setClaimNotes] = useState('');
+  const [claiming, setClaiming] = useState(false);
+  const [claimError, setClaimError] = useState('');
+
+  const handleOpenClaimModal = async () => {
+    setClaimJrNumber(candidate?.jrNumber || '');
+    setClaimNotes('');
+    setClaimError('');
+    setClaimModalOpen(true);
+    try {
+      const res = await api.getJobs({ status: 'Open', limit: '500' });
+      const jobs = res.jobs || (Array.isArray(res) ? res : []);
+      setOpenJobsList(jobs);
+    } catch (err) {
+      console.error('Failed to load open jobs:', err);
+    }
+  };
+
+  const handleClaimSubmit = async () => {
+    if (!candidate) return;
+    try {
+      setClaiming(true);
+      setClaimError('');
+      const res = await api.claimCandidate(candidate._id, {
+        newJrNumber: claimJrNumber || undefined,
+        notes: claimNotes,
+      });
+      setClaimModalOpen(false);
+      if (res.candidate) {
+        setCandidate(res.candidate);
+        setStatus(res.candidate.status || 'Eligible');
+      }
+    } catch (err: any) {
+      setClaimError(err.message || 'Failed to claim candidate');
+    } finally {
+      setClaiming(false);
+    }
+  };
 
   const handleOpenTagJrModal = async () => {
     setSelectedJrNumber('');
@@ -752,8 +804,17 @@ export function CandidateProfilePage() {
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-slate-700 text-sm transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Resumes
         </button>
-        {(isAdmin || isTL || isManager || (isRecruiter && !isLockedForOtherRecruiter)) && (
+        {(isAdmin || isTL || isManager || isCandidateGeneralPool || (isRecruiter && !isLockedForOtherRecruiter)) && (
           <div className="flex items-center gap-2">
+            {isCandidateGeneralPool && !isOwner && (
+              <button
+                onClick={handleOpenClaimModal}
+                className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded-xl transition-all shadow-sm font-semibold cursor-pointer"
+                title="Claim ownership of candidate from General Pool"
+              >
+                <CheckCircle className="w-4 h-4" /> Claim Candidate
+              </button>
+            )}
             {isAdmin && (
               <button
                 onClick={() => navigate('/admin/offer-letters')}
@@ -773,7 +834,29 @@ export function CandidateProfilePage() {
         )}
       </div>
 
-      {/* ── Lock Banners ────────────────────────────────────────── */}
+      {/* ── Lock & Availability Banners ────────────────────────── */}
+      {isCandidateGeneralPool && (
+        <div className="flex items-center justify-between gap-3 px-4 py-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-xl text-emerald-950 text-sm shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🌟</span>
+            <div>
+              <p className="font-bold text-emerald-900">Available in General Pool (30-Day Release Complete)</p>
+              <p className="text-xs text-emerald-800 mt-0.5">
+                This candidate is in the General Pool and can be claimed by any recruiter for other Job Requisitions (JRs). All initial screening history is preserved.
+              </p>
+            </div>
+          </div>
+          {!isOwner && (
+            <button
+              type="button"
+              onClick={handleOpenClaimModal}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+            >
+              <CheckCircle className="w-3.5 h-3.5" /> Claim Candidate
+            </button>
+          )}
+        </div>
+      )}
       {isLockedForOtherRecruiter && (
         <div className="flex items-center gap-3 px-4 py-3.5 bg-amber-50 border-2 border-amber-300 rounded-xl text-amber-900 text-sm shadow-sm">
           <Lock className="w-5 h-5 flex-shrink-0 text-amber-600" />
@@ -785,7 +868,7 @@ export function CandidateProfilePage() {
           </div>
         </div>
       )}
-      {candidate.tlCallSubmitted && !isAdmin && (
+      {candidate.tlCallSubmitted && !isAdmin && !isCandidateGeneralPool && (
         <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
           <Shield className="w-4 h-4 flex-shrink-0" />
           <span><strong>Fully Locked</strong> — TL second call submitted. Only Admin can edit this profile.</span>
@@ -992,7 +1075,7 @@ export function CandidateProfilePage() {
               <div>
                 <p className="text-slate-400 text-xs mb-1 flex items-center justify-between">
                   <span>Assigned To</span>
-                  {(isAdmin || isTL || isManager) && (
+                  {(isAdmin || isTL || isManager) ? (
                     <button
                       type="button"
                       onClick={() => setReassignOpen(true)}
@@ -1000,7 +1083,15 @@ export function CandidateProfilePage() {
                     >
                       {candidate.assignedRecruiterName && candidate.assignedRecruiterName !== 'General Pool' ? 'Change' : 'Assign'}
                     </button>
-                  )}
+                  ) : isCandidateGeneralPool && !isOwner ? (
+                    <button
+                      type="button"
+                      onClick={handleOpenClaimModal}
+                      className="text-[11px] text-emerald-600 hover:text-emerald-700 font-bold underline cursor-pointer"
+                    >
+                      Claim Ownership
+                    </button>
+                  ) : null}
                 </p>
                 <p className="text-slate-700" style={{ fontWeight: 500 }}>
                   {candidate.assignedRecruiterName && candidate.assignedRecruiterName !== 'General Pool' ? candidate.assignedRecruiterName : (candidate.assignedRecruiter?.name || 'Unassigned')}
@@ -2342,6 +2433,109 @@ export function CandidateProfilePage() {
                   <>
                     <Tag className="w-4 h-4" />
                     Tag to JR & Fast-Track
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Claim Candidate Modal ── */}
+      {claimModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-lg bg-emerald-50 text-emerald-600 font-bold">🌟</span>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Claim Candidate Ownership</h3>
+                  <p className="text-xs text-slate-500">Take ownership from General Pool &amp; optionally attach to an active JR</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setClaimModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3.5 text-xs text-emerald-950 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-sm text-slate-800">{candidate.name}</p>
+                  <span className="text-[11px] px-2 py-0.5 bg-emerald-100 text-emerald-800 font-semibold rounded">
+                    General Pool Available
+                  </span>
+                </div>
+                {candidate.originalJrNumber && (
+                  <p className="text-emerald-900 font-medium">
+                    🏷️ Original JR: <strong>{candidate.originalJrNumber}</strong> {candidate.originalJobTitle ? `(${candidate.originalJobTitle})` : ''}
+                  </p>
+                )}
+                <p className="text-slate-600">
+                  Phone: <strong>{candidate.phone || 'N/A'}</strong> · Current Status: <strong>{candidate.status || 'Eligible'}</strong>
+                </p>
+                <div className="mt-2 pt-2 border-t border-emerald-200/60 text-[11px] text-emerald-800">
+                  ✨ <strong>Fast-Track Guarantee:</strong> Previously screened eligible candidates will remain marked <strong>Eligible</strong> under your ownership without repeating preliminary screening.
+                </div>
+              </div>
+
+              {claimError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-600 font-medium">
+                  {claimError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">Assign to Job Requisition (JR) (Optional)</label>
+                <select
+                  value={claimJrNumber}
+                  onChange={e => setClaimJrNumber(e.target.value)}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 outline-none focus:border-emerald-500 font-medium text-slate-800"
+                >
+                  <option value="">— Keep Current / Assign Later —</option>
+                  {openJobsList.map((j: any) => (
+                    <option key={j._id || j.jrNumber} value={j.jrNumber}>
+                      {j.jrNumber} — {j.jobTitle} ({j.companyName || j.client || 'Client'}) [{j.division || 'BPO'}]
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5 uppercase tracking-wider">Notes / Justification (Optional)</label>
+                <textarea
+                  rows={2}
+                  value={claimNotes}
+                  onChange={e => setClaimNotes(e.target.value)}
+                  placeholder="e.g., Claiming profile for immediate client interview..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm outline-none focus:border-emerald-500 bg-slate-50 resize-none"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-2 justify-end flex-shrink-0">
+              <button
+                disabled={claiming}
+                onClick={() => setClaimModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={claiming}
+                onClick={handleClaimSubmit}
+                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {claiming ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    Claiming...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Confirm &amp; Claim Ownership
                   </>
                 )}
               </button>

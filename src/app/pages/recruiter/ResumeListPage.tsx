@@ -522,6 +522,51 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
     }
   };
 
+  const handleClaimDirect = async (c: any) => {
+    if (!window.confirm(`Claim candidate "${c.name}" from General Pool to your name?`)) return;
+    try {
+      await api.claimCandidate(c.id);
+      // Reload candidates
+      const params: Record<string, string> = { limit: '1000' };
+      if (search) params.search = search;
+      if (statusFilter !== 'All Status') params.status = statusFilter;
+      if (recruiterFilter !== 'All Recruiters') params.recruiter = recruiterFilter;
+      if (customerFilter !== 'All Customers') params.company = customerFilter;
+      const data = await api.getCandidates(params);
+      const list = data.candidates || (Array.isArray(data) ? data : []);
+      setCandidates(list.map((cand: any) => ({
+        id: cand._id || cand.id,
+        name: cand.name,
+        candidateId: cand.candidateId || '',
+        skills: Array.isArray(cand.skills) ? cand.skills.join(', ') : (cand.skills || ''),
+        exp: cand.experience || '',
+        source: cand.source || '',
+        status: cand.status || 'Eligible',
+        email: cand.email || '',
+        city: cand.city || '',
+        localArea: cand.localArea || '',
+        resumePath: cand.resumePath || '',
+        recruiter: cand.assignedRecruiterName || 'Unassigned',
+        phone: cand.phone || '',
+        positionApplied: cand.positionApplied || '',
+        clientName: cand.clientName || cand.company || cand.companyName || cand.client || '—',
+        jrNumber: cand.jrNumber || '',
+        originalJrNumber: cand.originalJrNumber || '',
+        originalJobTitle: cand.originalJobTitle || '',
+        originalClientName: cand.originalClientName || '',
+        originalScreenedAt: cand.originalScreenedAt || null,
+        tlRejectedAt: cand.tlRejectedAt || null,
+        tlRejectionReason: cand.tlRejectionReason || '',
+        availableInGeneralPoolAfter: cand.availableInGeneralPoolAfter || null,
+        isPreviouslyScreened: cand.isPreviouslyScreened || Boolean(cand.originalJrNumber),
+        ownershipStatus: cand.ownershipStatus || 'Assigned',
+      })));
+      alert(`Candidate "${c.name}" successfully claimed! Assigned to you.`);
+    } catch (err: any) {
+      alert(err.message || 'Failed to claim candidate');
+    }
+  };
+
   const hasActiveFilters =
     statusFilter !== 'All Status' ||
     recruiterFilter !== 'All Recruiters' || customerFilter !== 'All Customers' || generalPoolOnly;
@@ -1094,6 +1139,17 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
                           <Edit3 className="w-3.5 h-3.5" />
                           Edit
                         </Link>
+                        {(c.ownershipStatus === 'General Data' || c.ownershipStatus === 'Expired' || c.recruiter === 'Unassigned' || c.recruiter === 'General Pool') && (
+                          <button
+                            onClick={() => handleClaimDirect(c)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer"
+                            style={{ fontWeight: 500 }}
+                            title="Claim Candidate Ownership to your name"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            Claim
+                          </button>
+                        )}
                         <button
                           onClick={() => handleOpenTagJrModal(c)}
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 text-xs rounded-lg hover:bg-amber-100 transition-colors cursor-pointer"

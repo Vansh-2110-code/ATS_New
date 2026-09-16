@@ -53,6 +53,36 @@ function isStatusUnlockedForReassignment(status) {
   return UNLOCKED_REASSIGN_STATUSES.some(s => s.toLowerCase() === clean);
 }
 
+function isCandidateInGeneralPool(candidate) {
+  if (!candidate) return false;
+  const own = String(candidate.ownershipStatus || '').trim().toLowerCase();
+  if (own === 'general data' || own === 'expired' || own === 'unassigned') return true;
+
+  if (candidate.availableInGeneralPoolAfter && new Date() >= new Date(candidate.availableInGeneralPoolAfter)) {
+    return true;
+  }
+  if (candidate.tlRejectedAt) {
+    const daysSinceTl = (Date.now() - new Date(candidate.tlRejectedAt).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSinceTl >= 30) return true;
+  }
+
+  const recName = String(candidate.assignedRecruiterName || '').trim().toLowerCase();
+  if (!candidate.assignedRecruiter && (!recName || recName === 'unassigned' || recName === 'general pool')) {
+    return true;
+  }
+
+  const isJoinedStage = ['joined', 'joined and abort', 'exited', 'black list', 'blacklist'].includes(String(candidate.status || '').trim().toLowerCase());
+  const lastActivity = candidate.assignedAt || candidate.createdAt;
+  if (!isJoinedStage && lastActivity) {
+    const daysSinceAssigned = (Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSinceAssigned >= 30) return true;
+  }
+
+  if (isStatusUnlockedForReassignment(candidate.status)) return true;
+
+  return false;
+}
+
 function cleanRecruiterName(name) {
   if (!name || typeof name !== 'string') return name || '';
   return name
@@ -348,6 +378,24 @@ exports.list = async (req, res, next) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
+    // Auto-sync candidates that reached 30-day General Pool threshold
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    Candidate.updateMany({
+      $or: [
+        { availableInGeneralPoolAfter: { $lte: new Date() } },
+        { tlRejectedAt: { $lte: thirtyDaysAgo } },
+        { assignedAt: { $lte: thirtyDaysAgo }, status: { $nin: ['Joined', 'Joined and Abort', 'Exited', 'Black List', 'Blacklist'] } }
+      ],
+      ownershipStatus: { $ne: 'General Data' }
+    }, {
+      $set: {
+        ownershipStatus: 'General Data',
+        assignedRecruiter: null,
+        assignedRecruiterName: 'Unassigned',
+        tlCallSubmitted: false
+      }
+    }).catch(err => console.error('Auto General Pool sync error in list:', err));
+
     // Compute status counts across the entire dataset matching non-status query filters
     const countQuery = { ...query };
     delete countQuery.status;
@@ -449,15 +497,11 @@ exports.getById = async (req, res, next) => {
     }
 
     // Auto-update ownership status based on 30-day validity
-    const lastActivity = candidate.assignedAt || candidate.createdAt;
-    const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
-    const isExpired = daysSinceAssignment >= 30 || candidate.ownershipStatus === 'Expired';
-    const isTlRejected30Days = candidate.tlRejectedAt && (Date.now() - new Date(candidate.tlRejectedAt).getTime() >= 30 * 24 * 60 * 60 * 1000);
-
-    if ((daysSinceAssignment >= 30 || isTlRejected30Days) && candidate.ownershipStatus !== 'General Data') {
+    if (isCandidateInGeneralPool(candidate) && candidate.ownershipStatus !== 'General Data') {
       candidate.ownershipStatus = 'General Data';
       candidate.assignedRecruiter = undefined;
       candidate.assignedRecruiterName = 'Unassigned';
+      candidate.tlCallSubmitted = false;
       await candidate.save();
     }
 
@@ -571,15 +615,16 @@ exports.create = async (req, res, next) => {
     }
 
     if (existing) {
-      const isExpiredOwnership = existing.ownershipStatus === 'Expired' || !existing.assignedAt || new Date(existing.assignedAt).getTime() === 0;
+      const inGeneralPool = isCandidateInGeneralPool(existing);
+      const isExpiredOwnership = inGeneralPool || existing.ownershipStatus === 'Expired' || !existing.assignedAt || new Date(existing.assignedAt).getTime() === 0;
       const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status) || isExpiredOwnership;
       const lastActivity = existing.assignedAt || existing.createdAt;
       const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
       const recruiterName = existing.assignedRecruiterName || 'another recruiter';
 
       // Strict 30-day duplicate rule for ALL USERS (including Admin & Recruiters)
-      // If candidate is under active 30-day validity AND NOT in one of the unlocked waived statuses AND not expired:
-      if (!isUnlockedStatus && !isExpiredOwnership && daysSinceAssignment < 30) {
+      // If candidate is under active 30-day validity AND NOT in one of the unlocked waived statuses AND not expired/general pool:
+      if (!inGeneralPool && !isUnlockedStatus && !isExpiredOwnership && daysSinceAssignment < 30) {
         return res.status(409).json({
           message: `Candidate already exists in the system! This profile (${existing.name}, Phone: ${existing.phone}) is already assigned to ${recruiterName} under active 30-day validity (Status: "${existing.status}"). Duplicate candidates cannot be added.`,
           existingId: existing._id,
@@ -635,6 +680,8 @@ exports.create = async (req, res, next) => {
       existing.assignedRecruiterName = cleanRecruiterName(req.user.name);
       existing.assignedAt = new Date();
       existing.ownershipStatus = 'Assigned';
+      existing.tlCallSubmitted = false;
+      existing.finalInterviewLocked = false;
 
       // Set candidate status to chosen status
       const chosenStatus = data.status || data.firstCallStatus || data.recruiterStatus;
@@ -776,35 +823,38 @@ exports.checkDuplicate = async (req, res, next) => {
 
     const existing = await Candidate.findOne({ $or: orClauses })
       .populate('assignedRecruiter', 'name email')
-      .select('name phone email status assignedRecruiterName assignedRecruiter currentStage createdAt assignedAt');
+      .select('name phone email status assignedRecruiterName assignedRecruiter currentStage createdAt assignedAt ownershipStatus tlRejectedAt availableInGeneralPoolAfter originalJrNumber');
 
     if (!existing) {
       return res.json({ duplicate: false });
     }
 
-    const isExpiredOwnership = existing.ownershipStatus === 'Expired' || !existing.assignedAt || new Date(existing.assignedAt).getTime() === 0;
+    const inGeneralPool = isCandidateInGeneralPool(existing);
+    const isExpiredOwnership = inGeneralPool || existing.ownershipStatus === 'Expired' || !existing.assignedAt || new Date(existing.assignedAt).getTime() === 0;
     const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status) || isExpiredOwnership;
     const lastActivity = existing.assignedAt || existing.createdAt;
     const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
-    const is30DayLocked = !isUnlockedStatus && !isExpiredOwnership && daysSinceAssignment < 30;
-    const daysRemaining = (isUnlockedStatus || isExpiredOwnership) ? 0 : Math.max(0, 30 - daysSinceAssignment);
+    const is30DayLocked = !inGeneralPool && !isUnlockedStatus && !isExpiredOwnership && daysSinceAssignment < 30;
+    const daysRemaining = (inGeneralPool || isUnlockedStatus || isExpiredOwnership) ? 0 : Math.max(0, 30 - daysSinceAssignment);
 
     return res.json({
       duplicate: true,
-      isUnlockedStatus,
+      isUnlockedStatus: isUnlockedStatus || inGeneralPool,
       is30DayLocked,
-      canReassign: !is30DayLocked || req.user?.role === 'admin',
+      inGeneralPool,
+      canReassign: !is30DayLocked || inGeneralPool || req.user?.role === 'admin',
       candidate: {
         id: existing._id,
         name: existing.name,
         phone: existing.phone,
         email: existing.email,
         status: existing.status,
-        recruiterName: existing.assignedRecruiterName || existing.assignedRecruiter?.name || 'Unassigned',
+        recruiterName: inGeneralPool ? 'General Pool (Unassigned)' : (existing.assignedRecruiterName || existing.assignedRecruiter?.name || 'Unassigned'),
         stage: existing.currentStage,
         createdAt: existing.createdAt,
-        ownershipStatus: existing.ownershipStatus,
-        isUnlockedStatus,
+        ownershipStatus: inGeneralPool ? 'General Data' : (existing.ownershipStatus || 'Assigned'),
+        inGeneralPool,
+        isUnlockedStatus: isUnlockedStatus || inGeneralPool,
         is30DayLocked,
         daysRemaining,
       },
@@ -874,8 +924,9 @@ if (typeof data.skills === 'string') {
       }
     }
 
-    // Ownership check: recruiters can only edit their own candidates (or expired / unlocked candidates)
-    const isExistingExpiredOwnership = existing.ownershipStatus === 'Expired' || !existing.assignedAt || new Date(existing.assignedAt).getTime() === 0;
+    // Ownership check: recruiters can only edit their own candidates (or expired / unlocked / general pool candidates)
+    const inGeneralPool = isCandidateInGeneralPool(existing);
+    const isExistingExpiredOwnership = inGeneralPool || existing.ownershipStatus === 'Expired' || !existing.assignedAt || new Date(existing.assignedAt).getTime() === 0;
     const lastActivity = existing.assignedAt || existing.createdAt;
     const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
     const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status) || isExistingExpiredOwnership;
@@ -889,7 +940,7 @@ if (typeof data.skills === 'string') {
       const isOwner = (candRecId && reqUserId && candRecId === reqUserId) ||
                       (candRecName && reqUserName && candRecName === reqUserName);
 
-      const isAssignedToOther = (Boolean(existing.assignedRecruiter) || Boolean(existing.assignedRecruiterName)) && !isOwner;
+      const isAssignedToOther = !inGeneralPool && (Boolean(existing.assignedRecruiter) || (Boolean(existing.assignedRecruiterName) && candRecName !== 'unassigned' && candRecName !== 'general pool')) && !isOwner;
       if (isAssignedToOther && !isExistingExpiredOwnership && daysSinceAssignment < 30 && !isUnlockedStatus) {
         return res.status(403).json({
           message: `Candidate is assigned to ${existing.assignedRecruiterName || 'another recruiter'}. You cannot edit or change the status of this candidate.`
@@ -901,17 +952,19 @@ if (typeof data.skills === 'string') {
     if (req.user.role === 'recruiter') {
       const isOwner = String(existing.assignedRecruiter || '') === String(req.user._id);
       const isExpired = !existing.assignedRecruiter || daysSinceAssignment >= 30 || isExistingExpiredOwnership;
-      const isGeneral = existing.ownershipStatus === 'General Data';
+      const isGeneral = inGeneralPool || existing.ownershipStatus === 'General Data';
 
       if (!isOwner && (isExpired || isGeneral || isUnlockedStatus)) {
         data.assignedRecruiter = req.user._id;
         data.assignedRecruiterName = cleanRecruiterName(req.user.name);
         data.ownershipStatus = 'Assigned';
         data.assignedAt = new Date();
+        data.tlCallSubmitted = false;
+        data.finalInterviewLocked = false;
       }
     }
 
-    if (existing.tlCallSubmitted && req.user.role !== 'admin') {
+    if (existing.tlCallSubmitted && req.user.role !== 'admin' && !inGeneralPool) {
       return res.status(403).json({ message: 'Profile is locked after TL submission. Only Admin can edit.' });
     }
     if (existing.isDuplicate && req.user.role !== 'admin') {
@@ -1535,7 +1588,7 @@ exports.secondCallSubmit = async (req, res, next) => {
   }
 };
 
-// POST /api/candidates/:id/reassign  (admin only)
+// POST /api/candidates/:id/reassign  (admin, tl, manager, or recruiter for general pool)
 exports.reassign = async (req, res, next) => {
   try {
     const { newRecruiterId, newRecruiterName, reason } = req.body;
@@ -1544,10 +1597,17 @@ exports.reassign = async (req, res, next) => {
     const candidate = await Candidate.findById(req.params.id);
     if (!candidate) return res.status(404).json({ message: 'Candidate not found' });
 
-    // Item 3: If TL, can reassign candidates with status "Not Eligible", "Client Duplicate", "No Response", "Hold"
-    if (req.user.role === 'tl') {
+    const inGeneralPool = isCandidateInGeneralPool(candidate);
+
+    if (req.user.role === 'recruiter') {
+      if (!inGeneralPool && !isStatusUnlockedForReassignment(candidate.status)) {
+        return res.status(403).json({
+          message: 'Recruiters can only reassign candidates who are in the General Pool or have completed the 30-day validity period.'
+        });
+      }
+    } else if (req.user.role === 'tl') {
       const allowedStatuses = ['Not Eligible', 'Client Duplicate', 'Duplicate-Client', 'No Response', 'Hold'];
-      if (!allowedStatuses.includes(candidate.status)) {
+      if (!inGeneralPool && !allowedStatuses.includes(candidate.status)) {
         return res.status(403).json({
           message: `Team Leads can only reassign candidates with status "Not Eligible", "Client Duplicate", "No Response", or "Hold". Current candidate status is "${candidate.status}".`
         });
@@ -1588,7 +1648,7 @@ exports.reassign = async (req, res, next) => {
       candidate.finalInterviewStatus = undefined;
       candidate.finalInterviewLocked = false;
       candidate.currentStage = 'Applied';
-      candidate.status = 'New';
+      candidate.status = candidate.isPreviouslyScreened ? 'Eligible' : 'New';
     }
     candidate.candidateActiveStatus = 'Active';
     candidate.inactiveSince = undefined;
@@ -1602,7 +1662,9 @@ exports.reassign = async (req, res, next) => {
 
     // Reassign
     candidate.assignedRecruiter = newRecruiterId;
-    candidate.assignedRecruiterName = newRecruiterName || '';
+    candidate.assignedRecruiterName = cleanRecruiterName(newRecruiterName || '');
+    candidate.assignedAt = new Date();
+    candidate.ownershipStatus = 'Assigned';
     candidate.recruiterChangedBy = req.user._id;
     candidate.recruiterChangedAt = new Date();
     candidate.recruiterChangedByName = req.user.name;
@@ -1629,6 +1691,120 @@ exports.reassign = async (req, res, next) => {
     });
 
     res.json(candidate);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/candidates/:id/claim  (Recruiters claiming candidates from General Pool or expired validity)
+exports.claim = async (req, res, next) => {
+  try {
+    const { newJrNumber, notes } = req.body;
+    const candidate = await Candidate.findById(req.params.id);
+    if (!candidate) return res.status(404).json({ message: 'Candidate not found' });
+
+    const inGeneralPool = isCandidateInGeneralPool(candidate);
+    const isPrivileged = ['admin', 'tl', 'manager'].includes(req.user.role);
+
+    if (!inGeneralPool && !isPrivileged && !isStatusUnlockedForReassignment(candidate.status)) {
+      return res.status(403).json({
+        message: 'Candidate is currently assigned to another recruiter under active 30-day validity and is not yet available in the General Pool.'
+      });
+    }
+
+    const prevRecruiter = candidate.assignedRecruiterName || 'Unassigned';
+    const prevJr = candidate.jrNumber || candidate.originalJrNumber || 'N/A';
+
+    // Permanent JR Heritage Preservation
+    if (!candidate.originalJrNumber && candidate.jrNumber) {
+      candidate.originalJrNumber = candidate.jrNumber;
+      candidate.originalJobTitle = candidate.positionApplied || '';
+      candidate.originalClientName = candidate.clientName || '';
+      candidate.originalScreenedAt = candidate.originalScreenedAt || candidate.createdAt;
+    }
+
+    // Archive prior state to jrHistory
+    if (!candidate.jrHistory) candidate.jrHistory = [];
+    candidate.jrHistory.push({
+      jrNumber: prevJr,
+      jobTitle: candidate.positionApplied || candidate.originalJobTitle || '',
+      clientName: candidate.clientName || candidate.originalClientName || '',
+      screenedAt: candidate.originalScreenedAt || candidate.createdAt,
+      screeningStatus: candidate.status || 'Eligible',
+      tlDecision: candidate.secondCallStatus || candidate.finalInterviewStatus || (candidate.tlRejectedAt ? 'Rejected' : 'Completed'),
+      tlNotes: candidate.secondCallNotes || candidate.tlRejectionReason || '',
+      tlDecidedAt: candidate.tlRejectedAt || undefined,
+      tlDecidedByName: candidate.tlRejectedByName || '',
+      assignedRecruiter: candidate.assignedRecruiter,
+      assignedRecruiterName: prevRecruiter,
+      assignedAt: candidate.assignedAt,
+      movedToGeneralPoolAt: new Date(),
+      notes: `Claimed from General Pool by ${cleanRecruiterName(req.user.name)}. ${notes || ''}`
+    });
+
+    // If new JR passed, apply it
+    if (newJrNumber && String(newJrNumber).trim()) {
+      const Job = require('../models/Job');
+      const job = await Job.findOne({ jrNumber: String(newJrNumber).trim() });
+      if (job) {
+        candidate.jrNumber = job.jrNumber;
+        candidate.clientName = job.companyName || candidate.clientName;
+        candidate.company = job.companyName || candidate.company;
+        candidate.positionApplied = job.jobTitle || candidate.positionApplied;
+        candidate.division = job.division || candidate.division || 'BPO';
+      }
+    }
+
+    // Assign ownership to current caller
+    candidate.assignedRecruiter = req.user._id;
+    candidate.assignedRecruiterName = cleanRecruiterName(req.user.name);
+    candidate.assignedAt = new Date();
+    candidate.ownershipStatus = 'Assigned';
+
+    // Unlock workflow locks for fresh recruiter action
+    candidate.tlCallSubmitted = false;
+    candidate.firstCallSubmitted = false;
+    candidate.finalInterviewLocked = false;
+    candidate.secondCallStatus = undefined;
+    candidate.secondCallNotes = undefined;
+    candidate.secondCallDate = undefined;
+    candidate.tlRejectedAt = undefined;
+    candidate.availableInGeneralPoolAfter = undefined;
+
+    // Fast-track: if candidate was previously screened and eligible, keep status 'Eligible'
+    if (candidate.isPreviouslyScreened || candidate.originalJrNumber) {
+      candidate.status = 'Eligible';
+      candidate.isPreviouslyScreened = true;
+      candidate.currentStage = 'Screening';
+    } else {
+      candidate.status = candidate.status || 'New';
+    }
+
+    candidate.stageHistory.push({
+      stage: candidate.currentStage || 'Screening',
+      subStatus: `Ownership claimed by ${cleanRecruiterName(req.user.name)} from General Pool`,
+      changedAt: new Date(),
+      changedBy: req.user._id,
+      notes: notes || `Transferred from ${prevRecruiter} to ${cleanRecruiterName(req.user.name)}`
+    });
+
+    await candidate.save();
+
+    await createLog({
+      type: 'reassign',
+      user: req.user._id,
+      userName: req.user.name,
+      role: req.user.role,
+      action: `Claimed ownership of candidate ${candidate.name} from General Pool. Assigned to ${cleanRecruiterName(req.user.name)}.`,
+      target: candidate._id.toString(),
+      ip: req.ip
+    });
+
+    res.json({
+      success: true,
+      message: `Candidate ${candidate.name} successfully claimed and assigned to ${cleanRecruiterName(req.user.name)}.`,
+      candidate
+    });
   } catch (err) {
     next(err);
   }
