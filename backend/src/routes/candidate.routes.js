@@ -6,12 +6,13 @@ const { uploadResume, uploadDoc, uploadImport, uploadJoining } = require('../mid
 router.use(auth);
 
 router.get('/export', authorize('admin', 'manager', 'tl', 'recruiter'), ctrl.exportCandidates);
-router.post('/import', authorize('recruiter', 'tl', 'admin'), uploadImport.single('file'), ctrl.importCandidates);
+router.post('/import', authorize('recruiter', 'tl', 'admin', 'mis', 'data_entry'), uploadImport.single('file'), ctrl.importCandidates);
 router.post('/bulk-email', authorize('recruiter', 'tl', 'admin'), ctrl.bulkEmail);
 router.get('/clients', ctrl.listClientNames);  // Distinct clientName values for filters
 router.get('/', ctrl.list);
 router.get('/callbacks', ctrl.getCallbacks);
-router.get('/check-duplicate', authorize('recruiter', 'tl', 'admin'), ctrl.checkDuplicate); // Must be before /:id
+router.get('/check-duplicate', authorize('recruiter', 'tl', 'admin', 'mis', 'data_entry'), ctrl.checkDuplicate); // Must be before /:id
+router.post('/find-similar', ctrl.findSimilarCandidates); // Find similar resumes in ATS DB
 router.get('/flagged', authorize('tl', 'admin'), ctrl.getFlagged);  // Must be before /:id
 
 // ─── Eligible Tracker Routes ───
@@ -21,8 +22,8 @@ router.post('/eligible-tracker', authorize('admin', 'manager', 'tl', 'recruiter'
 router.put('/eligible-tracker/:id', authorize('admin', 'manager', 'tl', 'recruiter', 'spoc'), ctrl.updateEligibleTracker);
 
 router.get('/:id([0-9a-fA-F]{24})', ctrl.getById);
-router.post('/', authorize('recruiter', 'tl', 'admin'), uploadResume.single('resume'), ctrl.create);
-router.put('/:id', authorize('recruiter', 'tl', 'admin', 'manager'), uploadResume.single('resume'), ctrl.update);
+router.post('/', authorize('recruiter', 'tl', 'admin', 'mis', 'data_entry'), uploadResume.single('resume'), ctrl.create);
+router.put('/:id', authorize('recruiter', 'tl', 'admin', 'manager', 'mis', 'data_entry'), uploadResume.single('resume'), ctrl.update);
 router.put('/:id/status', authorize('recruiter', 'tl', 'admin', 'manager'), ctrl.updateStatus);
 router.post('/:id/record-exit', authorize('admin'), ctrl.recordExit);
 router.put('/:id/flag', authorize('recruiter', 'tl', 'admin'), ctrl.flag);

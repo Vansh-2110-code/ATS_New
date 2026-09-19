@@ -54,6 +54,7 @@ const auth = async (req, res, next) => {
 };
 
 const ROLE_INHERITANCE = {
+  superadmin: ['superadmin', 'admin', 'manager', 'tl', 'recruiter', 'spoc', 'walkin', 'bd', 'business_developer', 'mis', 'data_entry'],
   admin: ['admin', 'manager', 'tl', 'recruiter', 'spoc'],
   manager: ['manager', 'tl', 'recruiter', 'spoc'],
   tl: ['tl', 'recruiter', 'spoc'],

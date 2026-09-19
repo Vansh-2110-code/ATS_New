@@ -33,8 +33,9 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Walk-In Queue',    href: '/recruiter/walkin-queue',  icon: ListChecks,      roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
   { label: 'Walk-In Mgmt',     href: '/recruiter/walkins',       icon: UserCheck,       roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
   { label: 'Interviews',       href: '/recruiter/interviews',    icon: CalendarCheck,   roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
-  { label: 'ATS Scanner',      href: '/recruiter/scan',          icon: ScanLine,        roles: ['recruiter', 'tl'], category: 'Recruiter' },
-  { label: 'ATS Database',     href: '/recruiter/ats-database',  icon: Database,        roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
+  { label: 'MIS Sourcing Hub', href: '/mis',                     icon: LayoutDashboard, roles: ['mis', 'data_entry'], category: 'Recruiter' },
+  { label: 'ATS Scanner',      href: '/recruiter/scan',          icon: ScanLine,        roles: ['recruiter', 'tl', 'mis', 'data_entry', 'admin'], category: 'Recruiter' },
+  { label: 'ATS Database',     href: '/recruiter/ats-database',  icon: Database,        roles: ['recruiter', 'tl', 'spoc', 'mis', 'data_entry', 'admin'], category: 'Recruiter' },
   { label: 'Recruiter Portals', href: '/recruiter-portals',       icon: Globe,           roles: ['admin', 'recruiter', 'tl', 'spoc', 'manager'], category: 'Recruiter' },
   { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['recruiter', 'spoc', 'tl', 'manager', 'admin'], category: 'Recruiter' },
   { label: 'Email Center',     href: '/email',                   icon: Mail,            roles: ['recruiter'], category: 'Recruiter' },
@@ -86,7 +87,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Candidate DB',     href: '/admin/candidates',        icon: Database,         roles: ['admin'], category: 'Admin' },
   { label: 'Eligible Tracker', href: '/admin/eligible-tracker',  icon: ClipboardCheck,   roles: ['admin'], category: 'Admin' },
   { label: 'ATS Scan Database',href: '/admin/ats-records',       icon: ScanLine,         roles: ['admin'], category: 'Admin' },
-  { label: 'Excel Import',     href: '/admin/excel-import',      icon: Upload,           roles: ['admin'], category: 'Admin' },
+  { label: 'Excel Import',     href: '/admin/excel-import',      icon: Upload,           roles: ['admin', 'mis', 'data_entry'], category: 'Admin' },
+  { label: 'MIS Sourcing Tracker', href: '/admin/mis-tracker',   icon: Users,            roles: ['admin'], category: 'Admin' },
   { label: 'Field Config',     href: '/admin/field-config',      icon: Settings,         roles: ['admin'], category: 'Admin' },
   { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['admin'], category: 'Admin' },
   { label: 'Bulk Job Post',    href: '/recruiter/jobs/bulk',     icon: LayoutGrid,       roles: ['admin'], category: 'Admin' },
@@ -143,11 +145,14 @@ interface SidebarProps {
 }
 
 const ROLE_CATEGORIES: Record<string, string[]> = {
+  superadmin: ['Admin', 'Payroll', 'Manager', 'Team Lead', 'Recruiter'],
   admin: ['Admin', 'Payroll', 'Manager', 'Team Lead', 'Recruiter'],
   manager: ['Manager', 'Payroll', 'Team Lead', 'Recruiter'],
   tl: ['Team Lead', 'Recruiter'],
   recruiter: ['Recruiter'],
   spoc: ['Recruiter'],
+  mis: ['Recruiter', 'Admin'],
+  data_entry: ['Recruiter', 'Admin'],
   bd: ['Admin', 'Manager', 'Team Lead', 'Recruiter'],
   business_developer: ['Admin', 'Manager', 'Team Lead', 'Recruiter'],
 };
@@ -175,7 +180,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   if (!user) return null;
 
   const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
-  const hasBDRole = userRoles.includes('bd') || userRoles.includes('business_developer') || user.role === 'admin' || user.role === 'manager';
+  const hasBDRole = userRoles.includes('bd') || userRoles.includes('business_developer') || user.role === 'admin' || user.role === 'superadmin' || user.role === 'manager';
 
   const allowedCategoriesSet = new Set<string>();
   userRoles.forEach(r => {
@@ -203,7 +208,7 @@ export function Sidebar({ onClose }: SidebarProps) {
   });
 
   const handleLogout = () => {
-    if (user.role === 'admin' || user.role === 'walkin' || user.role === 'demo_walkin' || Boolean(user.disableBiometric)) {
+    if (user.role === 'admin' || user.role === 'superadmin' || user.role === 'walkin' || user.role === 'demo_walkin' || Boolean(user.disableBiometric)) {
       completeLogout();
     } else {
       setShowCheckOutFaceModal(true);

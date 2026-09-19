@@ -146,6 +146,18 @@ exports.update = async (req, res, next) => {
 // DELETE /api/users/:id
 exports.remove = async (req, res, next) => {
   try {
+    const isSuperAdmin = req.user && (
+      req.user.isSuperAdmin === true ||
+      req.user.employeeId === 'WH000001' ||
+      req.user.email === 'admin@whitehorsemanpower.in'
+    );
+    if (!isSuperAdmin) {
+      return res.status(403).json({ message: 'Only System Administrator has permission to delete users.' });
+    }
+    if (req.params.id === 'WH000001' || req.params.id === 'admin@whitehorsemanpower.in') {
+      return res.status(403).json({ message: 'Root System Administrator account cannot be deleted.' });
+    }
+
     const mongoose = require('mongoose');
     let user;
     if (mongoose.Types.ObjectId.isValid(req.params.id)) {

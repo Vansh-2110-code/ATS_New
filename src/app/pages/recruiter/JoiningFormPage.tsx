@@ -750,7 +750,7 @@ export function JoiningFormPage() {
       setServerEmployeeId(res?.employeeId || '');
       setSubmitted(true);
     } catch (err: any) {
-      alert(err.message || 'Failed to submit form');
+      alert(err.response?.data?.message || err.message || 'Failed to submit form');
     } finally {
       setSubmitting(false);
     }

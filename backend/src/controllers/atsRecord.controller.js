@@ -55,50 +55,198 @@ const EXCEL_COLUMNS = [
   { key: 'remarks',                header: 'Remarks / Feedback' },
 ];
 
+function buildFilterQuery(query, user) {
+  const {
+    status, minScore, maxScore,
+    startDate, endDate,
+    search,
+    company, excludeKeywords, skills,
+    minExp, maxExp,
+    location,
+    minSalary, maxSalary,
+    gender, qualification
+  } = query;
+
+  const andClauses = [];
+
+  // 1. Status
+  if (status && status.trim() && status !== 'all') {
+    andClauses.push({ atsStatus: status.trim() });
+  }
+
+  // 2. Score range
+  if (minScore || maxScore) {
+    const scoreFilter = {};
+    if (minScore) scoreFilter.$gte = parseInt(minScore, 10);
+    if (maxScore) scoreFilter.$lte = parseInt(maxScore, 10);
+    andClauses.push({ atsScore: scoreFilter });
+  }
+
+  // 3. Date range
+  if (startDate || endDate) {
+    const dateFilter = {};
+    if (startDate) dateFilter.$gte = new Date(startDate);
+    if (endDate)   dateFilter.$lte = new Date(new Date(endDate).setHours(23, 59, 59));
+    andClauses.push({ scanDate: dateFilter });
+  }
+
+  // 4. Company Hiring For (matching jobTitle, currentCompanyName, industry, department)
+  if (company && company.trim()) {
+    const cRe = { $regex: company.trim(), $options: 'i' };
+    andClauses.push({
+      $or: [
+        { jobTitle: cRe },
+        { currentCompanyName: cRe },
+        { industry: cRe },
+        { department: cRe }
+      ]
+    });
+  }
+
+  // 5. Positive Keywords / Search
+  if (search && search.trim()) {
+    const sTerm = search.trim();
+    const sRe = { $regex: sTerm, $options: 'i' };
+    andClauses.push({
+      $or: [
+        { name: sRe },
+        { email: sRe },
+        { phone: sRe },
+        { keySkills: sRe },
+        { jobTitle: sRe },
+        { currentCompanyName: sRe },
+        { summary: sRe },
+        { resumeHeadline: sRe },
+        { currentCompanyDesignation: sRe }
+      ]
+    });
+  }
+
+  // 6. Exclude Keywords
+  if (excludeKeywords && excludeKeywords.trim()) {
+    const exWords = excludeKeywords.trim().split(/[, ]+/).filter(Boolean);
+    exWords.forEach(ex => {
+      const exRe = { $regex: ex, $options: 'i' };
+      andClauses.push({
+        name: { $not: exRe },
+        keySkills: { $not: exRe },
+        jobTitle: { $not: exRe },
+        currentCompanyName: { $not: exRe },
+        summary: { $not: exRe },
+        resumeHeadline: { $not: exRe }
+      });
+    });
+  }
+
+  // 7. Add Skills
+  if (skills && skills.trim()) {
+    const skillList = skills.trim().split(/[,;]+/).map(s => s.trim()).filter(Boolean);
+    skillList.forEach(s => {
+      const skRe = { $regex: s, $options: 'i' };
+      andClauses.push({
+        $or: [
+          { keySkills: skRe },
+          { matchedSkills: skRe },
+          { summary: skRe }
+        ]
+      });
+    });
+  }
+
+  // 8. Location
+  if (location && location.trim() && location.toLowerCase() !== 'all') {
+    const locRe = { $regex: location.trim(), $options: 'i' };
+    andClauses.push({
+      $or: [
+        { currentLocation: locRe },
+        { preferredLocations: locRe },
+        { homeTownCity: locRe }
+      ]
+    });
+  }
+
+  // 9. Gender
+  if (gender && gender.trim() && gender.toLowerCase() !== 'all') {
+    andClauses.push({
+      gender: { $regex: `^${gender.trim()}`, $options: 'i' }
+    });
+  }
+
+  // 10. Qualification
+  if (qualification && qualification.trim() && qualification.toLowerCase() !== 'all') {
+    const qRe = { $regex: qualification.trim(), $options: 'i' };
+    andClauses.push({
+      $or: [
+        { ugDegree: qRe },
+        { ugSpecialization: qRe },
+        { pgDegree: qRe },
+        { pgSpecialization: qRe },
+        { doctorateDegree: qRe },
+        { resumeHeadline: qRe },
+        { summary: qRe }
+      ]
+    });
+  }
+
+  // 11. Experience Filter
+  if ((minExp !== undefined && minExp !== '' && minExp !== 'any') || 
+      (maxExp !== undefined && maxExp !== '' && maxExp !== 'any')) {
+    const minE = minExp && minExp !== 'any' ? parseFloat(minExp) : 0;
+    const maxE = maxExp && maxExp !== 'any' ? parseFloat(maxExp) : 999;
+    const expRegexes = [];
+    for (let y = Math.floor(minE); y <= Math.min(Math.ceil(maxE), 40); y++) {
+      expRegexes.push(`\\b${y}\\b|\\b${y}\\s*(?:yr|year|plus|\\+)`);
+    }
+    if (expRegexes.length > 0) {
+      andClauses.push({
+        $or: [
+          { totalExperience: { $regex: expRegexes.join('|'), $options: 'i' } },
+          { experienceMatchScore: { $gte: minE > 0 ? 30 : 0 } }
+        ]
+      });
+    }
+  }
+
+  // 12. Salary Filter
+  if ((minSalary !== undefined && minSalary !== '' && minSalary !== 'any') || 
+      (maxSalary !== undefined && maxSalary !== '' && maxSalary !== 'any')) {
+    const minS = minSalary && minSalary !== 'any' ? parseFloat(minSalary) : 0;
+    const maxS = maxSalary && maxSalary !== 'any' ? parseFloat(maxSalary) : 999;
+    const salRegexes = [];
+    for (let s = Math.floor(minS); s <= Math.min(Math.ceil(maxS), 60); s++) {
+      salRegexes.push(`\\b${s}\\b|\\b${s}\\s*(?:lpa|lac|lakh|l)`);
+    }
+    if (salRegexes.length > 0) {
+      andClauses.push({
+        annualSalary: { $regex: salRegexes.join('|'), $options: 'i' }
+      });
+    }
+  }
+
+  // 13. RBAC Scoping
+  if (user && (user.role === 'recruiter' || user.role === 'spoc')) {
+    const hasSearchQuery = !!(search && search.trim());
+    if (hasSearchQuery) {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      andClauses.push({
+        $or: [
+          { scannedBy: user._id },
+          { scanDate: { $lt: thirtyDaysAgo } }
+        ]
+      });
+    } else {
+      andClauses.push({ scannedBy: user._id });
+    }
+  }
+
+  return andClauses.length > 0 ? { $and: andClauses } : {};
+}
+
 /* ─── GET /api/ats-records ──────────────────────────────────── */
 exports.list = async (req, res, next) => {
   try {
-    const {
-      page = 1, limit = 20,
-      status, minScore, maxScore,
-      startDate, endDate,
-      search,
-    } = req.query;
-
-    const filter = {};
-
-    if (status)   filter.atsStatus = status;
-    if (minScore || maxScore) {
-      filter.atsScore = {};
-      if (minScore) filter.atsScore.$gte = parseInt(minScore, 10);
-      if (maxScore) filter.atsScore.$lte = parseInt(maxScore, 10);
-    }
-    if (startDate || endDate) {
-      filter.scanDate = {};
-      if (startDate) filter.scanDate.$gte = new Date(startDate);
-      if (endDate)   filter.scanDate.$lte = new Date(new Date(endDate).setHours(23, 59, 59));
-    }
-    // RBAC: recruiters only see their own records, unless they search via keywords, in which case they can see others' records after 30 days
-    if (req.user.role === 'recruiter' || req.user.role === 'spoc') {
-      if (search) {
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const re = { $regex: search, $options: 'i' };
-        filter.$and = [
-          { $or: [{ name: re }, { email: re }, { phone: re }, { keySkills: re }] },
-          {
-            $or: [
-              { scannedBy: req.user._id },
-              { scanDate: { $lt: thirtyDaysAgo } }
-            ]
-          }
-        ];
-      } else {
-        filter.scannedBy = req.user._id;
-      }
-    } else if (search) {
-      const re = { $regex: search, $options: 'i' };
-      filter.$or = [{ name: re }, { email: re }, { phone: re }, { keySkills: re }];
-    }
+    const { page = 1, limit = 20 } = req.query;
+    const filter = buildFilterQuery(req.query, req.user);
 
     const skip  = (parseInt(page, 10) - 1) * parseInt(limit, 10);
     const total = await AtsRecord.countDocuments(filter);
@@ -117,42 +265,7 @@ exports.list = async (req, res, next) => {
 /* ─── GET /api/ats-records/export ───────────────────────────── */
 exports.exportExcel = async (req, res, next) => {
   try {
-    const { status, minScore, maxScore, startDate, endDate, search } = req.query;
-    const filter = {};
-
-    if (status) filter.atsStatus = status;
-    if (minScore || maxScore) {
-      filter.atsScore = {};
-      if (minScore) filter.atsScore.$gte = parseInt(minScore, 10);
-      if (maxScore) filter.atsScore.$lte = parseInt(maxScore, 10);
-    }
-    if (startDate || endDate) {
-      filter.scanDate = {};
-      if (startDate) filter.scanDate.$gte = new Date(startDate);
-      if (endDate)   filter.scanDate.$lte = new Date(new Date(endDate).setHours(23, 59, 59));
-    }
-    // RBAC: Recruiters only export their own scanned records, unless they search via keywords, in which case they can export others' records after 30 days
-    if (req.user.role === 'recruiter' || req.user.role === 'spoc') {
-      if (search) {
-        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        const re = { $regex: search, $options: 'i' };
-        filter.$and = [
-          { $or: [{ name: re }, { email: re }, { phone: re }] },
-          {
-            $or: [
-              { scannedBy: req.user._id },
-              { scanDate: { $lt: thirtyDaysAgo } }
-            ]
-          }
-        ];
-      } else {
-        filter.scannedBy = req.user._id;
-      }
-    } else if (search) {
-      const re = { $regex: search, $options: 'i' };
-      filter.$or = [{ name: re }, { email: re }, { phone: re }];
-    }
-
+    const filter = buildFilterQuery(req.query, req.user);
     const records = await AtsRecord.find(filter).sort({ scanDate: -1 }).lean();
 
     const ExcelJS = require('exceljs');

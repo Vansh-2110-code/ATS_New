@@ -24,7 +24,7 @@ exports.recruiterDashboard = async (req, res, next) => {
     const dateFilter = { $gte: start, $lt: end };
     
     let filterRecruiter = userId;
-    let filterRecruiterName = null;
+    let filterRecruiterName = req.user.name;
     let teamScopeFilter = null;
 
     if (isAdmin) {
@@ -41,6 +41,7 @@ exports.recruiterDashboard = async (req, res, next) => {
         }
       } else {
         filterRecruiter = null; // Admin viewing all
+        filterRecruiterName = null;
       }
 
       if (!filterRecruiter && (tlId || req.user.role === 'tl')) {
@@ -143,6 +144,34 @@ exports.recruiterDashboard = async (req, res, next) => {
       status: 'Joined'
     });
 
+    // Recruiter base conditions (independent of range filter, since todayCalls is strictly for today)
+    const recruiterScopeConditions = [];
+    if (division && division !== 'All') {
+      recruiterScopeConditions.push({ division });
+    }
+    if (filterRecruiter || filterRecruiterName) {
+      const recOr = [];
+      if (filterRecruiter) recOr.push({ assignedRecruiter: filterRecruiter });
+      if (filterRecruiterName) {
+        recOr.push({ assignedRecruiterName: filterRecruiterName });
+        recOr.push({ sourcedBy: filterRecruiterName });
+        recOr.push({ recruiterName: filterRecruiterName });
+      }
+      recruiterScopeConditions.push({ $or: recOr });
+    } else if (teamScopeFilter) {
+      recruiterScopeConditions.push(teamScopeFilter);
+    }
+    if (clientFilter && clientFilter !== 'All Companies') {
+      const companyRegex = new RegExp(`^${clientFilter.replace(/[-[\]{}()*+?.,\\^$|#\\s]/g, '\\$&')}$`, 'i');
+      recruiterScopeConditions.push({
+        $or: [
+          { clientName: companyRegex },
+          { company: companyRegex },
+          { client: companyRegex },
+        ]
+      });
+    }
+
     // Call stats
     const callMatch = { ...baseMatch };
     const totalCalls = await Candidate.countDocuments({
@@ -154,15 +183,21 @@ exports.recruiterDashboard = async (req, res, next) => {
       ]
     });
 
-    const todayCalls = await Candidate.countDocuments({
-      ...baseMatch,
-      createdAt: { $gte: startOfToday, $lt: endOfToday },
-      $or: [
-        { firstCallDate: { $ne: null, $ne: '' } },
-        { firstCallStatus: { $ne: null, $ne: '' } },
-        { 'notes.0': { $exists: true } }
+    const todayCallsMatch = {
+      $and: [
+        ...(recruiterScopeConditions.length > 0 ? recruiterScopeConditions : [{}]),
+        {
+          $or: [
+            { createdAt: { $gte: startOfToday, $lt: endOfToday } },
+            { firstCallDate: { $gte: startOfToday, $lt: endOfToday } },
+            { updatedAt: { $gte: startOfToday, $lt: endOfToday } },
+            { 'notes.createdAt': { $gte: startOfToday, $lt: endOfToday } }
+          ]
+        }
       ]
-    });
+    };
+
+    const todayCalls = await Candidate.countDocuments(todayCallsMatch);
 
     // Candidates
     const totalCandidates = await Candidate.countDocuments(baseMatch);
@@ -339,12 +374,12 @@ exports.tlDashboard = async (req, res, next) => {
       });
 
       const todayCalls = await Candidate.countDocuments({
-        ...recruiterBaseMatch,
-        createdAt: { $gte: today, $lt: tomorrow },
+        ...recruiterBaseNoDate,
         $or: [
-          { firstCallDate: { $ne: null, $ne: '' } },
-          { firstCallStatus: { $ne: null, $ne: '' } },
-          { 'notes.0': { $exists: true } }
+          { createdAt: { $gte: today, $lt: tomorrow } },
+          { firstCallDate: { $gte: today, $lt: tomorrow } },
+          { updatedAt: { $gte: today, $lt: tomorrow } },
+          { 'notes.createdAt': { $gte: today, $lt: tomorrow } }
         ]
       });
 
@@ -810,14 +845,27 @@ exports.allTeamsDashboard = async (req, res, next) => {
 
       // 3. Calculate performance for each recruiter
       const recruiterStats = await Promise.all(recruiters.map(async (r) => {
-        // Calls today
-        const callsAgg = await Candidate.aggregate([
-          { $match: { assignedRecruiter: r._id } },
-          { $unwind: '$notes' },
-          { $match: { 'notes.createdAt': { $gte: today, $lt: tomorrow } } },
-          { $count: 'count' },
-        ]);
-        const calls = callsAgg[0]?.count || 0;
+        // Calls / touches today
+        const calls = await Candidate.countDocuments({
+          $and: [
+            {
+              $or: [
+                { assignedRecruiter: r._id },
+                { assignedRecruiterName: r.name },
+                { sourcedBy: r.name },
+                { recruiterName: r.name }
+              ]
+            },
+            {
+              $or: [
+                { createdAt: { $gte: today, $lt: tomorrow } },
+                { firstCallDate: { $gte: today, $lt: tomorrow } },
+                { updatedAt: { $gte: today, $lt: tomorrow } },
+                { 'notes.createdAt': { $gte: today, $lt: tomorrow } }
+              ]
+            }
+          ]
+        });
 
         // Interviews today
         const interviews = await Candidate.countDocuments({

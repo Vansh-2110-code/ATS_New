@@ -90,34 +90,47 @@ export function AtsDashboardPage() {
   const [editFormData, setEditFormData] = useState<Partial<AtsRecord>>({});
 
   // Filters
-  const [search,    setSearch]    = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterMinScore, setFilterMinScore] = useState('');
-  const [filterMaxScore, setFilterMaxScore] = useState('');
-  const [filterStart, setFilterStart] = useState('');
-  const [filterEnd,   setFilterEnd]   = useState('');
+  const [search,          setSearch]          = useState('');
+  const [company,         setCompany]         = useState('');
+  const [excludeKeywords, setExcludeKeywords] = useState('');
+  const [skills,          setSkills]          = useState('');
+  const [minExp,          setMinExp]          = useState('');
+  const [maxExp,          setMaxExp]          = useState('');
+  const [location,        setLocation]        = useState('');
+  const [minSalary,       setMinSalary]       = useState('');
+  const [maxSalary,       setMaxSalary]       = useState('');
+  const [gender,          setGender]          = useState('All');
+  const [qualification,   setQualification]   = useState('');
+  const [filterStatus,    setFilterStatus]    = useState('');
+  const [filterMinScore,  setFilterMinScore]  = useState('');
+  const [filterMaxScore,  setFilterMaxScore]  = useState('');
+  const [filterStart,     setFilterStart]     = useState('');
+  const [filterEnd,       setFilterEnd]       = useState('');
 
   const LIMIT = 15;
 
   const fetchRecords = useCallback(async (pg = 1) => {
-    if (user?.role === 'recruiter' && !search.trim()) {
-      setRecords([]);
-      setTotal(0);
-      setPage(pg);
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     try {
       const params: Record<string, string> = {
         page: String(pg), limit: String(LIMIT),
       };
-      if (search)          params.search    = search;
-      if (filterStatus)    params.status    = filterStatus;
-      if (filterMinScore)  params.minScore  = filterMinScore;
-      if (filterMaxScore)  params.maxScore  = filterMaxScore;
-      if (filterStart)     params.startDate = filterStart;
-      if (filterEnd)       params.endDate   = filterEnd;
+      if (search)                         params.search          = search;
+      if (company)                        params.company         = company;
+      if (excludeKeywords)                params.excludeKeywords = excludeKeywords;
+      if (skills)                         params.skills          = skills;
+      if (minExp)                         params.minExp          = minExp;
+      if (maxExp)                         params.maxExp          = maxExp;
+      if (location)                       params.location        = location;
+      if (minSalary)                      params.minSalary       = minSalary;
+      if (maxSalary)                      params.maxSalary       = maxSalary;
+      if (gender && gender !== 'All')     params.gender          = gender;
+      if (qualification && qualification !== 'All') params.qualification = qualification;
+      if (filterStatus)                   params.status          = filterStatus;
+      if (filterMinScore)                 params.minScore        = filterMinScore;
+      if (filterMaxScore)                 params.maxScore        = filterMaxScore;
+      if (filterStart)                    params.startDate       = filterStart;
+      if (filterEnd)                      params.endDate         = filterEnd;
 
       const data = await api.getAtsRecords(params);
       setRecords(data.records || []);
@@ -128,7 +141,7 @@ export function AtsDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, filterStatus, filterMinScore, filterMaxScore, filterStart, filterEnd, user]);
+  }, [search, company, excludeKeywords, skills, minExp, maxExp, location, minSalary, maxSalary, gender, qualification, filterStatus, filterMinScore, filterMaxScore, filterStart, filterEnd]);
 
   useEffect(() => {
     if (user) fetchRecords(1);
@@ -136,16 +149,45 @@ export function AtsDashboardPage() {
 
   const handleSearch = () => fetchRecords(1);
 
+  const clearFilters = () => {
+    setSearch('');
+    setCompany('');
+    setExcludeKeywords('');
+    setSkills('');
+    setMinExp('');
+    setMaxExp('');
+    setLocation('');
+    setMinSalary('');
+    setMaxSalary('');
+    setGender('All');
+    setQualification('');
+    setFilterStatus('');
+    setFilterMinScore('');
+    setFilterMaxScore('');
+    setFilterStart('');
+    setFilterEnd('');
+  };
+
   const handleExport = async () => {
     setExporting(true);
     try {
       const params: Record<string, string> = {};
-      if (search)         params.search    = search;
-      if (filterStatus)   params.status    = filterStatus;
-      if (filterMinScore) params.minScore  = filterMinScore;
-      if (filterMaxScore) params.maxScore  = filterMaxScore;
-      if (filterStart)    params.startDate = filterStart;
-      if (filterEnd)      params.endDate   = filterEnd;
+      if (search)                         params.search          = search;
+      if (company)                        params.company         = company;
+      if (excludeKeywords)                params.excludeKeywords = excludeKeywords;
+      if (skills)                         params.skills          = skills;
+      if (minExp)                         params.minExp          = minExp;
+      if (maxExp)                         params.maxExp          = maxExp;
+      if (location)                       params.location        = location;
+      if (minSalary)                      params.minSalary       = minSalary;
+      if (maxSalary)                      params.maxSalary       = maxSalary;
+      if (gender && gender !== 'All')     params.gender          = gender;
+      if (qualification && qualification !== 'All') params.qualification = qualification;
+      if (filterStatus)                   params.status          = filterStatus;
+      if (filterMinScore)                 params.minScore        = filterMinScore;
+      if (filterMaxScore)                 params.maxScore        = filterMaxScore;
+      if (filterStart)                    params.startDate       = filterStart;
+      if (filterEnd)                      params.endDate         = filterEnd;
       await api.exportAtsRecords(params);
     } catch (err) {
       alert('Export failed. Please try again.');
@@ -178,7 +220,7 @@ export function AtsDashboardPage() {
   };
 
   const isDateFiltered = !!(filterStart || filterEnd);
-  const isFiltered = !!(search || filterStatus || filterMinScore || filterMaxScore || filterStart || filterEnd);
+  const isFiltered = !!(search || company || excludeKeywords || skills || minExp || maxExp || location || minSalary || maxSalary || (gender && gender !== 'All') || qualification || filterStatus || filterMinScore || filterMaxScore || filterStart || filterEnd);
 
   const getExportButtonText = () => {
     if (exporting) return 'Exporting...';
@@ -200,7 +242,7 @@ export function AtsDashboardPage() {
             ATS Candidate Database
           </h1>
           <p className="text-slate-500 text-sm mt-0.5">
-            Manage all scanned resumes. Every person you've ever scanned is stored here for permanent reuse.
+            Manage and filter all scanned resumes with custom keywords, skills, salary, experience, and location.
           </p>
         </div>
         <div className="flex gap-2.5">
@@ -223,7 +265,7 @@ export function AtsDashboardPage() {
           )}
           <button
             onClick={() => fetchRecords(page)}
-            className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 transition-colors"
+            className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 transition-colors cursor-pointer"
             title="Refresh database"
           >
             <RefreshCw className="w-4 h-4" />
@@ -256,96 +298,330 @@ export function AtsDashboardPage() {
         })}
       </div>
 
-      {/* Filters */}
-      <div className="bg-white border border-slate-100 rounded-xl p-4 space-y-3">
-        <div className="flex items-center gap-2 text-slate-600 text-sm font-medium">
-          <Filter className="w-4 h-4" /> Filters
+      {/* Advanced Filters Panel */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 shadow-xs">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2 text-slate-800 text-sm font-bold">
+            <Filter className="w-4 h-4 text-green-600" />
+            <span>Advanced Database Filters</span>
+          </div>
+          {isFiltered && (
+            <span className="text-xs font-semibold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
+              Filters Active
+            </span>
+          )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Search */}
-          <div className="space-y-1">
-            <label className="block text-xs font-semibold text-slate-500">Search Keyword</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+
+        {/* Filter Grid - 3 Logical Rows */}
+        <div className="space-y-4">
+          {/* Row 1: Company, Keywords, Exclude Keywords, Skills */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {/* 1. Company Hiring for */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">Company Hiring for</label>
               <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
+                value={company}
+                onChange={e => setCompany(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                placeholder="Name, email, phone, skill..."
-                className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-green-400"
+                placeholder="Target company / client / role..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-white"
+              />
+            </div>
+
+            {/* 2. Keywords */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">Keywords (Search)</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                  placeholder="Name, email, phone, title..."
+                  className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-white"
+                />
+              </div>
+            </div>
+
+            {/* 3. Exclude Keywords */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">Exclude Keywords</label>
+              <input
+                value={excludeKeywords}
+                onChange={e => setExcludeKeywords(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                placeholder="e.g. intern, trainee, contract..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400 bg-white"
+              />
+            </div>
+
+            {/* 4. Add Skills */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">Add Skills</label>
+              <input
+                value={skills}
+                onChange={e => setSkills(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                placeholder="e.g. Java, React, SAP, P2P..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 bg-white"
               />
             </div>
           </div>
 
-          {/* Status */}
-          <div className="space-y-1">
-            <label className="block text-xs font-semibold text-slate-500">ATS Status</label>
-            <select
-              value={filterStatus}
-              onChange={e => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-green-400 bg-white"
-            >
-              <option value="">All Statuses</option>
-              {Object.keys(STATUS_CFG).map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
+          {/* Row 2: Experience, Location, Salary, Gender */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {/* 5. Exp (Min to Max yrs) */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">Experience (Years)</label>
+              <div className="flex items-center gap-2">
+                <select
+                  value={minExp}
+                  onChange={e => setMinExp(e.target.value)}
+                  className="w-1/2 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-green-500 bg-white"
+                >
+                  <option value="">Min Exp</option>
+                  <option value="0">0 yrs</option>
+                  <option value="1">1 yr</option>
+                  <option value="2">2 yrs</option>
+                  <option value="3">3 yrs</option>
+                  <option value="4">4 yrs</option>
+                  <option value="5">5 yrs</option>
+                  <option value="6">6 yrs</option>
+                  <option value="7">7 yrs</option>
+                  <option value="8">8 yrs</option>
+                  <option value="9">9 yrs</option>
+                  <option value="10">10 yrs</option>
+                  <option value="12">12 yrs</option>
+                  <option value="15">15 yrs</option>
+                  <option value="20">20 yrs</option>
+                </select>
+                <span className="text-xs text-slate-400 font-bold">to</span>
+                <select
+                  value={maxExp}
+                  onChange={e => setMaxExp(e.target.value)}
+                  className="w-1/2 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-green-500 bg-white"
+                >
+                  <option value="">Max Exp</option>
+                  <option value="1">1 yr</option>
+                  <option value="2">2 yrs</option>
+                  <option value="3">3 yrs</option>
+                  <option value="4">4 yrs</option>
+                  <option value="5">5 yrs</option>
+                  <option value="6">6 yrs</option>
+                  <option value="7">7 yrs</option>
+                  <option value="8">8 yrs</option>
+                  <option value="9">9 yrs</option>
+                  <option value="10">10 yrs</option>
+                  <option value="12">12 yrs</option>
+                  <option value="15">15 yrs</option>
+                  <option value="20">20 yrs</option>
+                  <option value="25">25 yrs</option>
+                  <option value="30">30+ yrs</option>
+                </select>
+              </div>
+            </div>
 
-          {/* Score range */}
-          <div className="space-y-1">
-            <label className="block text-xs font-semibold text-slate-500">ATS Score Range</label>
-            <div className="flex gap-2">
-              <input
-                type="number" min="0" max="100"
-                value={filterMinScore}
-                onChange={e => setFilterMinScore(e.target.value)}
-                placeholder="Min"
-                className="w-1/2 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-green-400"
-              />
-              <input
-                type="number" min="0" max="100"
-                value={filterMaxScore}
-                onChange={e => setFilterMaxScore(e.target.value)}
-                placeholder="Max"
-                className="w-1/2 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-green-400"
-              />
+            {/* 6. Current Location */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">Current Location</label>
+              <select
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500 bg-white"
+              >
+                <option value="">All Locations</option>
+                <option value="Bangalore">Bangalore</option>
+                <option value="Hyderabad">Hyderabad</option>
+                <option value="Mumbai">Mumbai</option>
+                <option value="Pune">Pune</option>
+                <option value="Chennai">Chennai</option>
+                <option value="Delhi">Delhi / NCR</option>
+                <option value="Kolkata">Kolkata</option>
+                <option value="Ahmedabad">Ahmedabad</option>
+                <option value="Kochi">Kochi</option>
+                <option value="Noida">Noida</option>
+                <option value="Gurgaon">Gurgaon</option>
+                <option value="Remote">Remote</option>
+              </select>
+            </div>
+
+            {/* 7. Salary (Lacs) */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">Salary (Lacs / LPA)</label>
+              <div className="flex items-center gap-2">
+                <select
+                  value={minSalary}
+                  onChange={e => setMinSalary(e.target.value)}
+                  className="w-1/2 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-green-500 bg-white"
+                >
+                  <option value="">Min Lacs</option>
+                  <option value="0">0 Lac</option>
+                  <option value="1">1 Lac</option>
+                  <option value="2">2 Lacs</option>
+                  <option value="3">3 Lacs</option>
+                  <option value="4">4 Lacs</option>
+                  <option value="5">5 Lacs</option>
+                  <option value="6">6 Lacs</option>
+                  <option value="7">7 Lacs</option>
+                  <option value="8">8 Lacs</option>
+                  <option value="10">10 Lacs</option>
+                  <option value="12">12 Lacs</option>
+                  <option value="15">15 Lacs</option>
+                  <option value="18">18 Lacs</option>
+                  <option value="20">20 Lacs</option>
+                  <option value="25">25 Lacs</option>
+                  <option value="30">30 Lacs</option>
+                </select>
+                <span className="text-xs text-slate-400 font-bold">to</span>
+                <select
+                  value={maxSalary}
+                  onChange={e => setMaxSalary(e.target.value)}
+                  className="w-1/2 px-2.5 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-green-500 bg-white"
+                >
+                  <option value="">Max Lacs</option>
+                  <option value="2">2 Lacs</option>
+                  <option value="3">3 Lacs</option>
+                  <option value="4">4 Lacs</option>
+                  <option value="5">5 Lacs</option>
+                  <option value="6">6 Lacs</option>
+                  <option value="7">7 Lacs</option>
+                  <option value="8">8 Lacs</option>
+                  <option value="10">10 Lacs</option>
+                  <option value="12">12 Lacs</option>
+                  <option value="15">15 Lacs</option>
+                  <option value="18">18 Lacs</option>
+                  <option value="20">20 Lacs</option>
+                  <option value="25">25 Lacs</option>
+                  <option value="30">30 Lacs</option>
+                  <option value="40">40 Lacs</option>
+                  <option value="50">50+ Lacs</option>
+                </select>
+              </div>
+            </div>
+
+            {/* 8. Gender */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">Gender</label>
+              <div className="flex items-center gap-1.5 pt-0.5">
+                {['All', 'Male', 'Female'].map(g => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setGender(g)}
+                    className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      gender === g
+                        ? 'bg-green-600 text-white border-green-600 shadow-xs'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {g}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Date range */}
-          <div className="space-y-1">
-            <label className="block text-xs font-semibold text-slate-500">Date Range (From - To)</label>
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={filterStart}
-                onChange={e => setFilterStart(e.target.value)}
-                className="w-1/2 px-2 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-green-400 text-slate-600"
-              />
-              <input
-                type="date"
-                value={filterEnd}
-                onChange={e => setFilterEnd(e.target.value)}
-                className="w-1/2 px-2 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-green-400 text-slate-600"
-              />
+          {/* Row 3: Qualification, Status, Score, Date */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {/* 9. Qualification */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">Qualification</label>
+              <select
+                value={qualification}
+                onChange={e => setQualification(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500 bg-white"
+              >
+                <option value="">All Qualifications</option>
+                <option value="B.Tech">B.Tech / B.E</option>
+                <option value="Graduate">Any Graduate</option>
+                <option value="BCA">BCA</option>
+                <option value="B.Sc">B.Sc</option>
+                <option value="B.Com">B.Com</option>
+                <option value="BBA">BBA</option>
+                <option value="M.Tech">M.Tech / M.E</option>
+                <option value="MCA">MCA</option>
+                <option value="MBA">MBA</option>
+                <option value="M.Sc">M.Sc</option>
+                <option value="M.Com">M.Com</option>
+                <option value="Post Graduate">Post Graduate</option>
+                <option value="Doctorate">Doctorate / Ph.D</option>
+              </select>
+            </div>
+
+            {/* 10. Status */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">ATS Status</label>
+              <select
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500 bg-white"
+              >
+                <option value="">All Statuses</option>
+                {Object.keys(STATUS_CFG).map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+
+            {/* 11. Score range */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">ATS Score Range</label>
+              <div className="flex gap-2">
+                <input
+                  type="number" min="0" max="100"
+                  value={filterMinScore}
+                  onChange={e => setFilterMinScore(e.target.value)}
+                  placeholder="Min"
+                  className="w-1/2 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500"
+                />
+                <input
+                  type="number" min="0" max="100"
+                  value={filterMaxScore}
+                  onChange={e => setFilterMaxScore(e.target.value)}
+                  placeholder="Max"
+                  className="w-1/2 px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500"
+                />
+              </div>
+            </div>
+
+            {/* 12. Date range */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-600">Date Range (From - To)</label>
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={filterStart}
+                  onChange={e => setFilterStart(e.target.value)}
+                  className="w-1/2 px-2 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-green-500 text-slate-600"
+                />
+                <input
+                  type="date"
+                  value={filterEnd}
+                  onChange={e => setFilterEnd(e.target.value)}
+                  className="w-1/2 px-2 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-green-500 text-slate-600"
+                />
+              </div>
             </div>
           </div>
         </div>
-        <div className="flex gap-2 pt-2">
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
           <button
+            type="button"
             onClick={handleSearch}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-xs cursor-pointer"
           >
+            <Search className="w-4 h-4" />
             Apply Filters
           </button>
           <button
+            type="button"
             onClick={() => {
-              setSearch(''); setFilterStatus(''); setFilterMinScore('');
-              setFilterMaxScore(''); setFilterStart(''); setFilterEnd('');
-              fetchRecords(1);
+              clearFilters();
+              setTimeout(() => fetchRecords(1), 50);
             }}
-            className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg text-sm hover:bg-slate-50 transition-colors"
+            className="px-4 py-2.5 border border-slate-200 text-slate-600 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-all cursor-pointer"
           >
-            Clear
+            Clear All
           </button>
         </div>
       </div>
@@ -379,18 +655,11 @@ export function AtsDashboardPage() {
               {!loading && records.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-4 py-12 text-center">
-                    {user?.role === 'recruiter' && !search.trim() ? (
-                      <>
-                        <Lock className="w-10 h-10 text-slate-300 mx-auto mb-2 animate-pulse" />
-                        <p className="text-sm font-bold text-slate-600">Database Locked</p>
-                        <p className="text-xs text-slate-400 mt-1">Please enter a search keyword (e.g., skills) to unlock records.</p>
-                      </>
-                    ) : (
-                      <>
-                        <FileSpreadsheet className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                        <p className="text-sm text-slate-500">No ATS records found. Scan a resume to get started.</p>
-                      </>
-                    )}
+                    <FileSpreadsheet className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm font-bold text-slate-600">No ATS records found</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {isFiltered ? 'Try adjusting or clearing your filters to see more results.' : 'Scan a resume in ATS Scanner to automatically populate your records.'}
+                    </p>
                   </td>
                 </tr>
               )}

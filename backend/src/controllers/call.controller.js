@@ -153,22 +153,106 @@ exports.getCandidateCalls = async (req, res, next) => {
   }
 };
 
-// GET /api/calls/my - Get current recruiter's calls
+// GET /api/calls/my - Get recruiter's calls / candidate touches for a given date
 exports.getMyCalls = async (req, res, next) => {
   try {
-    const { date } = req.query;
-    const query = { recruiter: req.user._id };
-    
-    if (date) {
-      const start = new Date(date);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
-      end.setDate(end.getDate() + 1);
-      query.createdAt = { $gte: start, $lt: end };
+    const { date, recruiterId } = req.query;
+    const User = require('../models/User');
+
+    let targetUserId = req.user._id;
+    let targetUserName = req.user.name;
+
+    if (recruiterId && ['admin', 'manager', 'tl'].includes(req.user.role)) {
+      const u = await User.findById(recruiterId).select('name');
+      if (u) {
+        targetUserId = u._id;
+        targetUserName = u.name;
+      }
     }
 
-    const calls = await CallLog.find(query).sort('-createdAt').limit(100);
-    res.json(calls);
+    const targetDate = date ? new Date(date) : new Date();
+    const startOfToday = new Date(targetDate);
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date(targetDate);
+    endOfToday.setHours(23, 59, 59, 999);
+
+    // 1. Get CallLogs if any
+    const callLogs = await CallLog.find({
+      recruiter: targetUserId,
+      createdAt: { $gte: startOfToday, $lt: endOfToday }
+    }).populate('candidate').lean();
+
+    // 2. Get Candidate entries touched on that date
+    const candFilter = {
+      $and: [
+        {
+          $or: [
+            { assignedRecruiter: targetUserId },
+            { assignedRecruiterName: targetUserName },
+            { sourcedBy: targetUserName },
+            { recruiterName: targetUserName }
+          ]
+        },
+        {
+          $or: [
+            { createdAt: { $gte: startOfToday, $lt: endOfToday } },
+            { firstCallDate: { $gte: startOfToday, $lt: endOfToday } },
+            { updatedAt: { $gte: startOfToday, $lt: endOfToday } },
+            { 'notes.createdAt': { $gte: startOfToday, $lt: endOfToday } }
+          ]
+        }
+      ]
+    };
+
+    const candidates = await Candidate.find(candFilter)
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .lean();
+
+    // 3. Merge & Deduplicate
+    const candidateMap = new Map();
+
+    // Add CallLogs first if any
+    for (const cl of callLogs) {
+      const cId = cl.candidate?._id ? cl.candidate._id.toString() : (cl.candidate ? cl.candidate.toString() : String(cl._id));
+      candidateMap.set(cId, {
+        _id: cl._id,
+        candidate: cId,
+        candidateName: cl.candidate?.name || cl.candidateName || 'Candidate',
+        candidatePhone: cl.candidate?.phone || cl.candidatePhone || '',
+        candidateEmail: cl.candidate?.email || '',
+        startTime: cl.startTime || cl.createdAt,
+        duration: cl.duration || 0,
+        outcome: cl.outcome || cl.candidate?.status || 'Completed',
+        recruiterName: cl.recruiterName || targetUserName,
+        completed: cl.completed ?? true,
+        clientName: cl.candidate?.clientName || cl.candidate?.company || '',
+        status: cl.candidate?.status || cl.outcome
+      });
+    }
+
+    // Add candidates touched today
+    for (const c of candidates) {
+      const cId = c._id.toString();
+      if (!candidateMap.has(cId)) {
+        candidateMap.set(cId, {
+          _id: c._id,
+          candidate: cId,
+          candidateName: c.name,
+          candidatePhone: c.phone,
+          candidateEmail: c.email,
+          startTime: c.updatedAt || c.createdAt || c.firstCallDate,
+          duration: 0,
+          outcome: c.firstCallStatus || c.status || 'Updated',
+          recruiterName: c.assignedRecruiterName || targetUserName,
+          completed: true,
+          clientName: c.clientName || c.company || '',
+          status: c.status
+        });
+      }
+    }
+
+    const result = Array.from(candidateMap.values()).sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+    res.json(result);
   } catch (err) {
     next(err);
   }

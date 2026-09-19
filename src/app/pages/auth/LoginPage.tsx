@@ -52,7 +52,7 @@ export function LoginPage() {
     try {
       if (loginMode === 'employee') {
         const data = await api.login(employeeId.trim(), password, isWFH);
-        const isFaceExempt = ['admin', 'walkin', 'demo_walkin'].includes(data.user.role) || Boolean(data.user.disableBiometric);
+        const isFaceExempt = ['admin', 'superadmin', 'walkin', 'demo_walkin'].includes(data.user.role) || Boolean(data.user.disableBiometric);
         const needsFaceCheck = !isFaceExempt && ['recruiter', 'tl', 'manager'].includes(data.user.role);
         if (needsFaceCheck) {
           setTempAuthData(data);

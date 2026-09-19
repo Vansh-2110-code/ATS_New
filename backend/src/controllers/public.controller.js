@@ -49,27 +49,69 @@ async function getNextRoundRobinRecruiter() {
 // POST /api/public/apply
 exports.apply = async (req, res, next) => {
   try {
-    const { fullName, email, phone, experience, skills, jrNumber } = req.body;
-    if (!fullName || !email || !phone) {
-      return res.status(400).json({ message: 'Name, email, and phone are required' });
+    const applicantName = (req.body.fullName || req.body.name || req.body.candidateName || '').trim();
+    const applicantEmail = (req.body.email || '').trim().toLowerCase();
+    const applicantPhone = (req.body.phone || req.body.mobile || req.body.phoneNumber || '').trim();
+    const experience = req.body.experience || '';
+    const skills = req.body.skills;
+    const jrNumber = req.body.jrNumber;
+    const positionApplied = req.body.positionApplied || req.body.jobTitle || 'Website Application';
+
+    if (!applicantName || !applicantPhone) {
+      return res.status(400).json({ message: 'Name and phone number are required' });
     }
 
     // Check duplicate
-    const existing = await Candidate.findOne({ $or: [{ phone }, { email }] });
+    let existing = null;
+    if (applicantEmail || applicantPhone) {
+      const orConds = [];
+      if (applicantPhone) orConds.push({ phone: applicantPhone });
+      if (applicantEmail) orConds.push({ email: applicantEmail });
+      existing = await Candidate.findOne({ $or: orConds });
+    }
+
     if (existing) {
-      return res.status(409).json({ message: 'An application with this phone or email already exists' });
+      // Re-application: gracefully update resume and record re-application note rather than rejecting
+      if (req.file) {
+        existing.resumePath = `/uploads/resumes/${req.file.filename}`;
+        existing.resumeOriginalName = req.file.originalname;
+      }
+      if (!existing.notes) existing.notes = [];
+      existing.notes.unshift({
+        text: `Re-applied via White Horse Website for "${positionApplied}"${jrNumber ? ' (' + jrNumber + ')' : ''}`,
+        addedByName: 'Website Portal',
+        createdAt: new Date()
+      });
+      if (existing.ownershipStatus === 'Expired' || !existing.assignedRecruiter) {
+        existing.ownershipStatus = 'General Data';
+        existing.status = 'New';
+      }
+      existing.appliedViaPublic = true;
+      if (!existing.source || existing.source === 'Other') {
+        existing.source = 'Company Website';
+      }
+      await existing.save();
+
+      return res.status(200).json({
+        success: true,
+        message: 'Your application has been received and your profile updated in White Horse Manpower ATS.',
+        id: existing._id,
+        reapplication: true
+      });
     }
 
     const candidateData = {
-      name: fullName,
-      email,
-      phone,
+      name: applicantName,
+      email: applicantEmail,
+      phone: applicantPhone,
       experience: experience || '',
       skills: typeof skills === 'string' ? skills.split(',').map(s => s.trim()).filter(Boolean) : (skills || []),
-      source: 'Company Website',
+      source: req.body.source || 'Company Website',
       appliedViaPublic: true,
       status: 'New',
       ownershipStatus: 'General Data',
+      positionApplied: positionApplied,
+      clientName: 'White Horse Website'
     };
 
     // Round robin assignment to active recruiter
@@ -79,29 +121,22 @@ exports.apply = async (req, res, next) => {
       candidateData.assignedRecruiterName = nextRecruiter.name;
       candidateData.ownershipStatus = 'Assigned';
       candidateData.assignedAt = new Date();
+    } else {
+      candidateData.assignedRecruiterName = 'Unassigned';
     }
 
     if (jrNumber) {
-      // Map positionApplied for backwards compatibility with JR module aggregations
       const linkedJob = await Job.findOne({ jrNumber });
-      
-      if (linkedJob && linkedJob.status === 'Closed') {
-        return res.status(403).json({ message: 'Position already filled / JR is closed' });
-      }
-
-      // Joining-Based Lock
-      const joinedCandidate = await Candidate.findOne({
-        jrNumber: jrNumber,
-        status: 'Joined'
-      });
-      if (joinedCandidate) {
-        return res.status(403).json({ message: 'Position already filled / candidate joined' });
-      }
-
-      candidateData.jrNumber = jrNumber;
       if (linkedJob) {
+        candidateData.jrNumber = jrNumber;
         candidateData.positionApplied = linkedJob.jobTitle;
+        if (linkedJob.companyName) candidateData.clientName = linkedJob.companyName;
       }
+    }
+
+    if (req.body.location) {
+      candidateData.location = req.body.location;
+      candidateData.currentLocation = req.body.location;
     }
 
     if (req.file) {
@@ -110,7 +145,11 @@ exports.apply = async (req, res, next) => {
     }
 
     const candidate = await Candidate.create(candidateData);
-    res.status(201).json({ message: 'Application submitted successfully', id: candidate._id });
+    res.status(201).json({
+      success: true,
+      message: 'Application submitted successfully to White Horse Manpower ATS',
+      id: candidate._id
+    });
   } catch (err) {
     next(err);
   }

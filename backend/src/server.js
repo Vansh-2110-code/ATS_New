@@ -42,15 +42,13 @@ const leaveRoutes = require('./routes/leave.routes');
 const payrollRoutes = require('./routes/payroll.routes');
 const internalChatRoutes = require('./routes/chat.routes');
 const offerLetterRoutes = require('./routes/offerLetter.routes');
+const misRoutes = require('./routes/mis.routes');
+const customJdRoutes = require('./routes/customJd.routes');
 const { seedDefaultChannels } = require('./controllers/chat.controller');
 
 const { errorHandler } = require('./middleware/error.middleware');
 
 const app = express();
-const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:7899')
-  .split(',')
-  .map(origin => origin.trim())
-  .filter(Boolean);
 
 // Ensure upload directories exist
 const uploadDir = path.join(__dirname, '..', process.env.UPLOAD_DIR || 'uploads');
@@ -62,10 +60,46 @@ const chatDir = path.join(uploadDir, 'chat');
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
+const defaultAllowedOrigins = [
+  'https://whitehorsemanpower.in',
+  'https://www.whitehorsemanpower.in',
+  'http://whitehorsemanpower.in',
+  'http://www.whitehorsemanpower.in',
+  'https://ats.whitehorsemanpower.in',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:7899',
+  'http://localhost:5001',
+];
+
+const envOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+const allowedOriginsSet = new Set([...defaultAllowedOrigins, ...envOrigins]);
+
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 app.use(cors({
-  origin: corsOrigins,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    try {
+      const hostname = new URL(origin).hostname;
+      if (
+        allowedOriginsSet.has(origin) ||
+        hostname === 'whitehorsemanpower.in' ||
+        hostname.endsWith('.whitehorsemanpower.in') ||
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1'
+      ) {
+        return callback(null, true);
+      }
+    } catch (e) {}
+    return callback(null, true);
+  },
   credentials: true,
 }));
 app.use(morgan('combined'));
@@ -113,6 +147,8 @@ app.use('/api/leaves', leaveRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/internal-chat', internalChatRoutes);
 app.use('/api/offer-letters', offerLetterRoutes);
+app.use('/api/mis', misRoutes);
+app.use('/api/jd-presets', customJdRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

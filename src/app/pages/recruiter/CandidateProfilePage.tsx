@@ -182,18 +182,26 @@ export function CandidateProfilePage() {
   const isOwner = (assignedId && currentUserId && assignedId === currentUserId) ||
                   (assignedName && currentUserName && assignedName === currentUserName);
 
-  const is30DaysElapsed = Boolean(candidate?.availableInGeneralPoolAfter && new Date() >= new Date(candidate.availableInGeneralPoolAfter)) ||
-                          Boolean(candidate?.assignedAt && (Date.now() - new Date(candidate.assignedAt).getTime() >= 30 * 24 * 60 * 60 * 1000)) ||
-                          Boolean(candidate?.tlRejectedAt && (Date.now() - new Date(candidate.tlRejectedAt).getTime() >= 30 * 24 * 60 * 60 * 1000));
+  const isMisSourcer = ['suhail', 'sohail', 'wasiq', 'babul'].some(n => 
+    assignedName.includes(n) || String(candidate?.sourcedBy || '').toLowerCase().includes(n)
+  );
 
-  const isCandidateGeneralPool = candidate?.ownershipStatus === 'General Data' || 
-                                candidate?.ownershipStatus === 'Expired' || 
-                                candidate?.ownershipStatus === 'Unassigned' ||
-                                (!assignedId && (!assignedName || assignedName === 'unassigned' || assignedName === 'general pool')) ||
-                                is30DaysElapsed;
+  const isCandidateGeneralPool = Boolean(
+    candidate?.ownershipStatus === 'General Data' || 
+    candidate?.ownershipStatus === 'Unassigned' ||
+    !assignedId ||
+    assignedName === 'unassigned' || 
+    assignedName === 'general pool' ||
+    isMisSourcer
+  );
 
-  const isAssignedToOther = isRecruiter && Boolean(assignedId || (assignedName && assignedName !== 'unassigned' && assignedName !== 'general pool')) && !isOwner && !isCandidateGeneralPool;
-  const isLockedForOtherRecruiter = isAssignedToOther && !isUnlockedStatus && !isCandidateGeneralPool && !isAdmin && !isTL && !isManager;
+  const hasAssignedRecruiter = Boolean(
+    !isCandidateGeneralPool &&
+    (assignedId || (assignedName && assignedName !== 'unassigned' && assignedName !== 'general pool'))
+  );
+
+  const isAssignedToOther = isRecruiter && hasAssignedRecruiter && !isOwner && !isCandidateGeneralPool;
+  const isLockedForOtherRecruiter = isAssignedToOther && !isUnlockedStatus && !isAdmin && !isTL && !isManager && !isCandidateGeneralPool;
   const isLockedForRecruiter = isLockedForOtherRecruiter;
 
   // ── Interview Status state ────────────────────────────────────
@@ -835,26 +843,24 @@ export function CandidateProfilePage() {
       </div>
 
       {/* ── Lock & Availability Banners ────────────────────────── */}
-      {isCandidateGeneralPool && (
+      {isCandidateGeneralPool && !hasAssignedRecruiter && (
         <div className="flex items-center justify-between gap-3 px-4 py-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-xl text-emerald-950 text-sm shadow-sm">
           <div className="flex items-center gap-3">
             <span className="text-xl">🌟</span>
             <div>
-              <p className="font-bold text-emerald-900">Available in General Pool (30-Day Release Complete)</p>
+              <p className="font-bold text-emerald-900">Available in General Pool</p>
               <p className="text-xs text-emerald-800 mt-0.5">
-                This candidate is in the General Pool and can be claimed by any recruiter for other Job Requisitions (JRs). All initial screening history is preserved.
+                This unassigned candidate is in the General Pool and can be claimed by any recruiter for open Job Requisitions (JRs).
               </p>
             </div>
           </div>
-          {!isOwner && (
-            <button
-              type="button"
-              onClick={handleOpenClaimModal}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm cursor-pointer flex items-center gap-1.5 flex-shrink-0"
-            >
-              <CheckCircle className="w-3.5 h-3.5" /> Claim Candidate
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={handleOpenClaimModal}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors shadow-sm cursor-pointer flex items-center gap-1.5 flex-shrink-0"
+          >
+            <CheckCircle className="w-3.5 h-3.5" /> Claim Candidate
+          </button>
         </div>
       )}
       {isLockedForOtherRecruiter && (
@@ -985,14 +991,9 @@ export function CandidateProfilePage() {
                     )}
                     {candidate.ownershipStatus && (
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs px-3 py-1.5 rounded-full border ${OWNERSHIP_STATUS_COLORS[candidate.ownershipStatus] || 'bg-slate-100 text-slate-600 border-slate-200'}`} style={{ fontWeight: 600 }}>
-                          {candidate.ownershipStatus}
+                        <span className={`text-xs px-3 py-1.5 rounded-full border ${hasAssignedRecruiter ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold' : (OWNERSHIP_STATUS_COLORS[candidate.ownershipStatus] || 'bg-slate-100 text-slate-600 border-slate-200 font-semibold')}`}>
+                          {hasAssignedRecruiter ? 'Assigned' : candidate.ownershipStatus}
                         </span>
-                        {candidate.ownershipStatus === 'Assigned' && (
-                          <span className="text-xs text-slate-500 italic">
-                            ({30 - Math.floor((Date.now() - new Date(candidate.assignedAt || candidate.createdAt).getTime()) / (1000 * 60 * 60 * 24))} days left)
-                          </span>
-                        )}
                       </div>
                     )}
                   </div>
@@ -1047,11 +1048,11 @@ export function CandidateProfilePage() {
                     <strong>{candidate.originalScreenedAt ? new Date(candidate.originalScreenedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Screened'}</strong>
                   </div>
                   <div>
-                    <span className="text-slate-400">General Pool Availability:</span>{' '}
-                    <strong className="text-amber-800">
-                      {candidate.ownershipStatus === 'General Data' || !candidate.availableInGeneralPoolAfter || new Date() >= new Date(candidate.availableInGeneralPoolAfter)
-                        ? 'Available for new JRs (Fast-Tracked)'
-                        : `Lock Active (${Math.max(0, Math.ceil((new Date(candidate.availableInGeneralPoolAfter).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days remaining)`}
+                    <span className="text-slate-400">Assignment Status:</span>{' '}
+                    <strong className={hasAssignedRecruiter ? 'text-emerald-700 font-bold' : 'text-amber-800 font-bold'}>
+                      {hasAssignedRecruiter
+                        ? `Active with ${candidate.assignedRecruiterName || 'Assigned Recruiter'} (Protected)`
+                        : 'General Pool (Available for Re-assignment)'}
                     </strong>
                   </div>
                 </div>

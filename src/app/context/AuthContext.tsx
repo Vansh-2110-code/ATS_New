@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, ReactNode } from 'react';
 import api from '../services/api';
 
-export type Role = 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin' | 'bd' | 'business_developer';
+export type Role = 'superadmin' | 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin' | 'bd' | 'business_developer' | 'mis' | 'data_entry';
 
 export interface AuthUser {
   id: string;
@@ -15,6 +15,7 @@ export interface AuthUser {
   faceDescriptor?: number[];
   disableBiometric?: boolean;
   employeeId?: string;
+  isSuperAdmin?: boolean;
 }
 
 interface AuthContextType {
@@ -107,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export const useAuth = () => useContext(AuthContext);
 
 export const ROLE_DASHBOARD: Record<Role, string> = {
+  superadmin: '/admin',
   recruiter: '/recruiter',
   tl: '/tl',
   manager: '/manager',
@@ -116,4 +118,6 @@ export const ROLE_DASHBOARD: Record<Role, string> = {
   demo_walkin: '/walkin/demo-registration',
   bd: '/admin',
   business_developer: '/admin',
+  mis: '/mis',
+  data_entry: '/mis',
 };

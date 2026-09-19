@@ -82,6 +82,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState('All Sources');
   const [statusFilter, setStatusFilter] = useState(() => lockedStatus || locationState?.statusFilter || 'All Status');
+  const [todayCallsOnly, setTodayCallsOnly] = useState(() => Boolean(locationState?.todayCalls));
   const [recruiterFilter, setRecruiterFilter] = useState('All Recruiters');
   const [recruitersList, setRecruitersList] = useState<string[]>([]);
   const [recruiterUsers, setRecruiterUsers] = useState<any[]>([]);
@@ -113,8 +114,15 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
   const [taggingJr, setTaggingJr] = useState(false);
   const [tagJrError, setTagJrError] = useState('');
   const [generalPoolOnly, setGeneralPoolOnly] = useState(false);
+  const [prevScreenedOnly, setPrevScreenedOnly] = useState(false);
+  const [websiteOnly, setWebsiteOnly] = useState(false);
 
   // Column visibility
+    const isWebsiteCandidate = (c: any) => {
+    const src = String(c.source || '').toLowerCase();
+    return Boolean(c.appliedViaPublic || src.includes('website') || src.includes('company website') || src === 'website application');
+  };
+
   const [visibleCols, setVisibleCols] = useState<Record<ColKey, boolean>>(
     Object.fromEntries(ALL_COLUMNS.map(c => [c.key, c.defaultVisible])) as Record<ColKey, boolean>
   );
@@ -217,10 +225,11 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
     }
   };
 
-  // Sync status filter from navigation state
+  // Sync status filter & todayCalls from navigation state
   useEffect(() => {
     if (locationState?.statusFilter) setStatusFilter(locationState.statusFilter);
-  }, [locationState?.statusFilter]);
+    if (locationState?.todayCalls !== undefined) setTodayCallsOnly(Boolean(locationState.todayCalls));
+  }, [locationState?.statusFilter, locationState?.todayCalls]);
 
   // Load dynamic lists for filter dropdowns (Recruiters & Customers)
   useEffect(() => {
@@ -254,6 +263,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
         if (statusFilter !== 'All Status') params.status = statusFilter;
         if (recruiterFilter !== 'All Recruiters') params.recruiter = recruiterFilter;
         if (customerFilter !== 'All Customers') params.company = customerFilter;
+        if (todayCallsOnly) params.todayCalls = 'true';
         const data = await api.getCandidates(params);
         const list = data.candidates || (Array.isArray(data) ? data : []);
         if (data.statusCounts) {
@@ -288,6 +298,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
           availableInGeneralPoolAfter: c.availableInGeneralPoolAfter || null,
           isPreviouslyScreened: c.isPreviouslyScreened || Boolean(c.originalJrNumber),
           ownershipStatus: c.ownershipStatus || 'Assigned',
+          appliedViaPublic: Boolean(c.appliedViaPublic),
         })));
       } catch (err) {
         console.error('Failed to load candidates:', err);
@@ -296,7 +307,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
       }
     };
     fetchCandidates();
-  }, [statusFilter, recruiterFilter, customerFilter]);
+  }, [statusFilter, recruiterFilter, customerFilter, todayCallsOnly]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -450,9 +461,10 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
       (c.originalJobTitle && c.originalJobTitle.toLowerCase().includes(q));
     const matchStatus = statusFilter === 'All Status' || c.status === statusFilter;
     const matchRecruiter = recruiterFilter === 'All Recruiters' || c.recruiter === recruiterFilter;
-    const matchCustomer = customerFilter === 'All Customers' || c.clientName === customerFilter;
-    const matchGeneralPool = !generalPoolOnly || c.isPreviouslyScreened || c.ownershipStatus === 'General Data' || c.ownershipStatus === 'Unassigned';
-    return matchSearch && matchStatus && matchRecruiter && matchCustomer && matchGeneralPool;
+    const matchGeneralPool = !generalPoolOnly || ((c.ownershipStatus === 'General Data' || c.ownershipStatus === 'Unassigned') && (!c.recruiter || c.recruiter === 'Unassigned' || c.recruiter === 'General Pool'));
+    const matchPrevScreened = !prevScreenedOnly || Boolean(c.isPreviouslyScreened || c.originalJrNumber);
+    const matchWebsite = !websiteOnly || isWebsiteCandidate(c);
+    return matchSearch && matchStatus && matchRecruiter && matchGeneralPool && matchPrevScreened && matchWebsite;
   });
 
   const handleOpenTagJrModal = async (c: any) => {
@@ -514,6 +526,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
         availableInGeneralPoolAfter: cand.availableInGeneralPoolAfter || null,
         isPreviouslyScreened: cand.isPreviouslyScreened || Boolean(cand.originalJrNumber),
         ownershipStatus: cand.ownershipStatus || 'Assigned',
+        appliedViaPublic: Boolean(cand.appliedViaPublic),
       })));
     } catch (err: any) {
       setTagJrError(err.message || 'Failed to tag candidate to new JR');
@@ -569,13 +582,15 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
 
   const hasActiveFilters =
     statusFilter !== 'All Status' ||
-    recruiterFilter !== 'All Recruiters' || customerFilter !== 'All Customers' || generalPoolOnly;
+    recruiterFilter !== 'All Recruiters' || customerFilter !== 'All Customers' || generalPoolOnly || prevScreenedOnly || todayCallsOnly;
 
   const clearAll = () => {
     setStatusFilter('All Status');
     setRecruiterFilter('All Recruiters');
     setCustomerFilter('All Customers');
     setGeneralPoolOnly(false);
+    setPrevScreenedOnly(false);
+    setTodayCallsOnly(false);
   };
 
   const visibleCount = Object.values(visibleCols).filter(Boolean).length;
@@ -591,6 +606,18 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
             {statusFilter !== 'All Status' && (
               <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-700 border border-green-100" style={{ fontWeight: 500 }}>
                 {statusFilter}
+              </span>
+            )}
+            {todayCallsOnly && (
+              <span className="ml-2 inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200" style={{ fontWeight: 600 }}>
+                📞 Today's Calls & Entries
+                <button
+                  onClick={() => setTodayCallsOnly(false)}
+                  className="hover:text-blue-900 ml-1 font-bold"
+                  title="Show all candidates"
+                >
+                  ×
+                </button>
               </span>
             )}
           </p>
@@ -926,22 +953,59 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
           All ({totalCandidatesCount || candidates.length})
         </button>
 
-        {/* General Pool & Previously Screened Quick Tab */}
+        {/* Genuine General Pool (Unassigned) Quick Tab */}
         <button
-          onClick={() => setGeneralPoolOnly(!generalPoolOnly)}
+          onClick={() => { setGeneralPoolOnly(!generalPoolOnly); setPrevScreenedOnly(false); }}
           className={`text-xs px-3 py-1.5 rounded-full transition-all border flex items-center gap-1.5 ${
             generalPoolOnly
               ? 'bg-amber-600 text-white font-semibold border-amber-600 shadow-sm ring-2 ring-offset-1 ring-amber-400'
               : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
           }`}
           style={{ fontWeight: 500 }}
+          title="Unassigned candidates in General Pool"
         >
-          <span>🏷️</span>
-          <span>General Pool / Prev Screened</span>
+          <span>🌐</span>
+          <span>General Pool</span>
           <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${generalPoolOnly ? 'bg-amber-700 text-white' : 'bg-amber-200/80 text-amber-900'}`}>
-            {candidates.filter(c => c.isPreviouslyScreened || c.ownershipStatus === 'General Data' || c.ownershipStatus === 'Unassigned').length}
+            {candidates.filter(c => (c.ownershipStatus === 'General Data' || c.ownershipStatus === 'Unassigned') && (!c.recruiter || c.recruiter === 'Unassigned' || c.recruiter === 'General Pool')).length}
           </span>
         </button>
+
+        {/* Fast-Track / Previously Screened Quick Tab */}
+        <button
+          onClick={() => { setPrevScreenedOnly(!prevScreenedOnly); setGeneralPoolOnly(false); }}
+          className={`text-xs px-3 py-1.5 rounded-full transition-all border flex items-center gap-1.5 ${
+            prevScreenedOnly
+              ? 'bg-blue-600 text-white font-semibold border-blue-600 shadow-sm ring-2 ring-offset-1 ring-blue-400'
+              : 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100'
+          }`}
+          style={{ fontWeight: 500 }}
+          title="Candidates already screened under prior Job Requisitions, eligible for fast-track tagging"
+        >
+          <span>🏷️</span>
+          <span>Fast-Track / Prev Screened</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${prevScreenedOnly ? 'bg-blue-700 text-white' : 'bg-blue-200/80 text-blue-900'}`}>
+            {candidates.filter(c => c.isPreviouslyScreened || Boolean(c.originalJrNumber)).length}
+          </span>
+        </button>
+        {/* Website Applications Quick Tab */}
+        <button
+          onClick={() => { setWebsiteOnly(!websiteOnly); setGeneralPoolOnly(false); setPrevScreenedOnly(false); }}
+          className={`text-xs px-3 py-1.5 rounded-full transition-all border flex items-center gap-1.5 ${
+            websiteOnly
+              ? 'bg-purple-600 text-white font-semibold border-purple-600 shadow-sm ring-2 ring-offset-1 ring-purple-400'
+              : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100'
+          }`}
+          style={{ fontWeight: 500 }}
+          title="Candidates and students applying directly from White Horse Manpower website"
+        >
+          <span>🌐</span>
+          <span>Website Applications</span>
+          <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${websiteOnly ? 'bg-purple-700 text-white' : 'bg-purple-200/80 text-purple-900'}`}>
+            {candidates.filter(isWebsiteCandidate).length}
+          </span>
+        </button>
+
         {CANDIDATE_STATUS_OPTIONS.map((status) => {
           const color = CANDIDATE_STATUS_COLORS[status] || 'bg-slate-100 text-slate-600 border-slate-200';
           let count = statusCounts[status] ?? 0;
@@ -1139,7 +1203,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
                           <Edit3 className="w-3.5 h-3.5" />
                           Edit
                         </Link>
-                        {(c.ownershipStatus === 'General Data' || c.ownershipStatus === 'Expired' || c.recruiter === 'Unassigned' || c.recruiter === 'General Pool') && (
+                        {(!c.recruiter || c.recruiter === 'Unassigned' || c.recruiter === 'General Pool') && (c.ownershipStatus === 'General Data' || c.ownershipStatus === 'Unassigned') && (
                           <button
                             onClick={() => handleClaimDirect(c)}
                             className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer"

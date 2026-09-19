@@ -136,6 +136,21 @@ class ApiService {
     return this.request<any>(`/candidates${query ? `?${query}` : ''}`);
   }
 
+  async findSimilarCandidates(data: {
+    skills?: string[];
+    role?: string;
+    jobTitle?: string;
+    experience?: any;
+    email?: string;
+    phone?: string;
+    limit?: number;
+  }) {
+    return this.request<any>('/candidates/find-similar', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async exportCandidatesExcel(params: Record<string, string> = {}) {
     const query = new URLSearchParams(params).toString();
     const token = this.getToken();
@@ -358,9 +373,12 @@ class ApiService {
     return this.request<any>(`/calls/candidate/${candidateId}`);
   }
 
-  async getMyCalls(date?: string) {
-    const query = date ? `?date=${date}` : '';
-    return this.request<any>(`/calls/my${query}`);
+  async getMyCalls(date?: string, recruiterId?: string) {
+    const params = new URLSearchParams();
+    if (date) params.append('date', date);
+    if (recruiterId) params.append('recruiterId', recruiterId);
+    const query = params.toString();
+    return this.request<any>(`/calls/my${query ? `?${query}` : ''}`);
   }
 
   // ─── Interviews ───
@@ -438,6 +456,10 @@ class ApiService {
       return this.request<any>('/jobs/bulk', { method: 'POST', body: payload });
     }
     return this.request<any>('/jobs/bulk', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  async bulkImportJdFiles(data: FormData) {
+    return this.request<any>('/jobs/bulk-import-jds', { method: 'POST', body: data });
   }
 
   // ─── Users ───
@@ -1139,6 +1161,24 @@ class ApiService {
     return this.request<any>('/resumes/scan', { method: 'POST', body: data });
   }
 
+  async scanBulkResumes(data: FormData) {
+    return this.request<any>('/resumes/bulk-scan', { method: 'POST', body: data });
+  }
+
+  async bulkSaveAtsCandidates(data: { candidates: any[]; defaultJrNumber?: string }) {
+    return this.request<any>('/resumes/bulk-save', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async saveAtsCandidateToDb(data: Record<string, any>) {
+    return this.request<any>('/resumes/save-candidate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   // ─── ATS Records ───
   async getAtsRecords(params: Record<string, string> = {}) {
     const query = new URLSearchParams(params).toString();
@@ -1662,6 +1702,48 @@ class ApiService {
     link.download = filename || 'Offer_Letter.docx';
     link.click();
     URL.revokeObjectURL(link.href);
+  }
+
+  // ─── MIS & Data Entry Analytics ───
+  async getMisStats(params?: { range?: string; startDate?: string; endDate?: string; userId?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.range) qs.set('range', params.range);
+    if (params?.startDate) qs.set('startDate', params.startDate);
+    if (params?.endDate) qs.set('endDate', params.endDate);
+    if (params?.userId) qs.set('userId', params.userId);
+    return this.request<any>(`/mis/stats?${qs.toString()}`);
+  }
+
+  // ─── Self-Service Custom JDs ───
+  async getCustomJds() {
+    return this.request<any[]>('/jd-presets');
+  }
+
+  async extractJdDetails(text: string) {
+    return this.request<any>('/jd-presets/extract', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    });
+  }
+
+  async createCustomJd(data: { title: string; category?: string; experience?: string; location?: string; salary?: string; skills: string[]; text: string }) {
+    return this.request<any>('/jd-presets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCustomJd(id: string, data: any) {
+    return this.request<any>(`/jd-presets/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCustomJd(id: string) {
+    return this.request<any>(`/jd-presets/${id}`, {
+      method: 'DELETE',
+    });
   }
 }
 

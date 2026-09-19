@@ -63,6 +63,7 @@ import { EmailCenterPage } from './pages/shared/EmailCenterPage';
 import { NotificationsPage } from './pages/shared/NotificationsPage';
 import { PerformanceReviewPage } from './pages/admin/PerformanceReviewPage';
 import { OfferLettersPage } from './pages/admin/OfferLettersPage';
+import { MisDashboardPage } from './pages/mis/MisDashboardPage';
 
 import { AnalyticsPage } from './pages/analytics/AnalyticsPage';
 
@@ -175,6 +176,8 @@ export const router = createBrowserRouter([
       { path: '/admin/tl-activity', Component: TLActivityPage },
       { path: '/admin/performance-reviews', Component: PerformanceReviewPage },
       { path: '/admin/offer-letters', Component: OfferLettersPage },
+      { path: '/admin/mis-tracker', Component: MisDashboardPage },
+      { path: '/mis', Component: MisDashboardPage },
       { path: '/manager/tl-activity', Component: TLActivityPage },
 
       // Shared

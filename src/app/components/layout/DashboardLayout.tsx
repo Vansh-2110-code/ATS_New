@@ -93,7 +93,7 @@ export function DashboardLayout() {
         setAttMarkedAt(label);
         localStorage.setItem(todayKey(user.id), label);
       } else {
-        const isFaceExempt = user.role === 'admin' || user.role === 'walkin' || user.role === 'demo_walkin' || Boolean(user.disableBiometric);
+        const isFaceExempt = user.role === 'admin' || user.role === 'superadmin' || user.role === 'walkin' || user.role === 'demo_walkin' || Boolean(user.disableBiometric);
         if (!isFaceExempt) {
           setShowCheckInFaceModal(true);
         } else {
@@ -101,7 +101,7 @@ export function DashboardLayout() {
         }
       }
     }).catch(() => {
-      const isFaceExempt = user.role === 'admin' || user.role === 'walkin' || user.role === 'demo_walkin' || Boolean(user.disableBiometric);
+      const isFaceExempt = user.role === 'admin' || user.role === 'superadmin' || user.role === 'walkin' || user.role === 'demo_walkin' || Boolean(user.disableBiometric);
       if (!isFaceExempt) {
         setShowCheckInFaceModal(true);
       } else {

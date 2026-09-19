@@ -72,10 +72,10 @@ export function RecruiterDashboard() {
   const navigate = useNavigate();
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  const [dateRange, setDateRange] = useState<DateRange>('Day');
+  const [dateRange, setDateRange] = useState<DateRange>('All');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [division, setDivision] = useState('BPO');
+  const [division, setDivision] = useState('All');
   const [company, setCompany] = useState('');
   const [customer, setCustomer] = useState('');
   const [recruiter, setRecruiter] = useState('');
@@ -165,7 +165,25 @@ export function RecruiterDashboard() {
 
   // "Today's Calls" click
   const goToTodayCalls = () => {
-    navigate('/recruiter/calls/today');
+    const selectedRec = recruiters.find(r => r._id === recruiter);
+    navigate('/recruiter/calls/today', {
+      state: {
+        recruiterId: recruiter || undefined,
+        recruiterName: selectedRec?.name || (recruiter ? undefined : user?.name)
+      }
+    });
+  };
+
+  const goToFollowUps = () => {
+    navigate('/recruiter/resumes', { state: { statusFilter: 'Call Back' } });
+  };
+
+  const goToInterviews = () => {
+    navigate('/recruiter/interviews');
+  };
+
+  const goToResumeInflow = () => {
+    navigate('/recruiter/resumes');
   };
 
   return (
@@ -259,7 +277,7 @@ export function RecruiterDashboard() {
           
           {/* Division Pills (Division Dashboard style) */}
           <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mr-2">
-            {['IT', 'BPO', 'Lateral'].map(div => (
+            {['All', 'IT', 'BPO', 'Lateral'].map(div => (
               <button
                 key={div}
                 onClick={() => setDivision(div)}
@@ -272,15 +290,17 @@ export function RecruiterDashboard() {
             ))}
           </div>
 
-          {/* Recruiter Filter */}
-          <select
-            value={recruiter}
-            onChange={e => setRecruiter(e.target.value)}
-            className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-green-400 bg-white mr-2"
-          >
-            <option value="">All Recruiters</option>
-            {recruiters.map(r => <option key={r._id} value={r._id}>{r.name}</option>)}
-          </select>
+          {/* Recruiter Filter (only for TL / Admin) */}
+          {user?.role !== 'recruiter' && (
+            <select
+              value={recruiter}
+              onChange={e => setRecruiter(e.target.value)}
+              className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-green-400 bg-white mr-2"
+            >
+              <option value="">All Recruiters</option>
+              {recruiters.map(r => <option key={r._id} value={r._id}>{r.name}</option>)}
+            </select>
+          )}
 
           <div className="flex gap-1 flex-wrap">
             {DATE_TABS.map(tab => (
@@ -373,42 +393,36 @@ export function RecruiterDashboard() {
       <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: "Today's Calls", value: String(metrics.todayCalls), change: `+${metrics.todayCalls}`, color: 'blue', icon: Phone, clickable: true },
-          { label: 'Follow-Ups Due', value: String(metrics.followUpsDue), change: 'Urgent', color: 'amber', icon: AlertCircle, clickable: false },
-          { label: 'Interviews Scheduled', value: String(metrics.interviewsScheduled), change: 'This week', color: 'violet', icon: Calendar, clickable: false },
-          { label: 'Resume Inflow', value: String(metrics.resumeInflow), change: `+${metrics.resumeInflow} today`, color: 'emerald', icon: FileText, clickable: false },
+          { label: "Today's Calls", value: String(metrics.todayCalls), change: `+${metrics.todayCalls} today`, color: 'blue', icon: Phone, onClick: goToTodayCalls, tooltip: "View all candidates called or updated today" },
+          { label: 'Follow-Ups Due', value: String(metrics.followUpsDue), change: 'Urgent', color: 'amber', icon: AlertCircle, onClick: goToFollowUps, tooltip: "View follow-up candidates" },
+          { label: 'Interviews Scheduled', value: String(metrics.interviewsScheduled), change: 'This week', color: 'violet', icon: Calendar, onClick: goToInterviews, tooltip: "View scheduled interviews" },
+          { label: 'Resume Inflow', value: String(metrics.resumeInflow), change: `Total candidates`, color: 'emerald', icon: FileText, onClick: goToResumeInflow, tooltip: "View all candidates in resume pool" },
         ].map((m, i) => {
           const Icon = m.icon;
           const c = colorMap[m.color];
-          const content = (
-            <>
+          return (
+            <button
+              key={i}
+              onClick={m.onClick}
+              title={m.tooltip}
+              className={`bg-white rounded-xl p-5 border shadow-sm text-left transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer group ${c.card}`}
+            >
               <div className="flex items-center justify-between mb-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${c.icon}`}>
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105 ${c.icon}`}>
                   <Icon className="w-4 h-4" />
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${c.badge}`} style={{ fontWeight: 500 }}>
                   {m.change}
                 </span>
               </div>
-              <div className="text-slate-800" style={{ fontWeight: 700, fontSize: '1.75rem' }}>{m.value}</div>
-              <div className="text-slate-500 text-sm mt-0.5 flex items-center gap-1">
-                {m.label}
-                {m.clickable && <ArrowRight className="w-3 h-3 text-green-500 ml-auto" />}
+              <div className="text-slate-800 group-hover:text-green-700 transition-colors" style={{ fontWeight: 700, fontSize: '1.75rem' }}>
+                {m.value}
               </div>
-            </>
-          );
-          return m.clickable ? (
-            <button
-              key={i}
-              onClick={goToTodayCalls}
-              className={`bg-white rounded-xl p-5 border shadow-sm text-left transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${c.card}`}
-            >
-              {content}
+              <div className="text-slate-500 text-sm mt-0.5 flex items-center justify-between">
+                <span>{m.label}</span>
+                <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-green-600 transition-colors group-hover:translate-x-0.5" />
+              </div>
             </button>
-          ) : (
-            <div key={i} className={`bg-white rounded-xl p-5 border shadow-sm ${c.card}`}>
-              {content}
-            </div>
           );
         })}
       </div>

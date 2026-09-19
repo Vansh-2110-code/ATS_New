@@ -32,7 +32,7 @@ exports.login = async (req, res, next) => {
     }
 
     // Access Control: Cutoff login hours and WFH allowances (except Admin role)
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
       const localNow = getKolkataDate();
       const currentHour = localNow.getHours();
       const currentMin = localNow.getMinutes();
@@ -103,6 +103,7 @@ exports.login = async (req, res, next) => {
         faceDescriptor: user.faceDescriptor,
         disableBiometric: user.disableBiometric || false,
         employeeId: user.employeeId,
+        isSuperAdmin: Boolean(user.isSuperAdmin || user.employeeId === 'WH000001' || user.email === 'admin@whitehorsemanpower.in'),
         isDemoAccount: user.isDemoAccount || false,
       },
     });

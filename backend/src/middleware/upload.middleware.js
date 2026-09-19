@@ -88,21 +88,8 @@ const uploadImport = multer({
 const uploadJoining = multer({
   storage: docStorage,
   fileFilter: docFileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 },
-}).fields([
-  { name: 'photo', maxCount: 1 },
-  { name: 'resume', maxCount: 1 },
-  { name: 'panCard', maxCount: 1 },
-  { name: 'aadhaarCard', maxCount: 1 },
-  { name: 'highestDocument', maxCount: 1 },
-  { name: 'marksheet', maxCount: 1 },
-  { name: 'degreeCertificate', maxCount: 1 },
-  { name: 'bankProof', maxCount: 1 },
-  { name: 'relievingLetter0', maxCount: 1 },
-  { name: 'relievingLetter1', maxCount: 1 },
-  { name: 'relievingLetter2', maxCount: 1 },
-  { name: 'relievingLetter3', maxCount: 1 },
-]);
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max per document
+}).any();
 
 // ── Internal Chat File Attachments (Images, PDFs, Word, Excel, CSV, etc.) ──
 const chatStorage = multer.diskStorage({
@@ -136,5 +123,43 @@ const uploadChatAttachment = multer({
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max size
 });
 
-module.exports = { uploadResume, uploadJD, uploadDoc, uploadImport, uploadJoining, uploadChatAttachment };
+// ── Bulk Resumes / ZIP Archive Upload (Max 100MB) ──
+const bulkZipStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../../uploads/bulk_zip');
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `bulk-${Date.now()}-${uuidv4().slice(0, 8)}${ext}`);
+  },
+});
+
+const bulkZipFilter = (req, file, cb) => {
+  const allowed = ['.zip', '.rar', '.pdf', '.doc', '.docx', '.txt', '.xlsx', '.xls', '.csv'];
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (allowed.includes(ext) || file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed' || file.mimetype === 'application/octet-stream' || file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.mimetype === 'application/vnd.ms-excel' || file.mimetype === 'text/csv') {
+    cb(null, true);
+  } else {
+    cb(new Error('Only ZIP archives, document files (PDF, DOCX, DOC), or Excel/CSV sheets are allowed'), false);
+  }
+};
+
+const uploadBulkZip = multer({
+  storage: bulkZipStorage,
+  fileFilter: bulkZipFilter,
+  limits: { fileSize: 250 * 1024 * 1024 }, // 250MB limit
+});
+
+module.exports = {
+  uploadResume,
+  uploadJD,
+  uploadDoc,
+  uploadImport,
+  uploadJoining,
+  uploadChatAttachment,
+  uploadBulkZip,
+};
+
 

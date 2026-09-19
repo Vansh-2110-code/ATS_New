@@ -590,6 +590,62 @@ const UNIVERSAL_ROLES = [
       'o&m charges', 'network deployment', 'customer governance', 'jl4a', 'jl5b', 'contractual milestones'
     ],
     skills: ['Long-Haul Fiber Deployment', 'Hut Deployments & Lateral Builds', 'Telecom Infrastructure Transformation', 'Construction & Engineering (C&E)', 'BMS & Telemetry Systems', 'Operational Turn-Up & Handover', 'Commercial Readiness & IRU/O&M', 'Customer Governance & Executive Reporting']
+  },
+
+  // ── 15. IT Infrastructure, Core Networking & Operations ────────
+  {
+    roleName: 'Genesys PureCloud Voice Engineer',
+    domain: 'Telecom & Voice Engineering',
+    keywords: [
+      'genesys', 'purecloud', 'genesys purecloud', 'tig voice', 'call flow', 'gcv',
+      'byoc', 'sip trunk', 'webrtc', 'genesys api', 'contact center voice', 'telecom sla',
+      'ivr', 'acd', 'dialer', 'telecom engineer', 'voice infrastructure', 'sip byoc'
+    ],
+    skills: ['Genesys PureCloud', 'Contact Center Voice', 'Call Flow Architecture', 'GCV & SIP BYOC', 'Genesys APIs', 'WebRTC Troubleshooting', 'Voice Quality & SIP Trunks', 'Telecom Incident Management']
+  },
+  {
+    roleName: 'Core Network Lead & Cisco Administrator',
+    domain: 'IT Infrastructure & Networking',
+    keywords: [
+      'core network', 'cisco', 'ccna', 'ccnp', 'routing and switching', 'cisco router',
+      'cisco switch', 'cisco asa', 'firepower', 'cisco ips', 'anyconnect', 'checkpoint firewall',
+      'bgp', 'ospf', 'proxy', 'zscaler', 'network engineer', 'network lead', 'network administrator',
+      'network security audit', 'visio network diagram', 'disaster recovery network', 'ftd 2100'
+    ],
+    skills: ['Cisco Routing & Switching', 'Cisco ASA & Firepower', 'Cisco AnyConnect', 'Checkpoint Firewall', 'BGP & OSPF', 'CCNA / CCNP', 'Zscaler Proxy', 'Network Security Audits', 'Disaster Recovery']
+  },
+  {
+    roleName: 'IT Operations & Server Systems Administrator',
+    domain: 'IT Infrastructure & Networking',
+    keywords: [
+      'it operations', 'server administrator', 'systems administrator', 'active directory',
+      'ad', 'dhcp', 'dns', 'vmware', 'virtual machines', 'cloud servers', 'endpoints management',
+      'sccm', 'wsus', 'patch management', 'vulnerability fixing', 'itil', 'sla', 'amc renewal',
+      'cisco switches', 'qualys guard', 'rca', 'it ops', 'jl3b', 'jl4a'
+    ],
+    skills: ['IT Operations', 'Windows & Linux Server Admin', 'Active Directory (AD/DNS/DHCP)', 'VMware & Cloud Servers', 'Patch Management & WSUS', 'Network Device Support', 'ITIL SLA & RCA', 'Asset Management']
+  },
+  {
+    roleName: 'L2 Service Desk & Remote Tech Support Specialist',
+    domain: 'IT Service Desk & Operations',
+    keywords: [
+      'l2 service desk', 'service desk', 'technical support', 'tech support', 'remote support',
+      'desktop support', 'laptop support', 'office 365', 'o365', 'active directory', 'antivirus',
+      'imaging', 'patch management', 'mdm', 'mobile device management', 'ios', 'android',
+      'itil framework', 'ticketing tools', 'servicenow', 'remedy'
+    ],
+    skills: ['L2 Service Desk', 'Remote Tech Support', 'Desktop & Laptop Troubleshooting', 'Microsoft O365', 'Active Directory & Permissions', 'Patch Management & Imaging', 'Mobile Device Configuration', 'ITIL Ticketing']
+  },
+  {
+    roleName: 'IT Infrastructure Operations Manager',
+    domain: 'IT Infrastructure & Management',
+    keywords: [
+      'it infrastructure manager', 'technology specialist', 'infrastructure lead', 'it operations manager',
+      'team leadership', 'disaster recovery', 'bcp', 'dr planning', 'pam', 'privileged access management',
+      'iso 20k', 'iso 27k', 'servicenow', 'snow', 'vmware', 'hyper-v', 'aws', 'azure',
+      'itil', 'pmp', 'asset lifecycle', 'jl5b', 'jl5'
+    ],
+    skills: ['IT Infrastructure Management', 'Operations Oversight', 'Team Leadership (10+)', 'Disaster Recovery & BCP', 'PAM & Security Compliance', 'Virtualization (VMware/Hyper-V)', 'Cloud (AWS/Azure)', 'ServiceNow (SNOW)', 'ISO 20K/27K Audits']
   }
 ];
 
@@ -713,13 +769,26 @@ function classifyUniversalRole(parsed, openJobs = []) {
   const hasTelecomTransformationSignal = /\b(transformation\s*project\s*manager|long-haul\s*fiber|fiber\s*build|hut\s*deployment|lateral\s*builds|c&e|telemetry\s*systems|building\s*management\s*systems|iru\s*charges|operational\s*turn-up)\b/i.test(candidateAllText) ||
                                          (/\b(transformation\s*manager|project\s*manager)\b/i.test(primaryTitle) && /\b(fiber|telecom|infrastructure\s*deployment)\b/i.test(candidateAllText));
 
+  const hasGenesysSignal = /\b(genesys|purecloud|pure\s*cloud|tig\s*voice|byoc|sip\s*trunk|webrtc|gcv|call\s*flow)\b/i.test(candidateAllText) ||
+                           /\b(genesys|purecloud|voice\s*engineer)\b/i.test(primaryTitle);
+
+  const hasCiscoCoreNetworkSignal = /\b(cisco\s*asa|firepower|cisco\s*ips|anyconnect|checkpoint\s*firewall|bgp|ospf|ccna|ccnp|cisco\s*router|cisco\s*switch)\b/i.test(candidateAllText) ||
+                                    /\b(network\s*lead|network\s*administrator|cisco|ccnp)\b/i.test(primaryTitle);
+
+  const hasL2ServiceDeskSignal = /\b(l2\s*service\s*desk|service\s*desk|remote\s*desktop\s*support|desktop\s*support|laptop\s*support|office\s*365|o365|active\s*directory|patch\s*management|imaging)\b/i.test(candidateAllText) ||
+                                 /\b(service\s*desk|desktop\s*support|tech\s*support|l2)\b/i.test(primaryTitle);
+
+  const hasItOpsInfrastructureSignal = /\b(it\s*operations|infrastructure\s*support|server\s*admin|vmware|cloud\s*servers|qualys|sccm|wsus|amc\s*renewal|iso\s*20k|iso\s*27k|jl3b|jl4a|jl5b)\b/i.test(candidateAllText) ||
+                                       /\b(it\s*operations|infrastructure\s*manager|systems\s*admin|it\s*infra)\b/i.test(primaryTitle);
+
   // If candidate is clearly in a specialized domain and NOT explicitly a voice caller, suppress voice signals
   const isSpecializedProfessional = hasSapSignal || hasAribaSignal || hasProcurementSignal || hasP2pSignal || hasO2cSignal ||
                                     hasSupplyChainSignal || hasOracleSignal || hasServiceNowSignal || hasNocSignal ||
                                     hasVoiceTrainerSignal || hasHrRecruiterSignal || hasDotNetSignal || hasJavaSignal ||
                                     hasAwsSignal || hasAzureSignal || hasQaSignal || hasDbaSignal || hasItilSignal ||
                                     hasNetworkSignal || hasEngineeringSignal || hasSoftwareSignal || hasFinanceSignal ||
-                                    hasDmoAdOpsSignal || hasTelecomTransitionSignal || hasTelecomTransformationSignal;
+                                    hasDmoAdOpsSignal || hasTelecomTransitionSignal || hasTelecomTransformationSignal ||
+                                    hasGenesysSignal || hasCiscoCoreNetworkSignal || hasL2ServiceDeskSignal || hasItOpsInfrastructureSignal;
 
   const isExplicitVoiceTitle = /\b(voice\s*executive|voice\s*agent|telecaller|telecalling|telesales|bpo caller|call center)\b/i.test(primaryTitle);
 
@@ -985,6 +1054,38 @@ function classifyUniversalRole(parsed, openJobs = []) {
         tfRole.tier = 'Top Match';
         scoredRoles.sort((a, b) => b.matchScore - a.matchScore);
         bestRole = tfRole;
+      }
+    } else if (hasGenesysSignal) {
+      const genRole = scoredRoles.find(r => r.roleName.includes('Genesys PureCloud'));
+      if (genRole) {
+        genRole.matchScore = 88;
+        genRole.tier = 'Top Match';
+        scoredRoles.sort((a, b) => b.matchScore - a.matchScore);
+        bestRole = genRole;
+      }
+    } else if (hasCiscoCoreNetworkSignal) {
+      const netRole = scoredRoles.find(r => r.roleName.includes('Core Network Lead'));
+      if (netRole) {
+        netRole.matchScore = 88;
+        netRole.tier = 'Top Match';
+        scoredRoles.sort((a, b) => b.matchScore - a.matchScore);
+        bestRole = netRole;
+      }
+    } else if (hasL2ServiceDeskSignal) {
+      const sdRole = scoredRoles.find(r => r.roleName.includes('L2 Service Desk'));
+      if (sdRole) {
+        sdRole.matchScore = 85;
+        sdRole.tier = 'Top Match';
+        scoredRoles.sort((a, b) => b.matchScore - a.matchScore);
+        bestRole = sdRole;
+      }
+    } else if (hasItOpsInfrastructureSignal) {
+      const opsRole = scoredRoles.find(r => r.roleName.includes('IT Operations') || r.roleName.includes('IT Infrastructure Operations'));
+      if (opsRole) {
+        opsRole.matchScore = 85;
+        opsRole.tier = 'Top Match';
+        scoredRoles.sort((a, b) => b.matchScore - a.matchScore);
+        bestRole = opsRole;
       }
     }
   }

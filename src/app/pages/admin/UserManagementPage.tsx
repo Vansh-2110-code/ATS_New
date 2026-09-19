@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { UserPlus, Search, Edit3, Trash2, CheckCircle2, X, Shield, Wifi, Monitor, Eye, EyeOff, Loader2, ChevronRight, Mail, Calendar, Clock, Lock, Key } from 'lucide-react';
 import api from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 
-type Role = 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin' | 'bd' | 'business_developer';
+type Role = 'superadmin' | 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin' | 'bd' | 'business_developer' | 'mis' | 'data_entry';
 
 interface SystemUser {
   id: string;
@@ -38,6 +39,7 @@ const INITIAL_USERS: SystemUser[] = [
 ];
 
 const ROLE_COLORS: Record<Role, string> = {
+  superadmin: 'bg-purple-100 text-purple-800 font-bold border border-purple-300',
   recruiter: 'bg-emerald-100 text-emerald-700',
   tl: 'bg-violet-100 text-violet-700',
   manager: 'bg-amber-100 text-amber-700',
@@ -50,6 +52,7 @@ const ROLE_COLORS: Record<Role, string> = {
 };
 
 const ROLE_LABELS: Record<Role, string> = {
+  superadmin: 'Super Admin',
   recruiter: 'Recruiter',
   tl: 'Team Lead',
   manager: 'Manager',
@@ -89,6 +92,12 @@ function generateEID(fullName: string, role: Role): string {
 }
 
 export function UserManagementPage() {
+  const { user: currentAuthUser } = useAuth();
+  const isCurrentUserSuperAdmin = currentAuthUser?.isSuperAdmin === true ||
+    currentAuthUser?.role === 'superadmin' ||
+    currentAuthUser?.email === 'admin@whitehorsemanpower.in' ||
+    currentAuthUser?.employeeId === 'WH000001' ||
+    currentAuthUser?.id === 'WH000001';
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('All');
@@ -161,7 +170,7 @@ export function UserManagementPage() {
     return matchSearch && matchRole && matchStatus;
   });
 
-const ROLE_ORDER: Role[] = ['walkin', 'recruiter', 'spoc', 'bd', 'business_developer', 'tl', 'manager', 'admin'];
+const ROLE_ORDER: Role[] = ['data_entry', 'mis', 'walkin', 'recruiter', 'spoc', 'bd', 'business_developer', 'tl', 'manager', 'admin', 'superadmin'];
 const getHighestRole = (roles: Role[]): Role => {
   if (!roles || roles.length === 0) return 'recruiter';
   let highest = roles[0];
@@ -359,14 +368,14 @@ const getHighestRole = (roles: Role[]): Role => {
           />
         </div>
         <div className="flex gap-1.5 flex-wrap">
-          {['All', 'recruiter', 'tl', 'manager', 'admin', 'spoc', 'bd'].map(r => (
+          {['All', 'recruiter', 'tl', 'manager', 'admin', 'mis', 'spoc', 'bd'].map(r => (
             <button
               key={r}
               onClick={() => setRoleFilter(r)}
               className={`px-3 py-1.5 text-xs rounded-lg capitalize transition-colors ${roleFilter === r ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
               style={{ fontWeight: roleFilter === r ? 600 : 400 }}
             >
-              {r === 'tl' ? 'Team Lead' : r === 'spoc' ? 'SPOC' : r === 'bd' ? 'Business Developer' : r.charAt(0).toUpperCase() + r.slice(1)}
+              {r === 'tl' ? 'Team Lead' : r === 'spoc' ? 'SPOC' : r === 'bd' ? 'Business Developer' : r === 'mis' ? 'MIS / Data Entry' : r.charAt(0).toUpperCase() + r.slice(1)}
             </button>
           ))}
         </div>
@@ -428,13 +437,13 @@ const getHighestRole = (roles: Role[]): Role => {
                   </td>
                   <td className="px-4 py-3.5">
                     <button
-                      onClick={() => user.id !== 'ADM001' && toggleStatus(user.id)}
-                      disabled={user.id === 'ADM001'}
-                      className={`text-xs px-2.5 py-1 rounded-full cursor-pointer ${
+                      onClick={() => user.id !== 'ADM001' && user.id !== 'WH000001' && user.email !== 'admin@whitehorsemanpower.in' && toggleStatus(user.id)}
+                      disabled={user.id === 'ADM001' || user.id === 'WH000001' || user.email === 'admin@whitehorsemanpower.in'}
+                      className={`text-xs px-2.5 py-1 rounded-full ${
                         user.status === 'Active'
                           ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                           : 'bg-red-100 text-red-600 hover:bg-red-200'
-                      } disabled:cursor-default`}
+                      } ${user.id === 'WH000001' || user.email === 'admin@whitehorsemanpower.in' ? 'cursor-default opacity-90' : 'cursor-pointer'}`}
                       style={{ fontWeight: 500 }}
                     >
                       {user.status}
@@ -466,10 +475,11 @@ const getHighestRole = (roles: Role[]): Role => {
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
-                      {user.id !== 'ADM001' && (
+                      {isCurrentUserSuperAdmin && user.id !== 'WH000001' && user.id !== 'ADM001' && user.email !== 'admin@whitehorsemanpower.in' && (
                         <button
                           onClick={() => setDeleteConfirm(user.id)}
                           className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete User (Superadmin Only)"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -675,6 +685,7 @@ const getHighestRole = (roles: Role[]): Role => {
                 <div className="grid grid-cols-3 gap-2 px-3 py-2.5 border border-slate-200 rounded-lg bg-slate-50">
                   {([
                     { val: 'recruiter', label: 'Recruiter' },
+                    { val: 'mis', label: 'MIS / Data Entry' },
                     { val: 'tl', label: 'Team Lead' },
                     { val: 'manager', label: 'Manager' },
                     { val: 'admin', label: 'Admin' },

@@ -1,6 +1,8 @@
+import { CustomJdManagerModal } from '../../components/scanner/CustomJdManagerModal';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router';
 import {
+  Archive, FolderArchive, Globe, CheckSquare, Square,
   Upload, FileText, CheckCircle2, XCircle, AlertCircle, Loader2,
   User, Mail, Phone, MapPin, Briefcase, GraduationCap, Star,
   Zap, TrendingUp, Target, ChevronRight, RotateCcw, Download,
@@ -10,6 +12,7 @@ import {
   Layers, ArrowRight, UserCheck, ShieldCheck, Search, Filter,
   CheckCircle, ChevronDown, RefreshCw
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { matchKeywords, generateSuggestions, weightedScore, getFitTier } from '../../utils/atsKeywordEngine';
 import { matchSkills, parseSkillRequirements } from '../../utils/skillsMatchingEngine';
@@ -17,6 +20,31 @@ import { SkillsMatchDisplay } from '../../components/SkillsMatchDisplay';
 import { CLIENT_JD_PRESETS } from './clientJdPresets';
 
 /* ─── Types ─────────────────────────────────────────────── */
+
+export interface BulkCandidateResult {
+  id: string;
+  filename: string;
+  name: string;
+  email: string;
+  phone: string;
+  experience: string;
+  currentRole: string;
+  currentCompany: string;
+  skills: string[];
+  atsScore: number;
+  bestFitJr?: {
+    jrNumber: string;
+    jobTitle: string;
+    companyName: string;
+    matchScore: number;
+    matchedSkills: string[];
+  };
+  universalRole?: string;
+  isExistingInDb: boolean;
+  existingCandidate?: any;
+  ownershipStatus?: string;
+}
+
 type ParseStep = { label: string; status: 'pending' | 'running' | 'done' | 'error' };
 
 export interface UniversalRoleRecommendation {
@@ -1136,7 +1164,23 @@ function enrichProfileWithAllJrs(
 
 /* ─── Main Page ──────────────────────────────────────────── */
 export function ResumeScanPage() {
+  const [showJdManagerModal, setShowJdManagerModal] = useState(false);
+  const [customJds, setCustomJds] = useState<any[]>([]);
+
+  useEffect(() => {
+    api.getCustomJds().then(data => {
+      if (Array.isArray(data)) setCustomJds(data);
+    }).catch(err => console.warn('Failed to load custom JDs:', err));
+  }, []);
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const isGeneralSourcer = useMemo(() => {
+    const email = (user?.email || '').toLowerCase();
+    const name = (user?.name || '').trim().toLowerCase();
+    return ['whitehorsesohail@gmail.com', 'wasiq@whitehorsemanpower.in'].includes(email) ||
+           ['suhail', 'sohail', 'wasiq'].includes(name);
+  }, [user]);
   const [dragOver, setDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [steps, setSteps] = useState<ParseStep[]>(PARSE_STEPS.map(s => ({ ...s })));
@@ -1465,6 +1509,230 @@ export function ResumeScanPage() {
     type === 'warning' ? 'bg-amber-50 border-amber-100' :
     'bg-emerald-50 border-emerald-100';
 
+
+  /* ── Bulk ZIP / Multi-Resume Scanner State ── */
+  const [scannerTopMode, setScannerTopMode] = useState<'single' | 'bulk'>('single');
+  const [bulkFiles, setBulkFiles] = useState<File[]>([]);
+  const [bulkScanning, setBulkScanning] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number; stage: string }>({ current: 0, total: 0, stage: '' });
+  const [bulkResults, setBulkResults] = useState<BulkCandidateResult[]>([]);
+  const [bulkSummary, setBulkSummary] = useState<any>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkFilter, setBulkFilter] = useState<'all' | 'high' | 'medium' | 'new' | 'existing'>('all');
+  const [bulkSelectedJr, setBulkSelectedJr] = useState<string>('all');
+  const [bulkSearch, setBulkSearch] = useState<string>('');
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkSaveFeedback, setBulkSaveFeedback] = useState<string | null>(null);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<Set<string>>(new Set());
+  const bulkFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleBulkFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const selected = Array.from(e.target.files);
+      setBulkFiles(selected);
+      setBulkError(null);
+      setBulkSaveFeedback(null);
+    }
+  };
+
+  const handleBulkDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const dropped = Array.from(e.dataTransfer.files);
+      setBulkFiles(dropped);
+      setBulkError(null);
+      setBulkSaveFeedback(null);
+    }
+  };
+
+  const handleStartBulkScan = async () => {
+    if (bulkFiles.length === 0) return;
+    setBulkScanning(true);
+    setBulkError(null);
+    setBulkSaveFeedback(null);
+    setBulkProgress({ current: 1, total: bulkFiles.length, stage: 'Uploading & unzipping resumes in batch...' });
+
+    try {
+      const formData = new FormData();
+      bulkFiles.forEach(f => {
+        formData.append('resumes', f);
+      });
+
+      const res = await api.scanBulkResumes(formData);
+      if (res && res.candidates && res.candidates.length > 0) {
+        setBulkResults(res.candidates);
+        setBulkSummary(res.summary);
+        const allIds = new Set<string>(res.candidates.map((c: any) => c.id));
+        setSelectedCandidateIds(allIds);
+        setBulkSaveFeedback(`Successfully scanned ${res.candidates.length} candidates from ${res.summary?.totalFilesFound || bulkFiles.length} files!`);
+      } else {
+        setBulkError('No valid resumes or candidates could be extracted from the uploaded archive/files.');
+      }
+    } catch (err: any) {
+      console.error('Bulk scan error:', err);
+      setBulkError(err?.response?.data?.message || err?.message || 'Bulk scan failed. Please try again.');
+    } finally {
+      setBulkScanning(false);
+      setBulkProgress({ current: 0, total: 0, stage: '' });
+    }
+  };
+
+  const toggleCandidateSelection = (id: string) => {
+    setSelectedCandidateIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllCandidates = (listToSelect: BulkCandidateResult[]) => {
+    if (selectedCandidateIds.size === listToSelect.length && listToSelect.length > 0) {
+      setSelectedCandidateIds(new Set());
+    } else {
+      setSelectedCandidateIds(new Set(listToSelect.map(c => c.id)));
+    }
+  };
+
+  const handleBulkSaveToDb = async () => {
+    const candidatesToSave = bulkResults.filter(c => selectedCandidateIds.has(c.id));
+    if (candidatesToSave.length === 0) {
+      alert('Please select at least one candidate to save.');
+      return;
+    }
+    setBulkSaving(true);
+    setBulkSaveFeedback(null);
+    try {
+      const payload = {
+        candidates: candidatesToSave.map(c => ({
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+          experience: c.experience,
+          currentRole: c.currentRole,
+          currentCompany: c.currentCompany,
+          skills: c.skills,
+          atsScore: c.bestFitJr?.matchScore || c.atsScore || 65,
+          bestFitJrNumber: c.bestFitJr?.jrNumber || '',
+          universalRole: c.universalRole || '',
+          source: 'ATS Bulk Scanner'
+        })),
+        assignToCurrentUser: !isGeneralSourcer,
+        targetMode: isGeneralSourcer ? 'general' : 'recruiter'
+      };
+
+      const res = await api.bulkSaveAtsCandidates(payload);
+      setBulkSaveFeedback(isGeneralSourcer ? `Success! Added ${res.createdCount || selectedCandidateIds.size} candidates to the General Pool (Available for all recruiters to claim)!` : `Success! Added ${res.createdCount} new candidates and updated ${res.updatedCount} existing records under your assigned ownership!`);
+      // Update local state to mark existing
+      setBulkResults(prev => prev.map(c => {
+        if (selectedCandidateIds.has(c.id)) {
+          return { ...c, isExistingInDb: true };
+        }
+        return c;
+      }));
+    } catch (err: any) {
+      console.error('Bulk save failed:', err);
+      alert('Failed to save candidates to ATS Database: ' + (err?.response?.data?.message || err?.message));
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
+  const handleExportBulkExcel = () => {
+    const candidatesToExport = bulkResults.filter(c => selectedCandidateIds.has(c.id));
+    if (candidatesToExport.length === 0) {
+      alert('Please select at least one candidate to export.');
+      return;
+    }
+    const headers = ['Name', 'Email', 'Phone', 'Experience', 'Role', 'Company', 'Best Fit JR', 'JR Job Title', 'JR Company', 'Match Score %', 'Top Skills', 'DB Status'];
+    const rows = candidatesToExport.map(c => [
+      `"${(c.name || '').replace(/"/g, '""')}"`,
+      `"${(c.email || '').replace(/"/g, '""')}"`,
+      `"${(c.phone || '').replace(/"/g, '""')}"`,
+      `"${(c.experience || '').replace(/"/g, '""')}"`,
+      `"${(c.currentRole || '').replace(/"/g, '""')}"`,
+      `"${(c.currentCompany || '').replace(/"/g, '""')}"`,
+      `"${(c.bestFitJr?.jrNumber || 'General').replace(/"/g, '""')}"`,
+      `"${(c.bestFitJr?.jobTitle || '').replace(/"/g, '""')}"`,
+      `"${(c.bestFitJr?.companyName || '').replace(/"/g, '""')}"`,
+      c.bestFitJr?.matchScore || c.atsScore || 0,
+      `"${(c.skills || []).slice(0, 8).join(', ').replace(/"/g, '""')}"`,
+      c.isExistingInDb ? 'Already in DB' : 'New Profile'
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `ATS_Bulk_Scan_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const matchedJrsSummary = useMemo(() => {
+    const map = new Map<string, { jrNumber: string; jobTitle: string; companyName: string; count: number; highMatches: number }>();
+    bulkResults.forEach(c => {
+      const jr = c.bestFitJr;
+      const score = c.bestFitJr?.matchScore || c.atsScore || 0;
+      const jrNum = jr?.jrNumber || 'General Pool';
+      if (!map.has(jrNum)) {
+        map.set(jrNum, {
+          jrNumber: jrNum,
+          jobTitle: jr?.jobTitle || 'General Sourcing Pool',
+          companyName: jr?.companyName || 'White Horse ATS Pool',
+          count: 0,
+          highMatches: 0,
+        });
+      }
+      const item = map.get(jrNum)!;
+      item.count++;
+      if (score >= 80) item.highMatches++;
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [bulkResults]);
+
+  const filteredBulkResults = useMemo(() => {
+    return bulkResults.filter(cand => {
+      if (bulkFilter === 'eightyPlus') {
+        const score = cand.bestFitJr?.matchScore || cand.atsScore || 0;
+        if (score < 80) return false;
+      } else if (bulkFilter === 'high') {
+        const score = cand.bestFitJr?.matchScore || cand.atsScore || 0;
+        if (score < 75) return false;
+      } else if (bulkFilter === 'medium') {
+        const score = cand.bestFitJr?.matchScore || cand.atsScore || 0;
+        if (score < 55 || score >= 75) return false;
+      } else if (bulkFilter === 'new') {
+        if (cand.isExistingInDb) return false;
+      } else if (bulkFilter === 'existing') {
+        if (!cand.isExistingInDb) return false;
+      }
+
+      if (bulkSelectedJr !== 'all') {
+        if (cand.bestFitJr?.jrNumber !== bulkSelectedJr) return false;
+      }
+
+      if (bulkSearch.trim()) {
+        const q = bulkSearch.toLowerCase();
+        const matches =
+          (cand.name && cand.name.toLowerCase().includes(q)) ||
+          (cand.email && cand.email.toLowerCase().includes(q)) ||
+          (cand.phone && cand.phone.includes(q)) ||
+          (cand.currentRole && cand.currentRole.toLowerCase().includes(q)) ||
+          (cand.skills && cand.skills.some(s => s.toLowerCase().includes(q))) ||
+          (cand.bestFitJr?.jobTitle && cand.bestFitJr.jobTitle.toLowerCase().includes(q)) ||
+          (cand.bestFitJr?.companyName && cand.bestFitJr.companyName.toLowerCase().includes(q));
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [bulkResults, bulkFilter, bulkSelectedJr, bulkSearch]);
+
+  const eightyPlusCandidates = useMemo(() => {
+    return filteredBulkResults.filter(c => (c.bestFitJr?.matchScore || c.atsScore || 0) >= 80);
+  }, [filteredBulkResults]);
+
   /* ── Render ── */
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -1499,6 +1767,595 @@ export function ResumeScanPage() {
         )}
       </div>
 
+{/* ═════════════════════════════════════════════════════════════ */}
+      {/* 🧭 SCANNER TOP MODE SWITCHER */}
+      {/* ═════════════════════════════════════════════════════════════ */}
+      <div className="bg-white border border-slate-200 p-1.5 rounded-2xl shadow-xs flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setScannerTopMode('single')}
+          className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2.5 transition-all ${
+            scannerTopMode === 'single'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          <span>Single Resume Deep Scan</span>
+          <span className="text-[11px] font-normal opacity-80">(Dual Match & Similarity)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setScannerTopMode('bulk')}
+          className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2.5 transition-all ${
+            scannerTopMode === 'bulk'
+              ? 'bg-indigo-600 text-white shadow-sm'
+              : 'text-slate-600 hover:text-indigo-600 hover:bg-indigo-50/50'
+          }`}
+        >
+          <Archive className="w-4 h-4 text-amber-300" />
+          <span>📦 Bulk ZIP / Multi-Resume Scanner</span>
+          <span className="bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">
+            50-250+ Resumes
+          </span>
+        </button>
+      </div>
+
+      {/* ═════════════════════════════════════════════════════════════ */}
+      {/* 📦 BULK ZIP / MULTI-RESUME SCANNER VIEW */}
+      {/* ═════════════════════════════════════════════════════════════ */}
+      {scannerTopMode === 'bulk' && (
+        <div className="space-y-6">
+          {isGeneralSourcer && (
+            <div className="bg-indigo-50 border border-indigo-200 text-indigo-950 px-4 py-3 rounded-2xl text-xs sm:text-sm flex items-center gap-3 shadow-xs">
+              <Globe className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+              <div>
+                <span className="font-bold">🌐 Sourcing Scanner Mode Active ({user?.name || 'Suhail & Wasiq'}):</span> Any resume scanned by you will be added directly into the <strong>General Pool (Available for All Recruiters)</strong> so any recruiter in the company can see and claim them.
+              </div>
+            </div>
+          )}
+
+          {bulkSaveFeedback && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-2 shadow-xs">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+              <span>{bulkSaveFeedback}</span>
+            </div>
+          )}
+
+          {bulkError && (
+            <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-xl text-sm font-bold flex items-center gap-2 shadow-xs">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <span>{bulkError}</span>
+            </div>
+          )}
+
+          {/* Upload Card */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <FolderArchive className="w-5 h-5 text-indigo-600" />
+                  Batch Upload Resumes (.ZIP or Multiple PDF / DOCX)
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Upload a <strong>.zip file with 50-250+ resumes</strong> or select multiple resume files at once. All resumes will be extracted, parsed, role-classified, and matched against open JRs automatically!
+                </p>
+              </div>
+
+              {bulkResults.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBulkResults([]);
+                    setBulkFiles([]);
+                    setSelectedCandidateIds(new Set());
+                    setBulkSummary(null);
+                    setBulkSaveFeedback(null);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-50"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Clear Batch
+                </button>
+              )}
+            </div>
+
+            {/* Dropzone */}
+            <div
+              onDrop={handleBulkDrop}
+              onDragOver={(e) => e.preventDefault()}
+              onClick={() => bulkFileInputRef.current?.click()}
+              className="border-2 border-dashed border-indigo-200 bg-indigo-50/20 hover:bg-indigo-50/40 hover:border-indigo-400 transition-all rounded-2xl p-8 text-center cursor-pointer flex flex-col items-center justify-center gap-3"
+            >
+              <input
+                ref={bulkFileInputRef}
+                type="file"
+                multiple
+                accept=".zip,.rar,.pdf,.docx,.doc"
+                className="hidden"
+                onChange={handleBulkFileSelect}
+              />
+
+              <div className="w-14 h-14 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-xs">
+                <Archive className="w-7 h-7" />
+              </div>
+
+              <div>
+                <p className="text-sm font-bold text-slate-800">
+                  {bulkFiles.length > 0
+                    ? `${bulkFiles.length} file(s) ready for scan`
+                    : 'Click to upload or drag and drop a ZIP archive / resumes here'}
+                </p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Supports .ZIP, .RAR (containing PDFs, DOCX, DOC) or select up to 250 files simultaneously (Max 250MB)
+                </p>
+              </div>
+
+              {bulkFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2 max-w-xl justify-center max-h-24 overflow-y-auto p-2 bg-white/80 rounded-xl border border-indigo-100">
+                  {bulkFiles.map((f, i) => (
+                    <span key={i} className="text-[11px] font-medium px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-200/60 truncate max-w-xs">
+                      {f.name} ({(f.size / 1024).toFixed(0)} KB)
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Scanning Progress */}
+            {bulkScanning && (
+              <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-indigo-900">
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                    {bulkProgress.stage || 'Batch scanning in progress...'}
+                  </span>
+                  <span>Please wait, analyzing candidates...</span>
+                </div>
+                <div className="w-full h-2 bg-indigo-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-indigo-600 animate-pulse rounded-full w-3/4" />
+                </div>
+              </div>
+            )}
+
+            {/* Action Bar */}
+            <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
+              <div className="text-xs text-slate-500">
+                {bulkFiles.length > 0 ? (
+                  <span>Selected <strong>{bulkFiles.length}</strong> file(s) ready to be processed.</span>
+                ) : (
+                  <span>No file selected yet.</span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleStartBulkScan}
+                disabled={bulkFiles.length === 0 || bulkScanning}
+                className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {bulkScanning ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Scanning Batch...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Start Bulk Scan & Match
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Results Section */}
+          {bulkResults.length > 0 && (
+            <div className="space-y-4">
+              {/* Batch Summary Stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Total Parsed</span>
+                  <p className="text-2xl font-black text-slate-900 mt-1">{bulkResults.length}</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">from uploaded files</p>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                  <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide">Top JR Matches (&ge;75%)</span>
+                  <p className="text-2xl font-black text-emerald-700 mt-1">
+                    {bulkResults.filter(c => (c.bestFitJr?.matchScore || c.atsScore || 0) >= 75).length}
+                  </p>
+                  <p className="text-[11px] text-emerald-600 mt-0.5">high priority candidates</p>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                  <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wide">Good Matches (55-74%)</span>
+                  <p className="text-2xl font-black text-blue-700 mt-1">
+                    {bulkResults.filter(c => {
+                      const s = c.bestFitJr?.matchScore || c.atsScore || 0;
+                      return s >= 55 && s < 75;
+                    }).length}
+                  </p>
+                  <p className="text-[11px] text-blue-600 mt-0.5">potential pipeline</p>
+                </div>
+
+                <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+                  <span className="text-[11px] font-bold text-violet-600 uppercase tracking-wide">New to Database</span>
+                  <p className="text-2xl font-black text-violet-700 mt-1">
+                    {bulkResults.filter(c => !c.isExistingInDb).length}
+                  </p>
+                  <p className="text-[11px] text-violet-600 mt-0.5">fresh profiles</p>
+                </div>
+              </div>
+
+              {/* Table Filter & Actions Bar */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  {/* Search */}
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search candidate, skill, role..."
+                      value={bulkSearch}
+                      onChange={(e) => setBulkSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-indigo-400 outline-none"
+                    />
+                  </div>
+
+                  {/* Filter Pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setBulkFilter('eightyPlus')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                        bulkFilter === 'eightyPlus'
+                          ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-300'
+                          : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+                      }`}
+                    >
+                      ⭐ 80%+ Score ({bulkResults.filter(c => (c.bestFitJr?.matchScore || c.atsScore || 0) >= 80).length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkFilter('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        bulkFilter === 'all'
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      All ({bulkResults.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkFilter('high')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        bulkFilter === 'high'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                      }`}
+                    >
+                      Top &ge;75% ({bulkResults.filter(c => (c.bestFitJr?.matchScore || c.atsScore || 0) >= 75).length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkFilter('medium')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        bulkFilter === 'medium'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                      }`}
+                    >
+                      Good 55-74% ({bulkResults.filter(c => {
+                        const s = c.bestFitJr?.matchScore || c.atsScore || 0;
+                        return s >= 55 && s < 75;
+                      }).length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkFilter('new')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        bulkFilter === 'new'
+                          ? 'bg-violet-600 text-white'
+                          : 'bg-violet-50 text-violet-700 hover:bg-violet-100'
+                      }`}
+                    >
+                      New Only ({bulkResults.filter(c => !c.isExistingInDb).length})
+                    </button>
+                  </div>
+
+                  {/* Batch Action Buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleExportBulkExcel}
+                      disabled={selectedCandidateIds.size === 0}
+                      className="px-3 py-2 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-1.5 disabled:opacity-40"
+                    >
+                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      Export CSV ({selectedCandidateIds.size})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleBulkSaveToDb}
+                      disabled={selectedCandidateIds.size === 0 || bulkSaving}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-40"
+                    >
+                      {bulkSaving ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Database className="w-3.5 h-3.5" />
+                          {isGeneralSourcer ? `Save to General Pool (${selectedCandidateIds.size})` : `Save to ATS DB (${selectedCandidateIds.size})`}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── Dual Matching Layout: JRs on Left, 80+ Resumes & Candidates on Right ── */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                  {/* Side A: Matching JRs (4 Cols) */}
+                  <div className="lg:col-span-4 space-y-3">
+                    <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 shadow-2xs">
+                      <div className="flex items-center justify-between pb-2.5 border-b border-slate-200">
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="w-4 h-4 text-emerald-600" />
+                          <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider">
+                            Matching JRs ({matchedJrsSummary.length})
+                          </h4>
+                        </div>
+                        {bulkSelectedJr !== 'all' && (
+                          <button
+                            type="button"
+                            onClick={() => setBulkSelectedJr('all')}
+                            className="text-[11px] font-bold text-emerald-600 hover:text-emerald-800"
+                          >
+                            Clear Filter
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="mt-3 space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                        {/* All JRs Option */}
+                        <div
+                          onClick={() => setBulkSelectedJr('all')}
+                          className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                            bulkSelectedJr === 'all'
+                              ? 'bg-emerald-500 text-white border-emerald-600 shadow-xs'
+                              : 'bg-white border-slate-200 text-slate-700 hover:border-emerald-300'
+                          }`}
+                        >
+                          <div>
+                            <p className="text-xs font-bold">All Matching JRs</p>
+                            <p className={`text-[10px] ${bulkSelectedJr === 'all' ? 'text-emerald-100' : 'text-slate-400'}`}>
+                              Show all parsed candidates
+                            </p>
+                          </div>
+                          <span className={`text-xs font-black px-2 py-0.5 rounded-full ${
+                            bulkSelectedJr === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {bulkResults.length}
+                          </span>
+                        </div>
+
+                        {/* Individual JR Cards */}
+                        {matchedJrsSummary.map((jr) => {
+                          const isSelected = bulkSelectedJr === jr.jrNumber;
+                          return (
+                            <div
+                              key={jr.jrNumber}
+                              onClick={() => setBulkSelectedJr(isSelected ? 'all' : jr.jrNumber)}
+                              className={`p-3 rounded-xl border cursor-pointer transition-all space-y-1 ${
+                                isSelected
+                                  ? 'bg-emerald-50 border-emerald-500 shadow-xs ring-1 ring-emerald-400'
+                                  : 'bg-white border-slate-200 hover:border-emerald-300 hover:shadow-2xs'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1.5">
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded border border-slate-200 truncate max-w-[120px]">
+                                  {jr.jrNumber}
+                                </span>
+                                <div className="flex items-center gap-1.5">
+                                  {jr.highMatches > 0 && (
+                                    <span className="text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded-full" title="Candidates with >= 80% score">
+                                      ⭐ {jr.highMatches}
+                                    </span>
+                                  )}
+                                  <span className="text-xs font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full">
+                                    {jr.count}
+                                  </span>
+                                </div>
+                              </div>
+                              <p className="text-xs font-bold text-slate-800 truncate" title={jr.jobTitle}>
+                                {jr.jobTitle}
+                              </p>
+                              <p className="text-[11px] text-slate-500 truncate">
+                                {jr.companyName}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Side B: Matching Resumes & 80+ Score Champions (8 Cols) */}
+                  <div className="lg:col-span-8 space-y-4">
+                    {/* ⭐ 80+ Score Showcase Banner */}
+                    {eightyPlusCandidates.length > 0 && (
+                      <div className="bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 rounded-2xl p-4 text-white shadow-md border border-emerald-800/60 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                            <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-300">
+                              ⭐ 80%+ High-Match Champions ({eightyPlusCandidates.length} Candidates)
+                            </h4>
+                          </div>
+                          <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-900/60 px-2 py-0.5 rounded-full border border-emerald-700">
+                            Immediate Lineup Qualified
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {eightyPlusCandidates.slice(0, 4).map((topCand, idx) => (
+                            <div
+                              key={topCand.id || idx}
+                              className="p-3 bg-white/5 border border-emerald-500/30 rounded-xl hover:bg-white/10 transition-colors flex items-start justify-between gap-2"
+                            >
+                              <div className="space-y-0.5 min-w-0">
+                                <p className="text-xs font-bold text-white truncate">{topCand.name}</p>
+                                <p className="text-[10px] text-slate-300 truncate">
+                                  {topCand.currentRole || 'Candidate'} • {topCand.experience || 'Exp not specified'}
+                                </p>
+                                <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1 py-0.5 rounded">
+                                    {topCand.bestFitJr?.jrNumber || 'JR'}
+                                  </span>
+                                  {topCand.phone && <span className="text-[10px] text-slate-400 font-mono">{topCand.phone}</span>}
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <span className="px-2 py-0.5 bg-emerald-500 text-white rounded-lg text-xs font-black shadow-xs">
+                                  {topCand.bestFitJr?.matchScore || topCand.atsScore}%
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Candidate Table */}
+                    <div className="overflow-x-auto border border-slate-200/80 rounded-2xl bg-white shadow-2xs">
+                      <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        <th className="py-3 px-4 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedCandidateIds.size === filteredBulkResults.length && filteredBulkResults.length > 0}
+                            onChange={() => toggleSelectAllCandidates(filteredBulkResults)}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                          />
+                        </th>
+                        <th className="py-3 px-4">Candidate & Contact</th>
+                        <th className="py-3 px-4">Role & Experience</th>
+                        <th className="py-3 px-4">Best Fit JR (Live 106 JRs)</th>
+                        <th className="py-3 px-4">Match Score</th>
+                        <th className="py-3 px-4">Detected Skills</th>
+                        <th className="py-3 px-4 text-right">DB Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {filteredBulkResults.map((cand, idx) => {
+                        const isSelected = selectedCandidateIds.has(cand.id);
+                        const score = cand.bestFitJr?.matchScore || cand.atsScore || 65;
+                        const isTop = score >= 75;
+                        const isGood = score >= 55 && score < 75;
+
+                        return (
+                          <tr
+                            key={cand.id || idx}
+                            className={`hover:bg-slate-50/60 transition-colors ${isSelected ? 'bg-indigo-50/20' : ''}`}
+                          >
+                            <td className="py-3.5 px-4 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleCandidateSelection(cand.id)}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-3.5 px-4 min-w-[200px]">
+                              <p className="font-bold text-slate-900">{cand.name}</p>
+                              <div className="flex items-center gap-2 text-[11px] text-slate-500 flex-wrap mt-0.5">
+                                {cand.email && <span>{cand.email}</span>}
+                                {cand.phone && <span>• {cand.phone}</span>}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 min-w-[170px]">
+                              <p className="font-semibold text-slate-700">{cand.currentRole || 'Candidate'}</p>
+                              <p className="text-[11px] text-slate-400">
+                                {cand.experience} {cand.currentCompany ? `• ${cand.currentCompany}` : ''}
+                              </p>
+                            </td>
+                            <td className="py-3.5 px-4 min-w-[200px]">
+                              {cand.bestFitJr ? (
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[10px] font-bold bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
+                                      {cand.bestFitJr.jrNumber}
+                                    </span>
+                                    <span className="text-[11px] font-semibold text-slate-700">
+                                      {cand.bestFitJr.companyName}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-slate-600 truncate max-w-xs">{cand.bestFitJr.jobTitle}</p>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 text-xs">General Pool</span>
+                              )}
+                            </td>
+                            <td className="py-3.5 px-4">
+                              <span className={`inline-block text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                                isTop
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : isGood
+                                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+                              }`}>
+                                {score}%
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-4 max-w-[220px]">
+                              <div className="flex flex-wrap gap-1">
+                                {(cand.skills || []).slice(0, 3).map((s: string) => (
+                                  <span key={s} className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-medium">
+                                    {s}
+                                  </span>
+                                ))}
+                                {(cand.skills || []).length > 3 && (
+                                  <span className="text-[10px] text-slate-400">+{(cand.skills || []).length - 3}</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                              {cand.isExistingInDb ? (
+                                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                  Already in DB
+                                </span>
+                              ) : (
+                                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                  New Profile
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+          )}
+        </div>
+      )}
+
+      {/* ═════════════════════════════════════════════════════════════ */}
+      {/* 📄 SINGLE RESUME DEEP SCANNER VIEW (ORIGINAL & DUAL MATCH) */}
+      {/* ═════════════════════════════════════════════════════════════ */}
+      {scannerTopMode === 'single' && (
+        <div className="space-y-6">
       {/* ── Upload Zone (idle) ── */}
       {!file && !parsing && !result && (
         <div className="space-y-4">
@@ -1726,10 +2583,27 @@ export function ResumeScanPage() {
                     Target Client Job Description (Custom or Mandate Preset)
                   </label>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-slate-500 font-medium">Quick Presets:</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-slate-500 font-medium">Quick Presets:</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowJdManagerModal(true)}
+                        className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors"
+                        title="Add or edit custom Job Descriptions without touching code"
+                      >
+                        <Sparkles className="w-3 h-3 text-emerald-600" /> Manage / Add JDs
+                      </button>
+                    </div>
                     <select
                       onChange={e => {
-                        const selected = CLIENT_JD_PRESETS.find(p => p.id === e.target.value);
+                        let selected = CLIENT_JD_PRESETS.find(p => p.id === e.target.value);
+                        if (!selected && e.target.value.startsWith('custom_')) {
+                          const cjId = e.target.value.replace('custom_', '');
+                          const cj = customJds.find(j => j._id === cjId);
+                          if (cj) {
+                            selected = { id: cj._id, title: cj.title, category: cj.category, skills: cj.skills || [], text: cj.text };
+                          }
+                        }
                         if (selected) {
                           setJobDesc(selected.text);
                           setRequiredSkillsInput(selected.skills.join(', '));
@@ -1739,6 +2613,15 @@ export function ResumeScanPage() {
                       className="text-xs bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-green-500 max-w-xs cursor-pointer"
                     >
                       <option value="" disabled>Select Client Mandate Preset...</option>
+                      {customJds.length > 0 && (
+                        <optgroup label="⭐ My Custom JDs (Live ATS Library)">
+                          {customJds.map(cj => (
+                            <option key={cj._id} value={'custom_' + cj._id}>
+                              {cj.title} ({cj.experience || 'Custom'})
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
                       <optgroup label="Finance & Procurement Operations">
                         <option value="p2p">P2P – Invoice & Payment Processing (5–14 Yrs)</option>
                         <option value="o2c">O2C – Billing & Revenue Management (5–14 Yrs)</option>
@@ -2501,6 +3384,29 @@ TypeScript (expert)`}
           )}
         </div>
       )}
+        </div>
+      )}
+
+      {/* ── Custom JD Manager Modal ── */}
+      <CustomJdManagerModal
+        isOpen={showJdManagerModal}
+        onClose={() => setShowJdManagerModal(false)}
+        onJdCreated={(newJd) => {
+          if (newJd) {
+            setCustomJds(prev => [newJd, ...prev]);
+            if (newJd.text || newJd.description) {
+              setJobDesc(newJd.text || newJd.description || '');
+            }
+            if (newJd.skills && newJd.skills.length > 0) {
+              setRequiredSkillsInput(newJd.skills.join(', '));
+            }
+          }
+          api.getJobs({ limit: '500' }).then(res => {
+            const jobs = res?.jobs || [];
+            if (jobs.length > 0) setExistingJrs(jobs);
+          }).catch(() => {});
+        }}
+      />
     </div>
   );
 }

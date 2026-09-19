@@ -185,6 +185,10 @@ const candidateSchema = new mongoose.Schema({
   division: { type: String, enum: ['IT', 'BPO', 'Lateral'], default: 'BPO' },
   sourcedBy: { type: String },
   sourceStatus: { type: String, enum: ['Active', 'Non-Active'], default: 'Active' },
+  scannedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+  scannedByName: { type: String },
+  scannedByRole: { type: String },
+  scannedDate: { type: Date, default: Date.now, index: true },
 
   // ─── Permanent Original JR Heritage & Tracking (Never Cleared/Removed) ───
   originalJrNumber: { type: String, trim: true, index: true },
@@ -369,8 +373,9 @@ const candidateSchema = new mongoose.Schema({
     docType: {
       type: String,
       enum: DOCUMENT_TYPES,
-      required: true,
+      default: 'Other',
     },
+    type: { type: String },
     filePath: { type: String, required: true },
     fileName: { type: String },
     fileSize: { type: Number },

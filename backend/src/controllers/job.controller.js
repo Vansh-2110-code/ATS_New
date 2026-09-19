@@ -453,3 +453,252 @@ exports.getHRContacts = async (req, res, next) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// ─── Bulk Import JDs from Files (ZIP, PDF, DOCX, TXT, Excel) to Active JRs ───
+exports.bulkImportJds = async (req, res, next) => {
+  let tempExtractDir = null;
+  try {
+    const files = req.files || (req.file ? [req.file] : []);
+    if (!files || files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No JD files, ZIP archive, or Excel sheet provided.' });
+    }
+
+    const defaultClient = (req.body.defaultClientName || '').trim() || 'Client Requirement';
+    const defaultLocation = (req.body.defaultLocation || '').trim() || 'Bangalore, India';
+    const fs = require('fs');
+    const path = require('path');
+    const JSZip = require('jszip');
+    const { v4: uuidv4 } = require('uuid');
+    const { extractJdInfo } = require('./customJd.controller');
+    const { parseDocx } = require('../utils/docxParser');
+    const pdfParse = require('pdf-parse');
+    const XLSX = require('xlsx');
+
+    const jdItemsToProcess = [];
+
+    for (const file of files) {
+      const ext = path.extname(file.originalname).toLowerCase();
+
+      // Case 1: Excel or CSV spreadsheet
+      if (['.xlsx', '.xls', '.csv'].includes(ext)) {
+        try {
+          const workbook = XLSX.readFile(file.path);
+          const sheetName = workbook.SheetNames[0];
+          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '' });
+
+          for (const row of rows) {
+            const getVal = (keys) => {
+              for (const k of keys) {
+                const foundKey = Object.keys(row).find(rk => rk.toLowerCase().replace(/[^a-z0-9]/g, '') === k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+                if (foundKey && String(row[foundKey]).trim()) return String(row[foundKey]).trim();
+              }
+              return '';
+            };
+
+            const title = getVal(['jobTitle', 'title', 'role', 'position', 'designation']);
+            const client = getVal(['client', 'company', 'companyName']) || defaultClient;
+            const exp = getVal(['experience', 'exp', 'years']) || '1-5 Years';
+            const loc = getVal(['location', 'city', 'place']) || defaultLocation;
+            const rawSkills = getVal(['skills', 'keySkills', 'technologies', 'technicalSkills']);
+            const desc = getVal(['description', 'jobDescription', 'jd', 'requirements']) || `${title} requirement for ${client}`;
+            const skills = rawSkills ? rawSkills.split(/[,;\/]/).map(s => s.trim()).filter(Boolean) : [];
+
+            if (title) {
+              jdItemsToProcess.push({
+                jobTitle: title,
+                companyName: client,
+                experience: exp,
+                location: loc,
+                skills,
+                description: desc,
+                requirements: desc,
+              });
+            }
+          }
+        } catch (excelErr) {
+          console.warn('[BulkJD] Failed to parse Excel sheet:', excelErr.message);
+        }
+      }
+      // Case 2: ZIP archive of JD files
+      else if (ext === '.zip' || file.mimetype === 'application/zip' || file.mimetype === 'application/x-zip-compressed') {
+        const zipData = fs.readFileSync(file.path);
+        const zip = await JSZip.loadAsync(zipData);
+
+        const batchId = `jd_extract_${Date.now()}_${uuidv4().slice(0, 6)}`;
+        tempExtractDir = path.join(__dirname, '../../uploads/temp_extract', batchId);
+        if (!fs.existsSync(tempExtractDir)) fs.mkdirSync(tempExtractDir, { recursive: true });
+
+        for (const relPath of Object.keys(zip.files)) {
+          const zipFile = zip.files[relPath];
+          if (zipFile.dir || relPath.includes('__MACOSX') || relPath.startsWith('.')) continue;
+
+          const fileExt = path.extname(relPath).toLowerCase();
+          if (!['.pdf', '.docx', '.doc', '.txt'].includes(fileExt)) continue;
+
+          const buf = await zipFile.async('nodebuffer');
+          const diskPath = path.join(tempExtractDir, `${uuidv4().slice(0, 8)}_${path.basename(relPath)}`);
+          fs.writeFileSync(diskPath, buf);
+
+          let text = '';
+          if (fileExt === '.pdf') {
+            const p = await pdfParse(buf);
+            text = p.text || '';
+          } else if (['.docx', '.doc'].includes(fileExt)) {
+            const r = await parseDocx(diskPath);
+            text = r.text || '';
+          } else {
+            text = buf.toString('utf8');
+          }
+
+          if (text.trim()) {
+            const info = extractJdInfo(text);
+            const baseFileName = path.basename(relPath, fileExt).replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+            jdItemsToProcess.push({
+              jobTitle: info.suggestedTitle || baseFileName || 'Custom Job Requirement',
+              companyName: defaultClient,
+              experience: info.suggestedExp || '1-5 Years',
+              location: defaultLocation,
+              skills: info.skills || [],
+              description: text,
+              requirements: text,
+            });
+          }
+        }
+      }
+      // Case 3: Direct document file (.pdf, .docx, .doc, .txt)
+      else if (['.pdf', '.docx', '.doc', '.txt'].includes(ext)) {
+        let text = '';
+        if (ext === '.pdf') {
+          const buf = fs.readFileSync(file.path);
+          const p = await pdfParse(buf);
+          text = p.text || '';
+        } else if (['.docx', '.doc'].includes(ext)) {
+          const r = await parseDocx(file.path);
+          text = r.text || '';
+        } else {
+          text = fs.readFileSync(file.path, 'utf8');
+        }
+
+        if (text.trim()) {
+          const info = extractJdInfo(text);
+          const baseFileName = path.basename(file.originalname, ext).replace(/[_-]/g, ' ').replace(/\s+/g, ' ').trim();
+          jdItemsToProcess.push({
+            jobTitle: info.suggestedTitle || baseFileName || 'Custom Job Requirement',
+            companyName: defaultClient,
+            experience: info.suggestedExp || '1-5 Years',
+            location: defaultLocation,
+            skills: info.skills || [],
+            description: text,
+            requirements: text,
+          });
+        }
+      }
+
+      try { fs.unlinkSync(file.path); } catch (_) {}
+    }
+
+    if (tempExtractDir && fs.existsSync(tempExtractDir)) {
+      try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch (_) {}
+    }
+
+    if (jdItemsToProcess.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No readable job descriptions found in the uploaded files. Please check file format.'
+      });
+    }
+
+    // Assign sequential JRWH numbers
+    const allJobs = await Job.find({ jrNumber: /^JRWH\d+$/i }).select('jrNumber').lean();
+    let maxNum = 0;
+    allJobs.forEach(j => {
+      const num = parseInt(j.jrNumber.replace(/^JRWH/i, ''), 10);
+      if (!isNaN(num) && num > maxNum) maxNum = num;
+    });
+
+    const created = [];
+    const failed = [];
+    const escapeRegex = str => str.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+
+    for (let i = 0; i < jdItemsToProcess.length; i++) {
+      const item = jdItemsToProcess[i];
+      const jobTitle = (item.jobTitle || 'Client Job Requirement').trim();
+      const companyName = (item.companyName || defaultClient).trim();
+
+      // Check if duplicate open job exists
+      const existingJob = await Job.findOne({
+        companyName: { $regex: `^${escapeRegex(companyName)}$`, $options: 'i' },
+        jobTitle: { $regex: `^${escapeRegex(jobTitle)}$`, $options: 'i' },
+        status: { $ne: 'Closed' }
+      });
+
+      if (existingJob) {
+        failed.push({
+          row: i + 1,
+          jobTitle,
+          companyName,
+          error: `Duplicate active JR already exists (${existingJob.jrNumber})`
+        });
+        continue;
+      }
+
+      try {
+        maxNum++;
+        const newJrNumber = `JRWH${String(maxNum).padStart(4, '0')}`;
+        const newJob = await Job.create({
+          jrNumber: newJrNumber,
+          companyName,
+          client: companyName,
+          jobTitle,
+          experience: item.experience || '1-5 Years',
+          location: item.location || defaultLocation,
+          skills: item.skills || [],
+          description: item.description || '',
+          requirements: item.requirements || item.description || '',
+          positions: 1,
+          status: 'Open',
+          priority: 'Medium',
+          division: item.jobTitle.toLowerCase().includes('it') || (item.skills || []).some(s => ['react', 'node', 'java', 'python'].includes(s.toLowerCase())) ? 'IT' : 'BPO',
+          portfolioDepartment: 'BPO',
+          createdBy: req.user?._id,
+          recruiterName: req.user?.name || 'Recruiter',
+          recruiterEmail: req.user?.email || '',
+        });
+
+        created.push({
+          _id: newJob._id,
+          jrNumber: newJob.jrNumber,
+          jobTitle: newJob.jobTitle,
+          companyName: newJob.companyName,
+          skills: newJob.skills,
+          experience: newJob.experience
+        });
+      } catch (err) {
+        failed.push({ row: i + 1, jobTitle, error: err.message });
+      }
+    }
+
+    await createLog({
+      type: 'create',
+      user: req.user._id,
+      userName: req.user.name,
+      role: req.user.role,
+      action: `Bulk imported ${created.length} active JR(s) from files (${failed.length} skipped/failed)`
+    });
+
+    res.json({
+      success: true,
+      message: `🎉 Successfully created ${created.length} new Active JRs in the ATS database!`,
+      totalFound: jdItemsToProcess.length,
+      createdCount: created.length,
+      failedCount: failed.length,
+      createdJobs: created,
+      failed
+    });
+  } catch (err) {
+    if (tempExtractDir && fs.existsSync(tempExtractDir)) {
+      try { fs.rmSync(tempExtractDir, { recursive: true, force: true }); } catch (_) {}
+    }
+    next(err);
+  }
+};
