@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import JSZip from 'jszip';
 import { matchKeywords, generateSuggestions, weightedScore, getFitTier } from '../../utils/atsKeywordEngine';
 import { matchSkills, parseSkillRequirements } from '../../utils/skillsMatchingEngine';
 import { SkillsMatchDisplay } from '../../components/SkillsMatchDisplay';
@@ -326,11 +327,17 @@ function UniversalRoleHeroCard({
   candidate,
   onNavigateAdd,
   onViewUniversalTab,
+  onSaveCandidateToDb,
+  savingCandidate,
+  savedCandidate,
 }: {
   profile: UniversalRoleProfile;
   candidate: ParsedResume;
   onNavigateAdd: (params: { role?: string; department?: string; jrNumber?: string }) => void;
   onViewUniversalTab: () => void;
+  onSaveCandidateToDb?: () => void;
+  savingCandidate?: boolean;
+  savedCandidate?: boolean;
 }) {
   const [showAllRoles, setShowAllRoles] = useState(false);
   const [jrSearchTerm, setJrSearchTerm] = useState('');
@@ -340,6 +347,54 @@ function UniversalRoleHeroCard({
   const [visibleJrsCount, setVisibleJrsCount] = useState(8);
 
   const allActiveJobs = profile.matchedActiveJobs || [];
+
+  // ── Candidate Benchmarking & Competitive Comparison State ──
+  const [selectedBenchmarkJr, setSelectedBenchmarkJr] = useState<string | null>(() => {
+    return allActiveJobs.length > 0 ? allActiveJobs[0].jrNumber : null;
+  });
+  const [benchmarkCandidates, setBenchmarkCandidates] = useState<any[]>([]);
+  const [loadingBenchmark, setLoadingBenchmark] = useState(false);
+  const [selectedBenchmarkIds, setSelectedBenchmarkIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (allActiveJobs.length > 0 && (!selectedBenchmarkJr || !allActiveJobs.some(j => j.jrNumber === selectedBenchmarkJr))) {
+      setSelectedBenchmarkJr(allActiveJobs[0].jrNumber);
+    }
+  }, [allActiveJobs, selectedBenchmarkJr]);
+
+  useEffect(() => {
+    if (!selectedBenchmarkJr) return;
+    const activeJr = allActiveJobs.find(j => j.jrNumber === selectedBenchmarkJr);
+    let cancelled = false;
+
+    const fetchBenchmark = async () => {
+      setLoadingBenchmark(true);
+      try {
+        const candidateSkills = Array.isArray(candidate?.skills)
+          ? candidate.skills.map((s: any) => (typeof s === 'string' ? s : s?.name || '')).filter(Boolean)
+          : [];
+
+        const res = await api.findSimilarCandidates({
+          jrNumber: selectedBenchmarkJr,
+          jobTitle: activeJr?.jobTitle || '',
+          role: activeJr?.jobTitle || '',
+          skills: activeJr?.matchedSkills?.length ? activeJr.matchedSkills : candidateSkills.slice(0, 10),
+          benchmarkMode: true,
+          limit: 1000
+        });
+        if (!cancelled && res && res.candidates) {
+          setBenchmarkCandidates(res.candidates);
+        }
+      } catch (err) {
+        console.error('Failed to load benchmark candidates:', err);
+      } finally {
+        if (!cancelled) setLoadingBenchmark(false);
+      }
+    };
+
+    fetchBenchmark();
+    return () => { cancelled = true; };
+  }, [selectedBenchmarkJr]);
 
   const uniqueCompanies = useMemo(() => {
     const set = new Set<string>();
@@ -500,18 +555,47 @@ function UniversalRoleHeroCard({
                 </div>
               </div>
 
-              {/* Tag Candidate to Role */}
-              <button
-                onClick={() => onNavigateAdd({
-                  role: profile.bestFitRole,
-                  department: profile.primaryDomain,
-                  jrNumber: profile.matchedActiveJobs?.[0]?.jrNumber
-                })}
-                className="w-full mt-1 px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <UserCheck className="w-4 h-4" />
-                Tag Candidate to Pipeline
-              </button>
+              {/* Action Buttons: Save to DB & Tag Candidate */}
+              <div className="flex flex-col gap-2 w-full mt-2">
+                {savedCandidate ? (
+                  <div className="w-full px-4 py-2.5 bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Candidate Saved in ATS DB</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onSaveCandidateToDb}
+                    disabled={savingCandidate}
+                    className="w-full px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 text-white text-xs sm:text-sm font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                  >
+                    {savingCandidate ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Saving to DB...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Database className="w-4 h-4" />
+                        <span>Save Candidate Directly to DB</span>
+                      </>
+                    )}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => onNavigateAdd({
+                    role: profile.bestFitRole,
+                    department: profile.primaryDomain,
+                    jrNumber: profile.matchedActiveJobs?.[0]?.jrNumber
+                  })}
+                  className="w-full px-4 py-2 bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <UserCheck className="w-4 h-4 text-emerald-400" />
+                  Tag Candidate to Pipeline
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -670,161 +754,287 @@ function UniversalRoleHeroCard({
           </span>
         </div>
 
-        {/* JRs Grid */}
+        {/* JRs & Database Benchmark Split Grid */}
         {filteredMatchedJobs.length > 0 ? (
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {filteredMatchedJobs.slice(0, visibleJrsCount).map((job, idx) => {
-                const isTop = job.matchScore >= 75;
-                const isGood = job.matchScore >= 55 && job.matchScore < 75;
-                const isClosed = (job.status || '').toLowerCase() === 'closed';
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              {/* ── Left Column: Matching JRs (6 Cols) ── */}
+              <div className="lg:col-span-6 space-y-3">
+                <div className="flex items-center justify-between pb-1">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                    Matching JRs ({filteredMatchedJobs.length})
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Click any JR to benchmark database talent
+                  </span>
+                </div>
 
-                return (
-                  <div
-                    key={job.jrNumber || idx}
-                    className={`group border rounded-xl p-4 transition-all flex flex-col justify-between gap-3 shadow-xs ${
-                      isTop
-                        ? 'border-emerald-200 bg-emerald-50/20 hover:border-emerald-400 hover:bg-emerald-50/40'
-                        : isGood
-                        ? 'border-blue-200 bg-blue-50/10 hover:border-blue-400 hover:bg-blue-50/30'
-                        : 'border-slate-200 bg-slate-50/40 hover:border-slate-300 hover:bg-white'
-                    }`}
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-xs font-bold text-slate-900 bg-white border border-slate-200 px-2 py-0.5 rounded shadow-2xs">
-                              {job.jrNumber}
-                            </span>
-                            <span className="text-xs text-slate-600 font-medium">
-                              {job.companyName}
-                            </span>
-                            <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full ${
-                              isClosed
-                                ? 'bg-slate-200 text-slate-700'
-                                : (job.status === 'On Hold' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800')
-                            }`}>
-                              {job.status || 'Open'}
-                            </span>
-                          </div>
-                          <h4 className="text-sm font-bold text-slate-800 mt-1 group-hover:text-emerald-700 transition-colors">
-                            {job.jobTitle}
-                          </h4>
-                        </div>
+                <div className="space-y-3 max-h-[660px] overflow-y-auto pr-1">
+                  {filteredMatchedJobs.slice(0, visibleJrsCount).map((job, idx) => {
+                    const isTop = job.matchScore >= 75;
+                    const isGood = job.matchScore >= 55 && job.matchScore < 75;
+                    const isClosed = (job.status || '').toLowerCase() === 'closed';
+                    const isSelected = selectedBenchmarkJr === job.jrNumber;
 
-                        <div className="text-right flex-shrink-0">
-                          <span className={`inline-block text-xs font-bold px-2.5 py-1 rounded-full ${
-                            isTop
-                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                              : isGood
-                              ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                              : 'bg-slate-100 text-slate-700 border border-slate-200'
-                          }`}>
-                            {job.matchScore}% Match
-                          </span>
-                        </div>
-                      </div>
+                    return (
+                      <div
+                        key={job.jrNumber || idx}
+                        onClick={() => setSelectedBenchmarkJr(job.jrNumber)}
+                        className={`group border rounded-xl p-3.5 transition-all flex flex-col justify-between gap-2.5 shadow-xs cursor-pointer ${
+                          isSelected
+                            ? 'border-emerald-500 bg-emerald-50/40 ring-2 ring-emerald-400 shadow-sm'
+                            : isTop
+                            ? 'border-emerald-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/20'
+                            : isGood
+                            ? 'border-blue-200 bg-white hover:border-blue-300 hover:bg-blue-50/20'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[11px] font-bold text-slate-900 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded shadow-2xs">
+                                  {job.jrNumber}
+                                </span>
+                                <span className="text-xs text-slate-600 font-medium truncate">
+                                  {job.companyName}
+                                </span>
+                                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full ${
+                                  isClosed
+                                    ? 'bg-slate-200 text-slate-700'
+                                    : (job.status === 'On Hold' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800')
+                                }`}>
+                                  {job.status || 'Open'}
+                                </span>
+                              </div>
+                              <h4 className="text-sm font-bold text-slate-800 mt-1 truncate">
+                                {job.jobTitle}
+                              </h4>
+                            </div>
 
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-slate-400" />
-                          {job.location || 'Any Location'}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Briefcase className="w-3 h-3 text-slate-400" />
-                          {job.experience || 'Exp Required'}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <User className="w-3 h-3 text-slate-400" />
-                          {job.positions || 1} Position{(job.positions || 1) > 1 ? 's' : ''}
-                        </span>
-                      </div>
-
-                      {/* Matched Skills */}
-                      {job.matchedSkills && job.matchedSkills.length > 0 && (
-                        <div className="space-y-1 pt-1">
-                          <p className="text-[10px] font-bold uppercase text-emerald-700">Matched Skills ({job.matchedSkills.length}):</p>
-                          <div className="flex flex-wrap gap-1">
-                            {job.matchedSkills.slice(0, 5).map(skill => (
-                              <span key={skill} className="px-1.5 py-0.5 rounded bg-emerald-100/70 text-emerald-800 text-[10px] font-semibold">
-                                ✓ {skill}
+                            <div className="text-right flex-shrink-0">
+                              <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${
+                                isTop
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : isGood
+                                  ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+                              }`}>
+                                {job.matchScore}% Match
                               </span>
-                            ))}
-                            {job.matchedSkills.length > 5 && (
-                              <span className="text-[10px] text-slate-400 font-medium self-center">
-                                +{job.matchedSkills.length - 5} more
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-slate-500">
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-slate-400" />
+                              {job.location || 'Any Location'}
+                            </span>
+                            {job.experience && (
+                              <span className="flex items-center gap-1">
+                                <Briefcase className="w-3 h-3 text-slate-400" />
+                                {job.experience}
                               </span>
                             )}
+                            <span className="flex items-center gap-1">
+                              <User className="w-3 h-3 text-slate-400" />
+                              {job.positions || 1} Position{(job.positions || 1) > 1 ? 's' : ''}
+                            </span>
                           </div>
-                        </div>
-                      )}
 
-                      {/* Missing Skills */}
-                      {job.missingSkills && job.missingSkills.length > 0 && (
-                        <div className="space-y-1 pt-0.5">
-                          <p className="text-[10px] font-bold uppercase text-amber-700">Gaps to Evaluate ({job.missingSkills.length}):</p>
-                          <div className="flex flex-wrap gap-1">
-                            {job.missingSkills.slice(0, 4).map(skill => (
-                              <span key={skill} className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 text-[10px] font-medium border border-amber-200/60">
-                                + {skill}
-                              </span>
-                            ))}
-                          </div>
+                          {/* Matched Skills */}
+                          {job.matchedSkills && job.matchedSkills.length > 0 && (
+                            <div className="space-y-0.5 pt-0.5">
+                              <p className="text-[9px] font-bold uppercase text-emerald-700">Matched Skills ({job.matchedSkills.length}):</p>
+                              <div className="flex flex-wrap gap-1">
+                                {job.matchedSkills.slice(0, 4).map(skill => (
+                                  <span key={skill} className="px-1.5 py-0.2 rounded bg-emerald-100/70 text-emerald-800 text-[9px] font-semibold">
+                                    ✓ {skill}
+                                  </span>
+                                ))}
+                                {job.matchedSkills.length > 4 && (
+                                  <span className="text-[9px] text-slate-400 font-medium self-center">
+                                    +{job.matchedSkills.length - 4} more
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
 
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                      <span className="text-[11px] text-slate-400">
-                        {isClosed ? 'Mandate Closed' : (job.status === 'On Hold' ? 'Mandate On Hold' : 'Open Active JR')}
-                      </span>
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-[10px] text-slate-400">
+                            {isClosed ? 'Mandate Closed' : (job.status === 'On Hold' ? 'Mandate On Hold' : 'Open Active JR')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onNavigateAdd({
+                              jrNumber: job.jrNumber,
+                              role: job.jobTitle,
+                              department: profile.primaryDomain
+                            })}
+                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                          >
+                            <UserCheck className="w-3.5 h-3.5" />
+                            Tag to {job.jrNumber} & Proceed
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Pagination / Expand controls */}
+                <div className="flex items-center justify-center gap-2 pt-1">
+                  {visibleJrsCount < filteredMatchedJobs.length && (
+                    <>
                       <button
-                        onClick={() => onNavigateAdd({
-                          jrNumber: job.jrNumber,
-                          role: job.jobTitle,
-                          department: profile.primaryDomain
-                        })}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        type="button"
+                        onClick={() => setVisibleJrsCount(prev => Math.min(prev + 8, filteredMatchedJobs.length))}
+                        className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-colors cursor-pointer"
                       >
-                        <UserCheck className="w-3.5 h-3.5" />
-                        Tag to {job.jrNumber} & Proceed
+                        Show Next 8 JRs
                       </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                      <button
+                        type="button"
+                        onClick={() => setVisibleJrsCount(filteredMatchedJobs.length)}
+                        className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Show All {filteredMatchedJobs.length} JRs
+                      </button>
+                    </>
+                  )}
+                  {visibleJrsCount > 8 && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleJrsCount(8)}
+                      className="px-2.5 py-1 text-slate-500 hover:text-slate-700 text-xs font-semibold cursor-pointer"
+                    >
+                      Collapse
+                    </button>
+                  )}
+                </div>
+              </div>
 
-            {/* Pagination / Expand controls */}
-            <div className="flex items-center justify-center gap-3 pt-2">
-              {visibleJrsCount < filteredMatchedJobs.length && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setVisibleJrsCount(prev => Math.min(prev + 8, filteredMatchedJobs.length))}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                  >
-                    Show Next 8 JRs ({filteredMatchedJobs.length - visibleJrsCount} remaining)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVisibleJrsCount(filteredMatchedJobs.length)}
-                    className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                  >
-                    Show All {filteredMatchedJobs.length} JRs
-                  </button>
-                </>
-              )}
-              {visibleJrsCount > 8 && (
-                <button
-                  type="button"
-                  onClick={() => setVisibleJrsCount(8)}
-                  className="px-3 py-2 text-slate-500 hover:text-slate-700 text-xs font-semibold cursor-pointer"
-                >
-                  Collapse to Top 8
-                </button>
-              )}
+              {/* ── Right Column: Candidate Benchmarking & Talent Comparison (6 Cols) ── */}
+              <div className="lg:col-span-6 space-y-3">
+                <div className="bg-slate-50/80 border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-slate-800 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                        Candidate Benchmarking & Talent Comparison
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5 truncate">
+                        Top competing talent in database for: <strong className="text-emerald-700">{selectedBenchmarkJr || 'Selected JR'}</strong>
+                      </p>
+                    </div>
+                    {benchmarkCandidates.length > 0 && (
+                      <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-300 flex-shrink-0">
+                        {benchmarkCandidates.length} Matching (≥80%)
+                      </span>
+                    )}
+                  </div>
+
+                  {loadingBenchmark ? (
+                    <div className="py-14 text-center space-y-2">
+                      <Loader2 className="w-6 h-6 animate-spin text-emerald-600 mx-auto" />
+                      <p className="text-xs text-slate-500 font-medium">
+                        Analyzing database candidates for {selectedBenchmarkJr}...
+                      </p>
+                    </div>
+                  ) : benchmarkCandidates.length > 0 ? (
+                    <div className="space-y-2 max-h-[660px] overflow-y-auto pr-1">
+                      {benchmarkCandidates.map((c, i) => {
+                        const isSelected = selectedBenchmarkIds.has(c._id);
+                        return (
+                          <div
+                            key={c._id || i}
+                            onClick={() => {
+                              if (c._id) {
+                                window.open(`/recruiter/candidate/${c._id}`, '_blank');
+                              }
+                            }}
+                            className="p-3 bg-white border border-slate-200 rounded-xl hover:border-emerald-400 hover:bg-slate-50/70 hover:shadow-xs transition-all flex items-center justify-between gap-3 cursor-pointer group"
+                            title="Click to open candidate profile & resume in new tab"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedBenchmarkIds(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(c._id)) next.delete(c._id);
+                                    else next.add(c._id);
+                                    return next;
+                                  });
+                                }}
+                                className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs font-bold text-slate-900 group-hover:text-emerald-700 group-hover:underline transition-colors truncate">
+                                    {c.name}
+                                  </span>
+                                  <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    {c.recommendation || 'Recommended'}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                                  {c.role || 'Candidate'} {c.skills?.length ? `• ${c.skills.slice(0, 3).join(', ')}` : ''}
+                                </p>
+                                {c.phone && (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <a
+                                      href={`tel:${c.phone}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded transition-colors"
+                                      title="Call candidate"
+                                    >
+                                      <Phone className="w-3 h-3 text-emerald-600" />
+                                      <span>{c.phone}</span>
+                                    </a>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (c._id) {
+                                    window.open(`/recruiter/candidate/${c._id}`, '_blank');
+                                  }
+                                }}
+                                className="px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100 hover:border-emerald-300 transition-all flex items-center gap-1.5 text-xs font-bold shadow-2xs group-hover:scale-105"
+                                title="Open candidate profile and resume in new tab"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                                <span className="hidden sm:inline">Open Resume</span>
+                              </button>
+                              <div className="text-right pl-1">
+                                <span className="text-2xl font-black text-slate-800 tracking-tight">
+                                  {c.similarityScore}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-12 text-center text-xs text-slate-400">
+                      No competing candidates found for this JR in the database.
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -1178,9 +1388,17 @@ export function ResumeScanPage() {
   const isGeneralSourcer = useMemo(() => {
     const email = (user?.email || '').toLowerCase();
     const name = (user?.name || '').trim().toLowerCase();
-    return ['whitehorsesohail@gmail.com', 'wasiq@whitehorsemanpower.in'].includes(email) ||
-           ['suhail', 'sohail', 'wasiq'].includes(name);
+    const role = (user?.role || '').toLowerCase();
+    return ['whitehorsesohail@gmail.com', 'wasiq@whitehorsemanpower.in', 'babul@whitehorsemanpower.in'].includes(email) ||
+           ['suhail', 'sohail', 'wasiq', 'babul'].some(n => name.includes(n)) ||
+           role === 'mis' || role === 'data_entry';
   }, [user]);
+
+  // Single resume candidate save state
+  const [savingSingleCandidate, setSavingSingleCandidate] = useState(false);
+  const [savedSingleCandidate, setSavedSingleCandidate] = useState<{ id?: string; name?: string; message?: string } | null>(null);
+  const [saveSingleFeedback, setSaveSingleFeedback] = useState<string | null>(null);
+
   const [dragOver, setDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [steps, setSteps] = useState<ParseStep[]>(PARSE_STEPS.map(s => ({ ...s })));
@@ -1438,9 +1656,60 @@ export function ResumeScanPage() {
 
   const reset = () => {
     setFile(null); setParsing(false); setResult(null);
+    setSavedSingleCandidate(null); setSaveSingleFeedback(null); setSavingSingleCandidate(false);
     setSteps(PARSE_STEPS.map(s => ({ ...s, status: 'pending' })));
     setActiveTab('overview');
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleSaveSingleCandidateToDb = async () => {
+    if (!result) return;
+    setSavingSingleCandidate(true);
+    setSaveSingleFeedback(null);
+    try {
+      const bestJob = result.universalRoleProfile?.matchedActiveJobs?.[0];
+      const payload = {
+        name: result.name || 'Candidate',
+        email: result.email || '',
+        phone: result.phone || '',
+        location: result.location || '',
+        currentLocation: result.location || '',
+        experience: result.universalRoleProfile?.seniority?.years
+          ? `${result.universalRoleProfile.seniority.years} Years`
+          : (result.experience?.[0]?.duration || ''),
+        totalExperience: result.universalRoleProfile?.seniority?.years
+          ? `${result.universalRoleProfile.seniority.years} Years`
+          : (result.experience?.[0]?.duration || ''),
+        currentCompany: result.experience?.[0]?.company || '',
+        positionApplied: result.universalRoleProfile?.bestFitRole || (result.experience?.[0]?.title || 'Scanned Candidate'),
+        role: result.universalRoleProfile?.bestFitRole || (result.experience?.[0]?.title || 'Scanned Candidate'),
+        skills: result.skills?.map(s => s.name) || [],
+        summary: result.summary || '',
+        atsScore: result.atsScore || 70,
+        jrNumber: selectedJr?.jrNumber || bestJob?.jrNumber || '',
+        clientName: selectedJr?.companyName || bestJob?.companyName || '',
+        company: selectedJr?.companyName || bestJob?.companyName || '',
+        source: 'ATS Scanner'
+      };
+
+      const res = await api.saveAtsCandidateToDb(payload);
+      const savedCand = res.candidate || res;
+      setSavedSingleCandidate({
+        id: savedCand._id,
+        name: savedCand.name || result.name,
+        message: res.message || 'Candidate saved successfully to ATS Database'
+      });
+      setSaveSingleFeedback(
+        isGeneralSourcer
+          ? `🎉 Saved to General Pool! ${savedCand.name || result.name} is now available in Calling Pool for recruiters.`
+          : `🎉 Candidate ${savedCand.name || result.name} saved directly to your ATS Database successfully!`
+      );
+    } catch (err: any) {
+      console.error('Failed to save candidate to DB:', err);
+      alert('Failed to save candidate to Database: ' + (err?.response?.data?.message || err?.message));
+    } finally {
+      setSavingSingleCandidate(false);
+    }
   };
 
   const handleSendEmail = async () => {
@@ -1550,23 +1819,94 @@ export function ResumeScanPage() {
     setBulkScanning(true);
     setBulkError(null);
     setBulkSaveFeedback(null);
-    setBulkProgress({ current: 1, total: bulkFiles.length, stage: 'Uploading & unzipping resumes in batch...' });
+    setBulkProgress({ current: 1, total: 100, stage: 'Preparing resumes for scan...' });
 
     try {
-      const formData = new FormData();
-      bulkFiles.forEach(f => {
-        formData.append('resumes', f);
-      });
+      // 1. Separate archives (.zip) vs direct resume files, extracting ZIPs client-side
+      const filesToProcess: File[] = [];
 
-      const res = await api.scanBulkResumes(formData);
-      if (res && res.candidates && res.candidates.length > 0) {
-        setBulkResults(res.candidates);
-        setBulkSummary(res.summary);
-        const allIds = new Set<string>(res.candidates.map((c: any) => c.id));
-        setSelectedCandidateIds(allIds);
-        setBulkSaveFeedback(`Successfully scanned ${res.candidates.length} candidates from ${res.summary?.totalFilesFound || bulkFiles.length} files!`);
+      for (const file of bulkFiles) {
+        const isZip = file.name.toLowerCase().endsWith('.zip') || file.type === 'application/zip' || file.type === 'application/x-zip-compressed';
+        if (isZip) {
+          setBulkProgress({ current: 1, total: 100, stage: `Extracting ${file.name} in browser...` });
+          const zip = await JSZip.loadAsync(file);
+          const entries = Object.keys(zip.files);
+          let extractedCount = 0;
+
+          for (const relativePath of entries) {
+            const entry = zip.files[relativePath];
+            if (entry.dir) continue;
+            if (relativePath.includes('__MACOSX') || relativePath.startsWith('.') || relativePath.includes('/.')) continue;
+            const ext = relativePath.slice(relativePath.lastIndexOf('.')).toLowerCase();
+            if (!['.pdf', '.docx', '.doc', '.txt'].includes(ext)) continue;
+
+            const blob = await entry.async('blob');
+            const baseName = relativePath.split('/').pop() || relativePath;
+            filesToProcess.push(new File([blob], baseName, { type: blob.type || 'application/octet-stream' }));
+            extractedCount++;
+          }
+        } else {
+          filesToProcess.push(file);
+        }
+      }
+
+      if (filesToProcess.length === 0) {
+        setBulkError('No valid resume files (.pdf, .docx, .doc, .txt) were found inside the uploaded archive.');
+        return;
+      }
+
+      // 2. Batch process in safe chunks (25 files per batch to prevent Nginx 413 / size limits)
+      const BATCH_SIZE = 25;
+      const totalBatches = Math.ceil(filesToProcess.length / BATCH_SIZE);
+      let allCandidates: BulkCandidateResult[] = [];
+      let totalDuplicates = 0;
+      let totalFailed = 0;
+
+      for (let b = 0; b < totalBatches; b++) {
+        const batch = filesToProcess.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+        setBulkProgress({
+          current: b + 1,
+          total: totalBatches,
+          stage: totalBatches > 1
+            ? `Scanning resumes: Batch ${b + 1} of ${totalBatches} (${batch.length} files, ${allCandidates.length} parsed so far)...`
+            : `Scanning ${batch.length} resumes...`
+        });
+
+        const formData = new FormData();
+        batch.forEach(f => formData.append('resumes', f));
+
+        try {
+          const res = await api.scanBulkResumes(formData);
+          if (res && res.candidates && res.candidates.length > 0) {
+            allCandidates = allCandidates.concat(res.candidates);
+            setBulkResults([...allCandidates]);
+            const allIds = new Set<string>(allCandidates.map((c: any) => c.id));
+            setSelectedCandidateIds(allIds);
+          }
+          if (res && res.summary) {
+            totalDuplicates += res.summary.duplicatesFound || 0;
+            totalFailed += res.summary.failedParses || 0;
+          }
+        } catch (batchErr: any) {
+          console.warn(`Batch ${b + 1} encountered an error:`, batchErr);
+          if (totalBatches === 1) {
+            throw batchErr;
+          }
+          totalFailed += batch.length;
+        }
+      }
+
+      if (allCandidates.length > 0) {
+        const finalSummary = {
+          totalFilesFound: filesToProcess.length,
+          parsedSuccess: allCandidates.length,
+          duplicatesFound: totalDuplicates,
+          failedParses: totalFailed
+        };
+        setBulkSummary(finalSummary);
+        setBulkSaveFeedback(`Successfully scanned ${allCandidates.length} candidates from ${filesToProcess.length} resumes!`);
       } else {
-        setBulkError('No valid resumes or candidates could be extracted from the uploaded archive/files.');
+        setBulkError('No valid candidates could be parsed from the uploaded files.');
       }
     } catch (err: any) {
       console.error('Bulk scan error:', err);
@@ -1747,19 +2087,46 @@ export function ResumeScanPage() {
           </p>
         </div>
         {(file || result) && (
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             {result && (
-              <Link
-                to="/recruiter/ats-database"
-                className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-bold hover:bg-slate-900 transition-all shadow-sm"
-              >
-                <Database className="w-4 h-4" />
-                View in ATS Database
-              </Link>
+              <>
+                {savedSingleCandidate ? (
+                  <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs sm:text-sm font-bold shadow-xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Saved to ATS DB</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSaveSingleCandidateToDb}
+                    disabled={savingSingleCandidate}
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    {savingSingleCandidate ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Saving to DB...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Database className="w-4 h-4" />
+                        <span>Save Candidate to DB</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <Link
+                  to="/recruiter/ats-database"
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-bold hover:bg-slate-900 transition-all shadow-sm"
+                >
+                  <Database className="w-4 h-4" />
+                  View in ATS Database
+                </Link>
+              </>
             )}
             <button
               onClick={reset}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-all cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" /> Scan Another
             </button>
@@ -2780,6 +3147,23 @@ export function ResumeScanPage() {
       {/* ── Results ── */}
       {result && (
         <div className="space-y-5">
+          {saveSingleFeedback && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-950 px-4 py-3.5 rounded-2xl text-sm font-bold flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                <span>{saveSingleFeedback}</span>
+              </div>
+              {savedSingleCandidate?.id && (
+                <Link
+                  to={`/recruiter/candidates/${savedSingleCandidate.id}`}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-xl font-bold transition-all ml-3 shrink-0"
+                >
+                  View Candidate Profile →
+                </Link>
+              )}
+            </div>
+          )}
+
           {/* Score + Meta Row */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Score Card */}
@@ -2801,17 +3185,46 @@ export function ResumeScanPage() {
 
             {/* Candidate Card */}
             <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5 space-y-3 md:col-span-2">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-white" style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                    {result.name.split(' ').map(n => n[0]).join('')}
-                  </span>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-white" style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                      {result.name.split(' ').map(n => n[0]).join('')}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-slate-800" style={{ fontWeight: 700, fontSize: '1rem' }}>{result.name}</p>
+                    <p className="text-slate-500 text-xs">{result.summary.slice(0, 80)}…</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-slate-800" style={{ fontWeight: 700, fontSize: '1rem' }}>{result.name}</p>
-                  <p className="text-slate-500 text-xs">{result.summary.slice(0, 80)}…</p>
-                </div>
+
+                {savedSingleCandidate ? (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold shadow-xs">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Saved in ATS DB</span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSaveSingleCandidateToDb}
+                    disabled={savingSingleCandidate}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    {savingSingleCandidate ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Database className="w-3.5 h-3.5" />
+                        <span>Save Candidate to DB</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {[
                   { icon: Mail, value: result.email },
@@ -2866,6 +3279,9 @@ export function ResumeScanPage() {
               candidate={result}
               onNavigateAdd={handleNavigateAdd}
               onViewUniversalTab={() => setActiveTab('universal')}
+              onSaveCandidateToDb={handleSaveSingleCandidateToDb}
+              savingCandidate={savingSingleCandidate}
+              savedCandidate={!!savedSingleCandidate}
             />
           )}
 

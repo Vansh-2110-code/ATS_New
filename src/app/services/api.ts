@@ -63,8 +63,20 @@ class ApiService {
     }
 
     if (!res.ok) {
-      const error = await res.json().catch(() => ({ message: 'Request failed' }));
-      throw new Error(error.message || `HTTP ${res.status}`);
+      let errorMessage = '';
+      try {
+        const error = await res.json();
+        errorMessage = error.message;
+      } catch (_) {
+        if (res.status === 413) {
+          errorMessage = 'Upload exceeds server size limit (HTTP 413). Large archives should be processed in batches.';
+        } else if (res.status === 504) {
+          errorMessage = 'Gateway timeout (HTTP 504). Server took too long to process.';
+        } else {
+          errorMessage = `Server error (HTTP ${res.status})`;
+        }
+      }
+      throw new Error(errorMessage || `HTTP ${res.status}`);
     }
 
     // Handle CSV/blob responses
@@ -143,6 +155,8 @@ class ApiService {
     experience?: any;
     email?: string;
     phone?: string;
+    jrNumber?: string;
+    benchmarkMode?: boolean;
     limit?: number;
   }) {
     return this.request<any>('/candidates/find-similar', {

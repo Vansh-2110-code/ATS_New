@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight, Eye, EyeOff, CheckCircle2,
   AlertCircle, XCircle, Clock, Edit3, X, Save, Loader2,
   Trophy, ThumbsUp, TrendingDown, Info, BarChart2,
-  Plus, Scan, Lock
+  Plus, Scan, Lock, Phone, Mail, MapPin, Briefcase, GraduationCap, User, ExternalLink
 } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -43,6 +43,15 @@ interface AtsRecord {
   pgDegree: string;
   pgInstitute: string;
   pgGraduationYear: string;
+  candidateRef?: string;
+  annualSalary?: string;
+  noticePeriod?: string;
+  resumeHeadline?: string;
+  ugSpecialization?: string;
+  pgSpecialization?: string;
+  doctorateDegree?: string;
+  doctorateInstitute?: string;
+  doctorateGraduationYear?: string;
 }
 
 /* ─── Status config ──────────────────────────────────────────── */
@@ -83,6 +92,7 @@ export function AtsDashboardPage() {
   const [loading, setLoading]       = useState(false);
   const [exporting, setExporting]   = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [viewingRecord, setViewingRecord] = useState<AtsRecord | null>(null);
   const [savingId, setSavingId]         = useState<string | null>(null);
   
   // Full Edit Modal State
@@ -666,13 +676,16 @@ export function AtsDashboardPage() {
               {!loading && records.map(rec => (
                 <tr
                   key={rec._id}
-                  className="hover:bg-slate-50/60 transition-colors cursor-pointer"
-                  onClick={() => setExpandedId(expandedId === rec._id ? null : rec._id)}
+                  className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
+                  onClick={() => setViewingRecord(rec)}
+                  title="Click to view candidate details"
                 >
                   {/* Candidate */}
                   <td className="px-4 py-3">
-                    <p className="text-sm font-semibold text-slate-800">{rec.name}</p>
-                    {rec.jobTitle && <p className="text-xs text-slate-400">{rec.jobTitle}</p>}
+                    <p className="text-sm font-bold text-slate-800 group-hover:text-green-700 transition-colors">
+                      {rec.name}
+                    </p>
+                    {rec.jobTitle && <p className="text-xs text-slate-500 font-medium">{rec.jobTitle}</p>}
                     {rec.currentCompanyDesignation && (
                       <p className="text-xs text-slate-400">{rec.currentCompanyDesignation}</p>
                     )}
@@ -724,15 +737,17 @@ export function AtsDashboardPage() {
                   <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center gap-1.5">
                       <button
-                        onClick={() => setExpandedId(expandedId === rec._id ? null : rec._id)}
-                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors"
+                        type="button"
+                        onClick={() => setViewingRecord(rec)}
+                        className="p-1.5 rounded-lg hover:bg-green-50 text-slate-500 hover:text-green-600 transition-colors cursor-pointer"
                         title="View details"
                       >
-                        {expandedId === rec._id ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        <Eye className="w-4 h-4" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => { openEditModal(rec); }}
-                        className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors cursor-pointer"
                         title="Edit full record"
                       >
                         <Edit3 className="w-4 h-4" />
@@ -912,6 +927,229 @@ export function AtsDashboardPage() {
                 {savingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 Save Changes
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Candidate Details View Modal */}
+      {viewingRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-xl bg-green-100 text-green-700 font-bold flex items-center justify-center text-lg border border-green-200 shrink-0">
+                  {viewingRecord.name ? viewingRecord.name.charAt(0).toUpperCase() : 'C'}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-lg font-bold text-slate-900 leading-tight truncate">
+                      {viewingRecord.name}
+                    </h2>
+                    <StatusBadge status={viewingRecord.atsStatus} />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5 truncate">
+                    {viewingRecord.jobTitle || viewingRecord.currentCompanyDesignation || 'Candidate'}
+                    {viewingRecord.currentCompanyName ? ` • ${viewingRecord.currentCompanyName}` : ''}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rec = viewingRecord;
+                    setViewingRecord(null);
+                    openEditModal(rec);
+                  }}
+                  className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors border border-blue-200 cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  Edit Record
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingRecord(null)}
+                  className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-full transition-colors cursor-pointer"
+                  title="Close modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* ATS Scores Ribbon */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="text-center p-2.5 bg-white rounded-lg border border-slate-100 shadow-2xs">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">ATS Score</span>
+                  <div className="mt-1">
+                    <ScoreBadge score={viewingRecord.atsScore} />
+                  </div>
+                </div>
+                <div className="text-center p-2.5 bg-white rounded-lg border border-slate-100 shadow-2xs">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Keyword Match</span>
+                  <p className="text-sm font-black text-slate-800 mt-1">{viewingRecord.keywordMatchPct || 0}%</p>
+                </div>
+                <div className="text-center p-2.5 bg-white rounded-lg border border-slate-100 shadow-2xs">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Experience Match</span>
+                  <p className="text-sm font-black text-slate-800 mt-1">{viewingRecord.experienceMatchScore || 0}%</p>
+                </div>
+                <div className="text-center p-2.5 bg-white rounded-lg border border-slate-100 shadow-2xs">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Quality Score</span>
+                  <p className="text-sm font-black text-slate-800 mt-1">{viewingRecord.resumeQualityScore || 0}%</p>
+                </div>
+              </div>
+
+              {/* Two column details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Contact & Professional Info */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b pb-1.5 flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-slate-500" />
+                    Contact & Professional
+                  </h3>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                      <span className="text-slate-500 font-medium">Email</span>
+                      <span className="font-semibold text-slate-800">
+                        {viewingRecord.email ? (
+                          <a href={`mailto:${viewingRecord.email}`} className="text-blue-600 hover:underline">
+                            {viewingRecord.email}
+                          </a>
+                        ) : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                      <span className="text-slate-500 font-medium">Phone</span>
+                      <span className="font-semibold text-slate-800">
+                        {viewingRecord.phone ? (
+                          <a href={`tel:${viewingRecord.phone}`} className="text-green-700 hover:underline">
+                            {viewingRecord.phone}
+                          </a>
+                        ) : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                      <span className="text-slate-500 font-medium">Current Location</span>
+                      <span className="font-semibold text-slate-800">{viewingRecord.currentLocation || '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                      <span className="text-slate-500 font-medium">Total Experience</span>
+                      <span className="font-semibold text-slate-800">{viewingRecord.totalExperience || '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                      <span className="text-slate-500 font-medium">Current Company</span>
+                      <span className="font-semibold text-slate-800">{viewingRecord.currentCompanyName || '—'}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                      <span className="text-slate-500 font-medium">Designation</span>
+                      <span className="font-semibold text-slate-800">{viewingRecord.currentCompanyDesignation || '—'}</span>
+                    </div>
+                    {viewingRecord.annualSalary && (
+                      <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                        <span className="text-slate-500 font-medium">Annual Salary</span>
+                        <span className="font-semibold text-slate-800">{viewingRecord.annualSalary}</span>
+                      </div>
+                    )}
+                    {viewingRecord.noticePeriod && (
+                      <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                        <span className="text-slate-500 font-medium">Notice Period</span>
+                        <span className="font-semibold text-slate-800">{viewingRecord.noticePeriod}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Education & Scan Meta */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b pb-1.5 flex items-center gap-1.5">
+                    <GraduationCap className="w-4 h-4 text-slate-500" />
+                    Education & Sourcing
+                  </h3>
+                  <div className="space-y-2 text-xs">
+                    <div className="py-1 border-b border-slate-50">
+                      <span className="text-slate-500 font-medium block">Undergraduate (UG)</span>
+                      <p className="font-semibold text-slate-800 mt-0.5">
+                        {viewingRecord.ugDegree || '—'} {viewingRecord.ugInstitute ? `• ${viewingRecord.ugInstitute}` : ''} {viewingRecord.ugGraduationYear ? `(${viewingRecord.ugGraduationYear})` : ''}
+                      </p>
+                    </div>
+                    <div className="py-1 border-b border-slate-50">
+                      <span className="text-slate-500 font-medium block">Postgraduate (PG)</span>
+                      <p className="font-semibold text-slate-800 mt-0.5">
+                        {viewingRecord.pgDegree ? `${viewingRecord.pgDegree} ${viewingRecord.pgInstitute ? `• ${viewingRecord.pgInstitute}` : ''} ${viewingRecord.pgGraduationYear ? `(${viewingRecord.pgGraduationYear})` : ''}` : 'Not Specified'}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                      <span className="text-slate-500 font-medium">Scanned By</span>
+                      <span className="font-semibold text-slate-800">{viewingRecord.scannedByName || 'Unassigned'} ({viewingRecord.scannedByRole || 'System'})</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                      <span className="text-slate-500 font-medium">Scan Date</span>
+                      <span className="font-semibold text-slate-800">
+                        {viewingRecord.scanDate ? new Date(viewingRecord.scanDate).toLocaleString('en-IN') : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-slate-50">
+                      <span className="text-slate-500 font-medium">Source</span>
+                      <span className="font-semibold text-slate-800">{viewingRecord.source || 'Upload'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Skills */}
+              {viewingRecord.keySkills && (
+                <div className="space-y-2 pt-2 border-t border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Key Skills</h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {viewingRecord.keySkills.split(/[,;]+/).map((s, idx) => (
+                      <span key={idx} className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-medium border border-slate-200">
+                        {s.trim()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Remarks */}
+              {viewingRecord.remarks && (
+                <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Remarks / Feedback</h4>
+                  <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200 leading-relaxed">
+                    {viewingRecord.remarks}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-3">
+              <div className="text-[11px] text-slate-400">
+                Record ID: <span className="font-mono text-slate-600">{viewingRecord._id}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rec = viewingRecord;
+                    setViewingRecord(null);
+                    openEditModal(rec);
+                  }}
+                  className="px-4 py-2 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Edit Record
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingRecord(null)}
+                  className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

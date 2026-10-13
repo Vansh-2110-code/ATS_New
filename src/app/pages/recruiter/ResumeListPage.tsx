@@ -72,6 +72,18 @@ const ALL_COLUMNS: { key: ColKey; label: string; defaultVisible: boolean }[] = [
   { key: 'action',     label: 'Action',           defaultVisible: true },
 ];
 
+const RESUME_LIST_SAVED_STATE_KEY = 'ats_resume_list_saved_state';
+
+const getInitialSavedState = () => {
+  try {
+    const raw = sessionStorage.getItem(RESUME_LIST_SAVED_STATE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
 export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
   const location = useLocation();
   const { user } = useAuth();
@@ -79,21 +91,25 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
   const isTLOrAdminOrManager = ['admin', 'tl', 'manager'].includes(user?.role || '');
   const locationState = location.state as { statusFilter?: string; todayCalls?: boolean } | null;
 
-  const [search, setSearch] = useState('');
-  const [sourceFilter, setSourceFilter] = useState('All Sources');
-  const [statusFilter, setStatusFilter] = useState(() => lockedStatus || locationState?.statusFilter || 'All Status');
-  const [todayCallsOnly, setTodayCallsOnly] = useState(() => Boolean(locationState?.todayCalls));
-  const [recruiterFilter, setRecruiterFilter] = useState('All Recruiters');
+  const savedStateRef = useRef<any>(getInitialSavedState());
+  const savedState = savedStateRef.current;
+
+  const [search, setSearch] = useState<string>(() => savedState?.search ?? '');
+  const [sourceFilter, setSourceFilter] = useState<string>(() => savedState?.sourceFilter ?? 'All Sources');
+  const [statusFilter, setStatusFilter] = useState<string>(() => lockedStatus || locationState?.statusFilter || savedState?.statusFilter || 'All Status');
+  const [todayCallsOnly, setTodayCallsOnly] = useState<boolean>(() => Boolean(locationState?.todayCalls ?? savedState?.todayCallsOnly));
+  const [recruiterFilter, setRecruiterFilter] = useState<string>(() => savedState?.recruiterFilter ?? 'All Recruiters');
   const [recruitersList, setRecruitersList] = useState<string[]>([]);
   const [recruiterUsers, setRecruiterUsers] = useState<any[]>([]);
-  const [customerFilter, setCustomerFilter] = useState('All Customers');
+  const [customerFilter, setCustomerFilter] = useState<string>(() => savedState?.customerFilter ?? 'All Customers');
   const [customersList, setCustomersList] = useState<string[]>([]);
-  const [cityFilter, setCityFilter] = useState('');
-  const [localAreaFilter, setLocalAreaFilter] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
+  const [cityFilter, setCityFilter] = useState<string>(() => savedState?.cityFilter ?? '');
+  const [localAreaFilter, setLocalAreaFilter] = useState<string>(() => savedState?.localAreaFilter ?? '');
+  const [showFilters, setShowFilters] = useState<boolean>(() => Boolean(savedState?.showFilters));
   const [candidates, setCandidates] = useState<any[]>([]);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
   const [totalCandidatesCount, setTotalCandidatesCount] = useState<number>(0);
+  const [generalPoolTotalCount, setGeneralPoolTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   // Reassign Modal State
@@ -113,9 +129,49 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
   const [tagJrNotes, setTagJrNotes] = useState('');
   const [taggingJr, setTaggingJr] = useState(false);
   const [tagJrError, setTagJrError] = useState('');
-  const [generalPoolOnly, setGeneralPoolOnly] = useState(false);
-  const [prevScreenedOnly, setPrevScreenedOnly] = useState(false);
-  const [websiteOnly, setWebsiteOnly] = useState(false);
+  const [generalPoolOnly, setGeneralPoolOnly] = useState<boolean>(() => Boolean(savedState?.generalPoolOnly));
+  const [prevScreenedOnly, setPrevScreenedOnly] = useState<boolean>(() => Boolean(savedState?.prevScreenedOnly));
+  const [websiteOnly, setWebsiteOnly] = useState<boolean>(() => Boolean(savedState?.websiteOnly));
+
+  // Sync active filters to sessionStorage
+  useEffect(() => {
+    const stateToSave = {
+      search,
+      sourceFilter,
+      statusFilter,
+      todayCallsOnly,
+      recruiterFilter,
+      customerFilter,
+      cityFilter,
+      localAreaFilter,
+      showFilters,
+      generalPoolOnly,
+      prevScreenedOnly,
+      websiteOnly,
+    };
+    try {
+      const existing = JSON.parse(sessionStorage.getItem(RESUME_LIST_SAVED_STATE_KEY) || '{}');
+      sessionStorage.setItem(RESUME_LIST_SAVED_STATE_KEY, JSON.stringify({ ...existing, ...stateToSave }));
+    } catch {}
+  }, [search, sourceFilter, statusFilter, todayCallsOnly, recruiterFilter, customerFilter, cityFilter, localAreaFilter, showFilters, generalPoolOnly, prevScreenedOnly, websiteOnly]);
+
+  // Record scroll position before navigating
+  const recordScrollPosition = () => {
+    try {
+      const existing = JSON.parse(sessionStorage.getItem(RESUME_LIST_SAVED_STATE_KEY) || '{}');
+      existing.scrollY = window.scrollY;
+      sessionStorage.setItem(RESUME_LIST_SAVED_STATE_KEY, JSON.stringify(existing));
+    } catch {}
+  };
+
+  // Restore scroll position after initial candidates load
+  useEffect(() => {
+    if (!loading && savedState?.scrollY) {
+      setTimeout(() => {
+        window.scrollTo({ top: savedState.scrollY, behavior: 'instant' });
+      }, 50);
+    }
+  }, [loading]);
 
   // Column visibility
     const isWebsiteCandidate = (c: any) => {
@@ -264,10 +320,16 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
         if (recruiterFilter !== 'All Recruiters') params.recruiter = recruiterFilter;
         if (customerFilter !== 'All Customers') params.company = customerFilter;
         if (todayCallsOnly) params.todayCalls = 'true';
+        if (generalPoolOnly) params.generalPool = 'true';
+        if (prevScreenedOnly) params.previouslyScreened = 'true';
+        if (websiteOnly) params.websiteOnly = 'true';
         const data = await api.getCandidates(params);
         const list = data.candidates || (Array.isArray(data) ? data : []);
         if (data.statusCounts) {
           setStatusCounts(data.statusCounts);
+        }
+        if (data.generalPoolCount != null) {
+          setGeneralPoolTotalCount(data.generalPoolCount);
         }
         if (data.totalCount != null || data.pagination?.total != null) {
           setTotalCandidatesCount(data.totalCount ?? data.pagination?.total ?? 0);
@@ -307,7 +369,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
       }
     };
     fetchCandidates();
-  }, [statusFilter, recruiterFilter, customerFilter, todayCallsOnly]);
+  }, [statusFilter, recruiterFilter, customerFilter, todayCallsOnly, generalPoolOnly, prevScreenedOnly, websiteOnly]);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -461,7 +523,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
       (c.originalJobTitle && c.originalJobTitle.toLowerCase().includes(q));
     const matchStatus = statusFilter === 'All Status' || c.status === statusFilter;
     const matchRecruiter = recruiterFilter === 'All Recruiters' || c.recruiter === recruiterFilter;
-    const matchGeneralPool = !generalPoolOnly || ((c.ownershipStatus === 'General Data' || c.ownershipStatus === 'Unassigned') && (!c.recruiter || c.recruiter === 'Unassigned' || c.recruiter === 'General Pool'));
+    const matchGeneralPool = !generalPoolOnly || true;
     const matchPrevScreened = !prevScreenedOnly || Boolean(c.isPreviouslyScreened || c.originalJrNumber);
     const matchWebsite = !websiteOnly || isWebsiteCandidate(c);
     return matchSearch && matchStatus && matchRecruiter && matchGeneralPool && matchPrevScreened && matchWebsite;
@@ -585,12 +647,20 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
     recruiterFilter !== 'All Recruiters' || customerFilter !== 'All Customers' || generalPoolOnly || prevScreenedOnly || todayCallsOnly;
 
   const clearAll = () => {
+    setSearch('');
     setStatusFilter('All Status');
+    setSourceFilter('All Sources');
     setRecruiterFilter('All Recruiters');
     setCustomerFilter('All Customers');
+    setCityFilter('');
+    setLocalAreaFilter('');
     setGeneralPoolOnly(false);
     setPrevScreenedOnly(false);
     setTodayCallsOnly(false);
+    setWebsiteOnly(false);
+    try {
+      sessionStorage.removeItem(RESUME_LIST_SAVED_STATE_KEY);
+    } catch {}
   };
 
   const visibleCount = Object.values(visibleCols).filter(Boolean).length;
@@ -955,7 +1025,13 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
 
         {/* Genuine General Pool (Unassigned) Quick Tab */}
         <button
-          onClick={() => { setGeneralPoolOnly(!generalPoolOnly); setPrevScreenedOnly(false); }}
+          onClick={() => {
+            const next = !generalPoolOnly;
+            setGeneralPoolOnly(next);
+            setPrevScreenedOnly(false);
+            setWebsiteOnly(false);
+            if (next) setStatusFilter('All Status');
+          }}
           className={`text-xs px-3 py-1.5 rounded-full transition-all border flex items-center gap-1.5 ${
             generalPoolOnly
               ? 'bg-amber-600 text-white font-semibold border-amber-600 shadow-sm ring-2 ring-offset-1 ring-amber-400'
@@ -967,7 +1043,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
           <span>🌐</span>
           <span>General Pool</span>
           <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${generalPoolOnly ? 'bg-amber-700 text-white' : 'bg-amber-200/80 text-amber-900'}`}>
-            {candidates.filter(c => (c.ownershipStatus === 'General Data' || c.ownershipStatus === 'Unassigned') && (!c.recruiter || c.recruiter === 'Unassigned' || c.recruiter === 'General Pool')).length}
+            {generalPoolTotalCount || candidates.filter(c => (c.ownershipStatus === 'General Data' || c.ownershipStatus === 'Unassigned' || c.ownershipStatus === 'Expired') && (!c.recruiter || c.recruiter === 'Unassigned' || c.recruiter === 'General Pool')).length}
           </span>
         </button>
 
@@ -1187,6 +1263,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
                       <div className="flex items-center justify-center gap-1.5 flex-wrap w-[220px]">
                         <Link
                           to={`/recruiter/candidate/${c.id}`}
+                          onClick={recordScrollPosition}
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-green-50 text-green-600 text-xs rounded-lg hover:bg-green-100 transition-colors"
                           style={{ fontWeight: 500 }}
                           title="View Profile"
@@ -1196,6 +1273,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
                         </Link>
                         <Link
                           to={`/recruiter/add?id=${c.id}`}
+                          onClick={recordScrollPosition}
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-600 text-xs rounded-lg hover:bg-blue-100 transition-colors"
                           style={{ fontWeight: 500 }}
                           title="Edit Profile"
@@ -1214,15 +1292,25 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
                             Claim
                           </button>
                         )}
-                        <button
-                          onClick={() => handleOpenTagJrModal(c)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 text-xs rounded-lg hover:bg-amber-100 transition-colors cursor-pointer"
-                          style={{ fontWeight: 500 }}
-                          title="Tag or Re-assign to New JR without repeating screening"
-                        >
-                          <Tag className="w-3.5 h-3.5 text-amber-600" />
-                          Tag JR
-                        </button>
+                        {(isTLOrAdminOrManager ||
+                          !c.recruiter ||
+                          c.recruiter === 'Unassigned' ||
+                          c.recruiter === 'General Pool' ||
+                          c.ownershipStatus === 'General Data' ||
+                          c.ownershipStatus === 'Expired' ||
+                          c.recruiter === user?.name ||
+                          c.assignedRecruiter === user?.id ||
+                          c.assignedRecruiter === user?._id) && (
+                          <button
+                            onClick={() => handleOpenTagJrModal(c)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 text-xs rounded-lg hover:bg-amber-100 transition-colors cursor-pointer"
+                            style={{ fontWeight: 500 }}
+                            title="Tag or Re-assign to New JR without repeating screening"
+                          >
+                            <Tag className="w-3.5 h-3.5 text-amber-600" />
+                            Tag JR
+                          </button>
+                        )}
                         {isTLOrAdminOrManager && (
                           <button
                             onClick={() => handleOpenReassignModal(c)}
@@ -1313,6 +1401,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
               <div className="mt-3 flex items-center justify-end gap-2 flex-wrap">
                 <Link
                   to={`/recruiter/candidate/${c.id}`}
+                  onClick={recordScrollPosition}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-600 text-xs rounded-lg"
                   style={{ fontWeight: 500 }}
                 >
@@ -1320,6 +1409,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
                 </Link>
                 <Link
                   to={`/recruiter/add?id=${c.id}`}
+                  onClick={recordScrollPosition}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 text-xs rounded-lg"
                   style={{ fontWeight: 500 }}
                 >

@@ -261,6 +261,9 @@ exports.saveCandidate = async (req, res, next) => {
     const recruiterId = req.user?._id;
     const recruiterName = req.user?.name || req.user?.email || 'Recruiter';
     const recruiterRole = req.user?.role || 'recruiter';
+    const isMis = req.user?.role === 'mis' ||
+                  req.user?.role === 'data_entry' ||
+                  /suhail|sohail|wasiq|babul/i.test(req.user?.name || req.user?.email || '');
 
     const cleanEmail = (data.email || '').trim().toLowerCase();
     const cleanPhone = (data.phone || '').replace(/\D/g, '').slice(-10);
@@ -284,12 +287,31 @@ exports.saveCandidate = async (req, res, next) => {
       if (data.jrNumber && !existing.jrNumber) {
         existing.jrNumber = data.jrNumber;
       }
+      if (data.clientName && !existing.clientName) {
+        existing.clientName = data.clientName;
+      }
       existing.scannedBy = recruiterId;
       existing.scannedByName = recruiterName;
       existing.scannedByRole = recruiterRole;
       existing.scannedDate = new Date();
+      if (!existing.sourcedBy) {
+        existing.sourcedBy = recruiterName;
+      }
+
+      if (!isMis) {
+        const isSameRecruiter = existing.assignedRecruiter && String(existing.assignedRecruiter) === String(recruiterId);
+        const isExpired = existing.ownershipStatus === 'Expired' ||
+                          (existing.assignedAt && (Date.now() - new Date(existing.assignedAt).getTime() > 30 * 24 * 60 * 60 * 1000));
+        const isUnassigned = !existing.assignedRecruiter || existing.ownershipStatus === 'Unassigned' || existing.ownershipStatus === 'General Data';
+        if (isSameRecruiter || isExpired || isUnassigned) {
+          existing.assignedRecruiter = recruiterId;
+          existing.assignedRecruiterName = recruiterName;
+          existing.assignedAt = new Date();
+          existing.ownershipStatus = 'Assigned';
+        }
+      }
       await existing.save();
-      return res.json({ success: true, message: 'Candidate record updated successfully', candidate: existing });
+      return res.json({ success: true, message: 'Candidate record updated successfully in ATS Database', candidate: existing });
     }
 
     const newCand = await Candidate.create({
@@ -310,10 +332,10 @@ exports.saveCandidate = async (req, res, next) => {
       clientName: data.clientName || data.company || '',
       company: data.company || data.clientName || '',
       totalScore: data.atsScore || data.totalScore || 65,
-      assignedRecruiter: recruiterId,
-      assignedRecruiterName: recruiterName,
+      assignedRecruiter: isMis ? null : recruiterId,
+      assignedRecruiterName: isMis ? 'Unassigned' : recruiterName,
       assignedAt: new Date(),
-      ownershipStatus: 'Assigned',
+      ownershipStatus: isMis ? 'General Data' : 'Assigned',
       sourcedBy: recruiterName,
       scannedBy: recruiterId,
       scannedByName: recruiterName,
@@ -321,14 +343,14 @@ exports.saveCandidate = async (req, res, next) => {
       scannedDate: new Date(),
     });
 
-    res.status(201).json({ success: true, message: 'Candidate saved successfully', candidate: newCand });
+    res.status(201).json({ success: true, message: 'Candidate saved successfully to ATS Database', candidate: newCand });
   } catch (err) {
     next(err);
   }
 };
 
 // POST /api/resumes/bulk-scan
-// Extracts and parses up to 120 resumes from a ZIP archive or file in batch
+// Extracts and parses resumes from a ZIP archive or file in batch (up to 1000 files)
 exports.bulkScan = async (req, res, next) => {
   let tempExtractDir = null;
   try {
@@ -383,7 +405,7 @@ exports.bulkScan = async (req, res, next) => {
           size: buffer.length
         });
 
-        if (filesToProcess.length >= 120) break;
+        if (filesToProcess.length >= 1000) break;
       }
     } else {
       // Single file or multi files
@@ -489,6 +511,11 @@ exports.bulkScan = async (req, res, next) => {
       totalFound: filesToProcess.length,
       parsedCount: results.length,
       failedCount: errors.length,
+      summary: {
+        totalFilesFound: filesToProcess.length,
+        parsedCount: results.length,
+        failedCount: errors.length
+      },
       candidates: results,
       errors
     });
@@ -511,6 +538,9 @@ exports.bulkSaveCandidates = async (req, res, next) => {
     const recruiterId = req.user?._id;
     const recruiterName = req.user?.name || req.user?.email || 'Recruiter';
     const recruiterRole = req.user?.role || 'recruiter';
+    const isMis = req.user?.role === 'mis' ||
+                  req.user?.role === 'data_entry' ||
+                  /suhail|sohail|wasiq|babul/i.test(req.user?.name || req.user?.email || '');
 
     let savedCount = 0;
     let updatedCount = 0;
@@ -540,7 +570,22 @@ exports.bulkSaveCandidates = async (req, res, next) => {
                             (existing.assignedAt && (Date.now() - new Date(existing.assignedAt).getTime() > 30 * 24 * 60 * 60 * 1000));
           const isUnassigned = !existing.assignedRecruiter || existing.ownershipStatus === 'Unassigned' || existing.ownershipStatus === 'General Data';
 
-          if (isSameRecruiter || isExpired || isUnassigned) {
+          if (isMis) {
+            existing.scannedBy = recruiterId;
+            existing.scannedByName = recruiterName;
+            existing.scannedByRole = recruiterRole;
+            existing.scannedDate = new Date();
+            if (!existing.sourcedBy) existing.sourcedBy = recruiterName;
+            if (jrToAssign && !existing.jrNumber) {
+              existing.jrNumber = jrToAssign;
+              existing.clientName = clientToAssign;
+            }
+            if (cand.skills?.length) {
+              existing.skills = Array.from(new Set([...(existing.skills || []), ...cand.skills]));
+            }
+            await existing.save();
+            updatedCount++;
+          } else if (isSameRecruiter || isExpired || isUnassigned) {
             existing.assignedRecruiter = recruiterId;
             existing.assignedRecruiterName = recruiterName;
             existing.assignedAt = new Date();
@@ -556,6 +601,7 @@ exports.bulkSaveCandidates = async (req, res, next) => {
             existing.scannedByName = recruiterName;
             existing.scannedByRole = recruiterRole;
             existing.scannedDate = new Date();
+            if (!existing.sourcedBy) existing.sourcedBy = recruiterName;
             await existing.save();
             updatedCount++;
           } else {
@@ -580,10 +626,10 @@ exports.bulkSaveCandidates = async (req, res, next) => {
             clientName: clientToAssign,
             company: clientToAssign,
             totalScore: cand.atsScore || 65,
-            assignedRecruiter: recruiterId,
-            assignedRecruiterName: recruiterName,
+            assignedRecruiter: isMis ? null : recruiterId,
+            assignedRecruiterName: isMis ? 'Unassigned' : recruiterName,
             assignedAt: new Date(),
-            ownershipStatus: 'Assigned',
+            ownershipStatus: isMis ? 'General Data' : 'Assigned',
             sourcedBy: recruiterName,
             scannedBy: recruiterId,
             scannedByName: recruiterName,

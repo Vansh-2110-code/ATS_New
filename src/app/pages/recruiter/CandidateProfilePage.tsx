@@ -1028,14 +1028,16 @@ export function CandidateProfilePage() {
                     <span className="px-2.5 py-1 rounded bg-green-100 text-green-800 font-bold text-[11px] border border-green-200">
                       Screened: Eligible
                     </span>
-                    <button
-                      type="button"
-                      onClick={handleOpenTagJrModal}
-                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <Tag className="w-3.5 h-3.5" />
-                      Assign to New JR
-                    </button>
+                    {(!isLockedForOtherRecruiter || isAdmin || isTL || isManager) && (
+                      <button
+                        type="button"
+                        onClick={handleOpenTagJrModal}
+                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-xs transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                      >
+                        <Tag className="w-3.5 h-3.5" />
+                        Assign to New JR
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-2 border-t border-amber-200/60 text-slate-700">

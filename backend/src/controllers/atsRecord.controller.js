@@ -225,17 +225,26 @@ function buildFilterQuery(query, user) {
 
   // 13. RBAC Scoping
   if (user && (user.role === 'recruiter' || user.role === 'spoc')) {
-    const hasSearchQuery = !!(search && search.trim());
+    const hasSearchQuery = !!(
+      (search && search.trim()) ||
+      (skills && skills.trim()) ||
+      (company && company.trim()) ||
+      (location && location.trim()) ||
+      (qualification && qualification.trim()) ||
+      (status && status.trim()) ||
+      minScore || maxScore || minExp || maxExp || minSalary || maxSalary
+    );
     if (hasSearchQuery) {
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      // When searching the ATS Database, recruiters can search across all records including other recruiters & general pool
+    } else {
+      // Default view before search: show records scanned by user, or portal/sourcer unassigned general pool records
       andClauses.push({
         $or: [
           { scannedBy: user._id },
-          { scanDate: { $lt: thirtyDaysAgo } }
+          { scannedByRole: { $in: ['admin', 'sourcer', 'superadmin', 'manager', 'lead'] } },
+          { reusable: true }
         ]
       });
-    } else {
-      andClauses.push({ scannedBy: user._id });
     }
   }
 

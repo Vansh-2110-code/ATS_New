@@ -11,6 +11,8 @@ import { calculateAge } from '../../utils/ageCalculator';
 import { ExtractionPreviewModal } from '../../components/ExtractionPreviewModal';
 import { DepartmentDropdown } from '../../components/DepartmentDropdown';
 import { CANDIDATE_STATUS_OPTIONS } from '../../utils/candidateStatusUtils';
+import { JrSearchableSelect } from '../../components/JrSearchableSelect';
+import { JdPreviewModal } from '../../components/JdPreviewModal';
 
 const API_BASE = window.location.origin;
 
@@ -304,18 +306,13 @@ export function AddCandidatePage() {
   const [dupResult, setDupResult] = useState<any>(null);
   const dupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // JR list for auto-fill
+  // JR list for auto-fill & preview
   const [jobs, setJobs] = useState<any[]>([]);
-  const [jrSearch, setJrSearch] = useState('');
+  const [previewJob, setPreviewJob] = useState<any | null>(null);
   useEffect(() => {
     api.getJobs({ limit: '1000' }).then((d: any) => setJobs(d.jobs || [])).catch(() => { });
   }, []);
 
-  const filteredJobs = jobs.filter(j => 
-    (j.jrNumber || '').toLowerCase().includes(jrSearch.toLowerCase()) ||
-    (j.jobTitle || '').toLowerCase().includes(jrSearch.toLowerCase()) ||
-    (j.client || j.companyName || '').toLowerCase().includes(jrSearch.toLowerCase())
-  );
 
   // ── Load existing candidate (edit / TL view mode) ────────────
   useEffect(() => {
@@ -1135,50 +1132,15 @@ export function AddCandidatePage() {
                       </span>
                     )}
                   </div>
-                  <div className="mb-2">
-                    <input
-                      type="text"
-                      placeholder="Search JRs by JR #, Job Title, Client/Company..."
-                      value={jrSearch}
-                      onChange={e => setJrSearch(e.target.value)}
-                      disabled={isLockedByFinalInterview}
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400 bg-slate-50 disabled:opacity-50"
-                    />
-                  </div>
-                  <div className="flex gap-2 items-end">
-                    <select
-                      value={form.jrNumber}
-                      onChange={e => handleJrSelect(e.target.value)}
-                      disabled={isLockedByFinalInterview}
-                      className={`flex-1 px-3 py-2.5 rounded-lg border ${errors.jrNumber ? 'border-red-400 bg-red-50/30 ring-1 ring-red-300' : 'border-slate-200 bg-white'} text-sm outline-none focus:border-green-400 disabled:bg-slate-50 disabled:text-slate-400`}
-                    >
-                      <option value="">-- Select JR ({filteredJobs.length} found) * --</option>
-                      {filteredJobs.map((j: any) => (
-                        <option key={j._id} value={j.jrNumber}>
-                          {j.jrNumber} – {j.jobTitle} ({j.client || j.companyName}) | Owner: {j.recruiterName || 'N/A'} | Loc: {j.location || 'N/A'} | Posted: {j.createdAt ? new Date(j.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'N/A'}
-                        </option>
-                      ))}
-                    </select>
-                    {form.jrNumber && isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const selectedJob = jobs.find((j: any) => j.jrNumber === form.jrNumber);
-                          if (selectedJob) navigate(`/recruiter/jobs/${selectedJob._id}/summary`);
-                        }}
-                        className="px-3 py-2.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm font-semibold transition-colors whitespace-nowrap"
-                        title="View JR Summary"
-                      >
-                        View JR
-                      </button>
-                    )}
-                  </div>
-                  {errors.jrNumber && (
-                    <p className="text-red-500 text-xs font-semibold mt-2 flex items-center gap-1.5 bg-red-50 p-2 rounded-lg border border-red-200">
-                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                      {errors.jrNumber}
-                    </p>
-                  )}
+
+                  <JrSearchableSelect
+                    jobs={jobs}
+                    value={form.jrNumber}
+                    onChange={handleJrSelect}
+                    onPreviewJd={(job) => setPreviewJob(job)}
+                    error={errors.jrNumber}
+                    disabled={isLockedByFinalInterview}
+                  />
                 </div>
                 
                 <fieldset disabled={isLockedCoreFields} className="grid sm:grid-cols-2 gap-4 sm:col-span-2 border-none p-0 m-0 contents">
@@ -1734,6 +1696,14 @@ export function AddCandidatePage() {
           </div>
         </form>
       </div>
+
+      {/* Read-Only JD Preview Modal */}
+      {previewJob && (
+        <JdPreviewModal
+          job={previewJob}
+          onClose={() => setPreviewJob(null)}
+        />
+      )}
     </div>
   );
 }

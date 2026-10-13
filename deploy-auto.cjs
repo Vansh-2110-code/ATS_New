@@ -39,8 +39,7 @@ async function run() {
     console.log('Unzip stderr:', unzipCmd.stderr);
 
     console.log('Restarting PM2...');
-    // pm2 is likely in ~/.npm-global/bin/pm2 or installed globally
-    const pm2Restart = await ssh.execCommand('export PATH=$PATH:~/.npm-global/bin:~/.nvm/versions/node/v18.17.0/bin; pm2 restart all || npx pm2 restart all', { cwd: remotePath });
+    const pm2Restart = await ssh.execCommand('export PATH=$PATH:~/.npm-global/bin:~/.nvm/versions/node/v18.17.0/bin:~/.nvm/versions/node/v20.18.0/bin:$(find ~/.nvm -name bin 2>/dev/null | tr "\\n" ":"); pm2 restart all || npx pm2 restart all', { cwd: remotePath });
     console.log('PM2 restart stdout:', pm2Restart.stdout);
     console.log('PM2 restart stderr:', pm2Restart.stderr);
 

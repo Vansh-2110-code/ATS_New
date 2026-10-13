@@ -91,125 +91,85 @@ exports.getStats = async (req, res, next) => {
       targetUser = await User.findById(targetUserId).select('name email role employeeId').lean();
     }
 
+    const { start, end } = getDateRange(range, startDate, endDate);
+
     // If Admin and no specific user filter: overall dashboard + team breakdown
     if (isSuperOrAdmin && !targetUserId) {
-      const matchQuery = Object.keys(dateFilter).length > 0 ? dateFilter : {};
-
-      // 1. Overall Aggregation across candidate collection
-      const [totalScanned, utilised, unused, selected, joined] = await Promise.all([
-        Candidate.countDocuments(matchQuery),
-        Candidate.countDocuments({
-          $and: [
-            matchQuery,
-            {
-              $or: [
-                { firstCallSubmitted: true },
-                { candidateContacted: true },
-                { status: { $nin: ['Screening', 'New', 'Unassigned'] } }
-              ]
-            }
-          ]
-        }),
-        Candidate.countDocuments({
-          $and: [
-            matchQuery,
-            {
-              firstCallSubmitted: { $ne: true },
-              candidateContacted: { $ne: true },
-              status: { $in: ['Screening', 'New', 'Unassigned'] }
-            }
-          ]
-        }),
-        Candidate.countDocuments({
-          $and: [
-            matchQuery,
-            {
-              $or: [
-                { status: { $in: SELECTED_STATUSES } },
-                { finalInterviewStatus: 'Selected' },
-                { recruiterStatus: 'Selected' }
-              ]
-            }
-          ]
-        }),
-        Candidate.countDocuments({
-          $and: [
-            matchQuery,
-            { status: 'Joined' }
-          ]
-        })
-      ]);
-
-      // 2. Per-User Breakdown (e.g. Sohail, Wasiq, Babul, etc.)
+      // 1. Per-User Breakdown (e.g. Sohail, Wasiq, Babul, etc.)
       const allTrackedUsers = await User.find({
         $or: [
           { role: { $in: ['mis', 'data_entry'] } },
-          { roles: { $in: ['mis', 'data_entry'] } }
+          { roles: { $in: ['mis', 'data_entry'] } },
+          { email: { $in: ['whitehorsesohail@gmail.com', 'wasiq@whitehorsemanpower.in', 'babul@whitehorsemanpower.in'] } },
+          { name: { $regex: 'suhail|sohail|wasiq|babul', $options: 'i' } }
         ]
       }).select('_id name email employeeId role').lean();
 
+      // Deduplicate by ID or email
+      const seenIds = new Set();
+      const uniqueUsers = allTrackedUsers.filter(u => {
+        const idStr = String(u._id);
+        if (seenIds.has(idStr)) return false;
+        seenIds.add(idStr);
+        return true;
+      });
+
       const userBreakdown = await Promise.all(
-        allTrackedUsers.map(async (u) => {
+        uniqueUsers.map(async (u) => {
           const rawName = (u.name || '').trim();
-          const namePattern = rawName.toLowerCase().includes('hail')
-            ? 's[u|o]hail'
-            : rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const nameRegex = rawName.toLowerCase().includes('hail')
+            ? /s[uo]hail/i
+            : new RegExp(rawName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
-          const userMatch = {
-            $or: [
-              { scannedBy: u._id },
-              { scannedByName: new RegExp(namePattern, 'i') },
-              { sourcedBy: new RegExp(namePattern, 'i') }
+          // 1. AtsRecord scan counts
+          const atsDateFilter = (start && end) ? { $or: [{ scanDate: { $gte: start, $lte: end } }, { createdAt: { $gte: start, $lte: end } }] } : {};
+          const atsUserFilter = { $or: [{ scannedBy: u._id }, { scannedByName: nameRegex }] };
+          const atsQuery = Object.keys(atsDateFilter).length > 0 ? { $and: [atsDateFilter, atsUserFilter] } : atsUserFilter;
+          const atsCount = await AtsRecord.countDocuments(atsQuery);
+
+          // 2. Candidate collection counts
+          const candDateFilter = (start && end) ? { $or: [{ scannedDate: { $gte: start, $lte: end } }, { createdAt: { $gte: start, $lte: end } }] } : {};
+          const candUserFilter = { $or: [{ scannedBy: u._id }, { scannedByName: nameRegex }, { sourcedBy: nameRegex }] };
+          const candQuery = Object.keys(candDateFilter).length > 0 ? { $and: [candDateFilter, candUserFilter] } : candUserFilter;
+          const candCount = await Candidate.countDocuments(candQuery);
+
+          const uTotal = Math.max(atsCount, candCount);
+
+          // 3. Utilised by recruiters
+          const uUtilised = await Candidate.countDocuments({
+            $and: [
+              candUserFilter,
+              {
+                $or: [
+                  { firstCallSubmitted: true },
+                  { candidateContacted: true },
+                  { status: { $nin: ['Screening', 'New', 'Unassigned'] } }
+                ]
+              }
             ]
-          };
+          });
 
-          const fullUserFilter = Object.keys(matchQuery).length > 0
-            ? { $and: [matchQuery, userMatch] }
-            : userMatch;
+          // 4. Selections
+          const uSelected = await Candidate.countDocuments({
+            $and: [
+              candUserFilter,
+              {
+                $or: [
+                  { status: { $in: SELECTED_STATUSES } },
+                  { finalInterviewStatus: 'Selected' },
+                  { recruiterStatus: 'Selected' }
+                ]
+              }
+            ]
+          });
 
-          const [uTotal, uUtilised, uUnused, uSelected, uJoined] = await Promise.all([
-            Candidate.countDocuments(fullUserFilter),
-            Candidate.countDocuments({
-              $and: [
-                fullUserFilter,
-                {
-                  $or: [
-                    { firstCallSubmitted: true },
-                    { candidateContacted: true },
-                    { status: { $nin: ['Screening', 'New', 'Unassigned'] } }
-                  ]
-                }
-              ]
-            }),
-            Candidate.countDocuments({
-              $and: [
-                fullUserFilter,
-                {
-                  firstCallSubmitted: { $ne: true },
-                  candidateContacted: { $ne: true },
-                  status: { $in: ['Screening', 'New', 'Unassigned'] }
-                }
-              ]
-            }),
-            Candidate.countDocuments({
-              $and: [
-                fullUserFilter,
-                {
-                  $or: [
-                    { status: { $in: SELECTED_STATUSES } },
-                    { finalInterviewStatus: 'Selected' },
-                    { recruiterStatus: 'Selected' }
-                  ]
-                }
-              ]
-            }),
-            Candidate.countDocuments({
-              $and: [
-                fullUserFilter,
-                { status: 'Joined' }
-              ]
-            })
-          ]);
+          // 5. Joinings
+          const uJoined = await Candidate.countDocuments({
+            $and: [
+              candUserFilter,
+              { status: 'Joined' }
+            ]
+          });
 
           return {
             userId: u._id,
@@ -219,7 +179,7 @@ exports.getStats = async (req, res, next) => {
             role: u.role,
             scanned: uTotal,
             utilised: uUtilised,
-            unused: uUnused,
+            unused: Math.max(0, uTotal - uUtilised),
             selected: uSelected,
             joined: uJoined,
             utilizationRate: uTotal ? Math.round((uUtilised / uTotal) * 100) : 0
@@ -230,12 +190,45 @@ exports.getStats = async (req, res, next) => {
       // Sort by scanned count descending
       userBreakdown.sort((a, b) => b.scanned - a.scanned);
 
+      // Overall Summary accurately matches the team's combined productivity
+      const totalScanned = userBreakdown.reduce((sum, u) => sum + u.scanned, 0);
+      const utilised = userBreakdown.reduce((sum, u) => sum + u.utilised, 0);
+      const unused = userBreakdown.reduce((sum, u) => sum + u.unused, 0);
+      const selected = userBreakdown.reduce((sum, u) => sum + u.selected, 0);
+      const joined = userBreakdown.reduce((sum, u) => sum + u.joined, 0);
+
       // Fetch 20 recent scanned candidates
-      const recentCandidates = await Candidate.find(matchQuery)
+      let recentCandidates = await Candidate.find({
+        $or: [
+          { sourcedBy: { $regex: 'suhail|sohail|wasiq|babul', $options: 'i' } },
+          { scannedByName: { $regex: 'suhail|sohail|wasiq|babul', $options: 'i' } }
+        ]
+      })
         .sort({ scannedDate: -1, createdAt: -1 })
         .limit(20)
         .select('name email phone positionApplied status scannedByName sourcedBy scannedDate firstCallSubmitted candidateContacted createdAt')
         .lean();
+
+      if (!recentCandidates || recentCandidates.length === 0) {
+        const recentAts = await AtsRecord.find({})
+          .sort({ scanDate: -1, createdAt: -1 })
+          .limit(20)
+          .lean();
+        recentCandidates = recentAts.map(r => ({
+          _id: r._id,
+          name: r.name,
+          email: r.email,
+          phone: r.phone,
+          positionApplied: r.role || r.jobTitle || 'Scanned Resume',
+          status: r.atsStatus || 'Scanned',
+          scannedByName: r.scannedByName || 'MIS Team',
+          sourcedBy: r.scannedByName || 'MIS Team',
+          scannedDate: r.scanDate || r.createdAt,
+          createdAt: r.createdAt,
+          firstCallSubmitted: false,
+          candidateContacted: false,
+        }));
+      }
 
       return res.json({
         summary: {
@@ -254,72 +247,82 @@ exports.getStats = async (req, res, next) => {
 
     // Individual MIS / Data Entry user view (or Admin filtered to 1 specific user)
     const activeUserName = targetUser?.name || req.user.name;
-    const namePattern = activeUserName.toLowerCase().includes('hail')
-      ? 's[u|o]hail'
-      : activeUserName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const nameRegex = activeUserName.toLowerCase().includes('hail')
+      ? /s[uo]hail/i
+      : new RegExp(activeUserName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
-    const userCondition = {
-      $or: [
-        { scannedBy: targetUserId },
-        { scannedByName: new RegExp(namePattern, 'i') },
-        { sourcedBy: new RegExp(namePattern, 'i') }
+    const atsDate = (start && end) ? { $or: [{ scanDate: { $gte: start, $lte: end } }, { createdAt: { $gte: start, $lte: end } }] } : {};
+    const atsUser = { $or: [{ scannedBy: targetUserId }, { scannedByName: nameRegex }] };
+    const atsCount = await AtsRecord.countDocuments(Object.keys(atsDate).length > 0 ? { $and: [atsDate, atsUser] } : atsUser);
+
+    const candDate = (start && end) ? { $or: [{ scannedDate: { $gte: start, $lte: end } }, { createdAt: { $gte: start, $lte: end } }] } : {};
+    const candUser = { $or: [{ scannedBy: targetUserId }, { scannedByName: nameRegex }, { sourcedBy: nameRegex }] };
+    const candCount = await Candidate.countDocuments(Object.keys(candDate).length > 0 ? { $and: [candDate, candUser] } : candUser);
+
+    const totalScanned = Math.max(atsCount, candCount);
+
+    const utilised = await Candidate.countDocuments({
+      $and: [
+        candUser,
+        {
+          $or: [
+            { firstCallSubmitted: true },
+            { candidateContacted: true },
+            { status: { $nin: ['Screening', 'New', 'Unassigned'] } }
+          ]
+        }
       ]
-    };
+    });
 
-    const combinedMatch = Object.keys(dateFilter).length > 0
-      ? { $and: [dateFilter, userCondition] }
-      : userCondition;
+    const unused = Math.max(0, totalScanned - utilised);
 
-    const [totalScanned, utilised, unused, selected, joined] = await Promise.all([
-      Candidate.countDocuments(combinedMatch),
-      Candidate.countDocuments({
-        $and: [
-          combinedMatch,
-          {
-            $or: [
-              { firstCallSubmitted: true },
-              { candidateContacted: true },
-              { status: { $nin: ['Screening', 'New', 'Unassigned'] } }
-            ]
-          }
-        ]
-      }),
-      Candidate.countDocuments({
-        $and: [
-          combinedMatch,
-          {
-            firstCallSubmitted: { $ne: true },
-            candidateContacted: { $ne: true },
-            status: { $in: ['Screening', 'New', 'Unassigned'] }
-          }
-        ]
-      }),
-      Candidate.countDocuments({
-        $and: [
-          combinedMatch,
-          {
-            $or: [
-              { status: { $in: SELECTED_STATUSES } },
-              { finalInterviewStatus: 'Selected' },
-              { recruiterStatus: 'Selected' }
-            ]
-          }
-        ]
-      }),
-      Candidate.countDocuments({
-        $and: [
-          combinedMatch,
-          { status: 'Joined' }
-        ]
-      })
-    ]);
+    const selected = await Candidate.countDocuments({
+      $and: [
+        candUser,
+        {
+          $or: [
+            { status: { $in: SELECTED_STATUSES } },
+            { finalInterviewStatus: 'Selected' },
+            { recruiterStatus: 'Selected' }
+          ]
+        }
+      ]
+    });
+
+    const joined = await Candidate.countDocuments({
+      $and: [
+        candUser,
+        { status: 'Joined' }
+      ]
+    });
 
     // Fetch recent candidates for this specific user
-    const recentCandidates = await Candidate.find(combinedMatch)
+    let recentCandidates = await Candidate.find(candUser)
       .sort({ scannedDate: -1, createdAt: -1 })
       .limit(20)
       .select('name email phone positionApplied status scannedByName sourcedBy scannedDate firstCallSubmitted candidateContacted createdAt')
       .lean();
+
+    if (!recentCandidates || recentCandidates.length === 0) {
+      const recentAts = await AtsRecord.find(atsUser)
+        .sort({ scanDate: -1, createdAt: -1 })
+        .limit(20)
+        .lean();
+      recentCandidates = recentAts.map(r => ({
+        _id: r._id,
+        name: r.name,
+        email: r.email,
+        phone: r.phone,
+        positionApplied: r.role || r.jobTitle || 'Scanned Resume',
+        status: r.atsStatus || 'Scanned',
+        scannedByName: r.scannedByName || activeUserName,
+        sourcedBy: r.scannedByName || activeUserName,
+        scannedDate: r.scanDate || r.createdAt,
+        createdAt: r.createdAt,
+        firstCallSubmitted: false,
+        candidateContacted: false,
+      }));
+    }
 
     return res.json({
       summary: {

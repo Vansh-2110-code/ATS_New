@@ -423,22 +423,36 @@ exports.list = async (req, res, next) => {
         }
       }
     } else if (req.user.role === 'recruiter') {
-      const recCond = [
-        { assignedRecruiter: req.user._id },
-        { assignedRecruiterName: req.user.name },
-        {
-          $and: [
-            { assignedRecruiter: { $in: [null, req.user._id] } },
-            { assignedRecruiterName: { $in: [null, '', 'Unassigned', 'General Pool', req.user.name] } },
-            { $or: [{ sourcedBy: req.user.name }, { recruiterName: req.user.name }] }
-          ]
-        }
-      ];
-      if (query.$or) {
-        query.$and = [{ $or: query.$or }, { $or: recCond }];
-        delete query.$or;
+      if (req.query.generalPool === 'true') {
+        // Recruiter is explicitly browsing the General Pool — allow viewing unassigned/available candidates!
       } else {
-        query.$or = recCond;
+        const hasSearch = !!(req.query.search && req.query.search.trim());
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const recCond = [
+          { assignedRecruiter: req.user._id },
+          { assignedRecruiterName: req.user.name },
+          {
+            $and: [
+              { assignedRecruiter: { $in: [null, req.user._id] } },
+              { assignedRecruiterName: { $in: [null, '', 'Unassigned', 'General Pool', req.user.name] } },
+              { $or: [{ sourcedBy: req.user.name }, { recruiterName: req.user.name }] }
+            ]
+          }
+        ];
+        if (hasSearch) {
+          // When searching, recruiters can also search and access General Pool / unassigned candidates from any recruiter/sourcer
+          recCond.push({ ownershipStatus: { $in: ['General Data', 'Unassigned', 'Expired'] } });
+          recCond.push({ assignedRecruiter: null });
+          recCond.push({ assignedRecruiterName: { $in: [null, '', 'Unassigned', 'General Pool'] } });
+          recCond.push({ availableInGeneralPoolAfter: { $lte: new Date() } });
+          recCond.push({ tlRejectedAt: { $lte: thirtyDaysAgo } });
+        }
+        if (query.$or) {
+          query.$and = [{ $or: query.$or }, { $or: recCond }];
+          delete query.$or;
+        } else {
+          query.$or = recCond;
+        }
       }
     }
 
@@ -464,7 +478,8 @@ exports.list = async (req, res, next) => {
     const countQuery = { ...query };
     delete countQuery.status;
 
-    const [candidates, total, statusAgg] = await Promise.all([
+    const thirtyDaysAgoForPool = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const [candidates, total, statusAgg, generalPoolCount] = await Promise.all([
       Candidate.find(query)
         .sort(sort)
         .skip(skip)
@@ -474,7 +489,16 @@ exports.list = async (req, res, next) => {
       Candidate.aggregate([
         { $match: countQuery },
         { $group: { _id: '$status', count: { $sum: 1 } } }
-      ])
+      ]),
+      Candidate.countDocuments({
+        $or: [
+          { ownershipStatus: 'General Data' },
+          { ownershipStatus: 'Unassigned' },
+          { ownershipStatus: 'Expired' },
+          { availableInGeneralPoolAfter: { $lte: new Date() } },
+          { tlRejectedAt: { $lte: thirtyDaysAgoForPool } }
+        ]
+      })
     ]);
 
     const CANONICAL_STATUS_MAP = {
@@ -536,6 +560,7 @@ exports.list = async (req, res, next) => {
     res.json({
       candidates,
       statusCounts,
+      generalPoolCount,
       totalCount: totalCandidatesCount || total,
       pagination: {
         page: parseInt(page),
@@ -554,8 +579,52 @@ exports.list = async (req, res, next) => {
 // GET /api/candidates/:id
 exports.getById = async (req, res, next) => {
   try {
-    const candidate = await Candidate.findById(req.params.id)
+    let candidate = await Candidate.findById(req.params.id)
       .populate('assignedRecruiter', 'name email');
+    if (!candidate) {
+      // Check if ID belongs to an AtsRecord
+      const AtsRecord = require('../models/AtsRecord');
+      const atsRec = await AtsRecord.findById(req.params.id).lean();
+      if (atsRec) {
+        if (atsRec.candidateRef) {
+          candidate = await Candidate.findById(atsRec.candidateRef)
+            .populate('assignedRecruiter', 'name email');
+        }
+        if (!candidate && (atsRec.email || atsRec.phone)) {
+          const crit = [];
+          if (atsRec.email) crit.push({ email: atsRec.email.toLowerCase() });
+          if (atsRec.phone) crit.push({ phone: atsRec.phone });
+          candidate = await Candidate.findOne({ $or: crit })
+            .populate('assignedRecruiter', 'name email');
+        }
+        // If not in Candidate collection, convert AtsRecord to candidate representation
+        if (!candidate) {
+          candidate = {
+            _id: atsRec._id,
+            name: atsRec.name,
+            email: atsRec.email,
+            phone: atsRec.phone,
+            currentLocation: atsRec.currentLocation,
+            city: atsRec.currentLocation || atsRec.homeTownCity || '',
+            totalExperience: atsRec.totalExperience,
+            experience: atsRec.totalExperience,
+            currentCompanyName: atsRec.currentCompanyName,
+            company: atsRec.currentCompanyName,
+            currentCompanyDesignation: atsRec.currentCompanyDesignation,
+            positionApplied: atsRec.jobTitle || atsRec.currentCompanyDesignation || 'Candidate',
+            skills: (atsRec.keySkills || '').split(/[,;]+/).map(s => s.trim()).filter(Boolean),
+            keySkills: atsRec.keySkills,
+            atsScore: atsRec.atsScore,
+            status: atsRec.atsStatus === 'Shortlisted' ? 'Eligible' : (atsRec.atsStatus === 'Selected' ? 'Final Select' : 'New'),
+            ownershipStatus: 'General Data',
+            assignedRecruiterName: atsRec.scannedByName || 'Unassigned',
+            createdAt: atsRec.scanDate || atsRec.createdAt,
+            notes: atsRec.remarks ? [{ text: atsRec.remarks, authorName: atsRec.scannedByName || 'System', createdAt: atsRec.scanDate }] : []
+          };
+          return res.json(candidate);
+        }
+      }
+    }
     if (!candidate) {
       return res.status(404).json({ message: 'Candidate not found' });
     }
@@ -3740,6 +3809,37 @@ exports.tagNewJr = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Candidate not found.' });
     }
 
+    // ── Ownership Protection Check ──
+    // Recruiters cannot tag or claim another recruiter's active candidate under 30-day protected validity
+    const inGeneralPool = isCandidateInGeneralPool(candidate);
+    const isPrivileged = ['admin', 'tl', 'manager'].includes(req.user.role);
+
+    if (req.user.role === 'recruiter') {
+      const candRecId = candidate.assignedRecruiter ? String(candidate.assignedRecruiter) : '';
+      const reqUserId = req.user._id ? String(req.user._id) : (req.user.id ? String(req.user.id) : '');
+      const candRecName = String(candidate.assignedRecruiterName || '').trim().toLowerCase();
+      const reqUserName = String(req.user.name || '').trim().toLowerCase();
+
+      const isOwner = (candRecId && reqUserId && candRecId === reqUserId) ||
+                      (candRecName && reqUserName && candRecName === reqUserName);
+
+      const hasOtherRecruiter = !inGeneralPool &&
+        (Boolean(candidate.assignedRecruiter) || (Boolean(candidate.assignedRecruiterName) && candRecName !== 'unassigned' && candRecName !== 'general pool')) &&
+        !isOwner;
+
+      const lastActivity = candidate.assignedAt || candidate.createdAt;
+      const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
+      const isExpired = candidate.ownershipStatus === 'Expired' || daysSinceAssignment >= 30;
+      const isUnlocked = isStatusUnlockedForReassignment(candidate.status) || isExpired;
+
+      if (hasOtherRecruiter && !isUnlocked) {
+        return res.status(403).json({
+          success: false,
+          message: `This candidate is actively assigned to ${candidate.assignedRecruiterName || 'another recruiter'} (Protected under 30-day validity). You cannot tag or reassign another recruiter's active candidate without Admin/TL permission.`
+        });
+      }
+    }
+
     // Capture previous screening history before retagging
     const prevJr = candidate.jrNumber || 'Unassigned';
     const prevClient = candidate.clientName || candidate.company || '';
@@ -3780,11 +3880,13 @@ exports.tagNewJr = async (req, res, next) => {
     candidate.positionApplied = job.jobTitle || candidate.positionApplied;
     candidate.division = job.division || candidate.division || 'BPO';
 
-    // Assign to current user (recruiter)
-    candidate.assignedRecruiter = req.user._id;
-    candidate.assignedRecruiterName = cleanRecruiterName(req.user.name);
-    candidate.assignedAt = new Date();
-    candidate.ownershipStatus = 'Assigned';
+    // Assign to current user if recruiter or if unassigned; otherwise preserve assigned recruiter for Admin/TL
+    if (req.user.role === 'recruiter' || !candidate.assignedRecruiter) {
+      candidate.assignedRecruiter = req.user._id;
+      candidate.assignedRecruiterName = cleanRecruiterName(req.user.name);
+      candidate.assignedAt = new Date();
+      candidate.ownershipStatus = 'Assigned';
+    }
 
     // Candidate was previously screened and marked Eligible:
     // Fast-track them: status is Eligible for the new JR without repeating complete initial screening!
@@ -3845,7 +3947,7 @@ exports.tagNewJr = async (req, res, next) => {
 };
 
 // POST /api/candidates/find-similar
-// Finds similar candidates from the 18,160+ database records based on skills, role & experience
+// Finds similar candidates from the database records based on skills, role, experience & JR
 exports.findSimilarCandidates = async (req, res, next) => {
   try {
     const {
@@ -3855,7 +3957,9 @@ exports.findSimilarCandidates = async (req, res, next) => {
       experience = '',
       email = '',
       phone = '',
-      limit = 12
+      jrNumber = '',
+      benchmarkMode = false,
+      limit = 15
     } = req.body;
 
     const query = {};
@@ -3884,8 +3988,14 @@ exports.findSimilarCandidates = async (req, res, next) => {
 
     const targetRole = String(role || jobTitle || '').trim();
 
-    // Match criteria: either overlapping skills or matching role/title
+    // Match criteria: overlapping skills, matching role/title, or same JR
     const orConditions = [];
+
+    if (jrNumber && String(jrNumber).trim()) {
+      const cleanJr = String(jrNumber).trim();
+      orConditions.push({ jrNumber: cleanJr });
+      orConditions.push({ originalJrNumber: cleanJr });
+    }
 
     if (cleanSkills.length > 0) {
       const skillRegexes = cleanSkills.slice(0, 10).map(s => new RegExp(s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'i'));
@@ -3907,12 +4017,33 @@ exports.findSimilarCandidates = async (req, res, next) => {
       query.$or = orConditions;
     }
 
-    // Fetch up to 80 potential matches to score accurately
-    const candidates = await Candidate.find(query)
-      .select('candidateId name email phone skills keySkills experience totalExperience positionApplied originalJobTitle currentCompanyDesignation status assignedRecruiter assignedRecruiterName ownershipStatus availableInGeneralPoolAfter city currentLocation clientName company jrNumber atsScore createdAt')
+    // Fetch potential matches to score accurately (up to 1000 candidates)
+    const fetchLimit = Math.min(Math.max(Number(limit) || 1000, 10), 1000);
+    let candidates = await Candidate.find(query)
+      .select('candidateId name email phone resumePath resumeOriginalName skills keySkills experience totalExperience positionApplied originalJobTitle currentCompanyDesignation status assignedRecruiter assignedRecruiterName ownershipStatus availableInGeneralPoolAfter city currentLocation clientName company jrNumber originalJrNumber atsScore createdAt')
       .sort({ updatedAt: -1, createdAt: -1 })
-      .limit(80)
+      .limit(fetchLimit)
       .lean();
+
+    // Fallback if specific conditions returned fewer than 5 candidates
+    if (candidates.length < 5) {
+      const fallback = await Candidate.find({
+        status: { $in: ['Eligible', 'Screening', 'Final Select', 'Contacted'] },
+        ...(excludeConditions.length > 0 ? { $nor: excludeConditions } : {})
+      })
+        .select('candidateId name email phone resumePath resumeOriginalName skills keySkills experience totalExperience positionApplied originalJobTitle currentCompanyDesignation status assignedRecruiter assignedRecruiterName ownershipStatus availableInGeneralPoolAfter city currentLocation clientName company jrNumber originalJrNumber atsScore createdAt')
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .limit(100)
+        .lean();
+      
+      const seenIds = new Set(candidates.map(c => String(c._id)));
+      for (const fc of fallback) {
+        if (!seenIds.has(String(fc._id))) {
+          candidates.push(fc);
+          seenIds.add(String(fc._id));
+        }
+      }
+    }
 
     // Score candidates against target profile
     const normalizedTargetSkills = cleanSkills.map(s => s.toLowerCase());
@@ -3949,35 +4080,38 @@ exports.findSimilarCandidates = async (req, res, next) => {
         }
       });
 
-      // Skill overlap score (up to 65 points)
-      let score = 0;
-      if (normalizedTargetSkills.length > 0) {
-        const skillRatio = matchedSkills.length / normalizedTargetSkills.length;
-        score += Math.round(skillRatio * 65);
-      } else {
-        score += 30;
-      }
+      // Skill match percentage (0 to 1)
+      const skillRatio = normalizedTargetSkills.length > 0
+        ? (matchedSkills.length / normalizedTargetSkills.length)
+        : 0.5;
 
       // Role match bonus (up to 25 points)
       const candRole = (c.positionApplied || c.originalJobTitle || c.currentCompanyDesignation || '').toLowerCase();
+      let roleRatio = 0;
       if (targetRole) {
         const lowerTarget = targetRole.toLowerCase();
         if (candRole && (candRole.includes(lowerTarget) || lowerTarget.includes(candRole))) {
-          score += 25;
+          roleRatio = 1.0;
         } else {
-          const words = lowerTarget.split(/[\s/,-]+/).filter(w => w.length >= 3);
+          const words = lowerTarget.split(/[s/,-]+/).filter(w => w.length >= 3);
           const matchedWords = words.filter(w => candRole.includes(w));
           if (words.length > 0 && matchedWords.length > 0) {
-            score += Math.round((matchedWords.length / words.length) * 20);
+            roleRatio = matchedWords.length / words.length;
           }
         }
+      } else {
+        roleRatio = 0.5;
       }
 
-      // Base presence / status bonus
-      if (c.atsScore && c.atsScore >= 70) score += 5;
-      if (c.status === 'Eligible' || c.status === 'Final Select' || c.status === 'L1 Select') score += 5;
+      const isSameJr = Boolean(jrNumber && (c.jrNumber === jrNumber || c.originalJrNumber === jrNumber));
 
-      const finalSimilarity = Math.min(98, Math.max(35, score));
+      // Calculate raw match score
+      let rawScore = 0;
+      rawScore += Math.round(skillRatio * 50);
+      rawScore += Math.round(roleRatio * 25);
+      if (isSameJr) rawScore += 25;
+      if (c.status === 'Eligible' || c.status === 'Final Select' || c.status === 'L1 Select') rawScore += 5;
+      if (c.atsScore && c.atsScore >= 70) rawScore += 5;
 
       return {
         _id: c._id,
@@ -3985,6 +4119,8 @@ exports.findSimilarCandidates = async (req, res, next) => {
         name: c.name,
         email: c.email,
         phone: c.phone,
+        resumePath: c.resumePath || null,
+        resumeOriginalName: c.resumeOriginalName || null,
         skills: candSkills.slice(0, 10),
         matchedSkills,
         experience: c.totalExperience || c.experience || 'Not specified',
@@ -3995,21 +4131,48 @@ exports.findSimilarCandidates = async (req, res, next) => {
         location: c.city || c.currentLocation || 'India',
         clientName: c.clientName || c.company || '',
         jrNumber: c.jrNumber || '',
-        similarityScore: finalSimilarity,
+        rawScore,
+        isSameJr,
+        similarityScore: 80,
+        recommendation: 'Recommended',
         createdAt: c.createdAt
       };
     });
 
-    // Sort descending by similarityScore
-    scored.sort((a, b) => b.similarityScore - a.similarityScore);
+    // Sort descending by rawScore, then matchedSkills count
+    scored.sort((a, b) => {
+      if (b.rawScore !== a.rawScore) return b.rawScore - a.rawScore;
+      return (b.matchedSkills?.length || 0) - (a.matchedSkills?.length || 0);
+    });
 
-    const maxLimit = Math.min(Number(limit) || 12, 30);
-    const topSimilar = scored.slice(0, maxLimit);
+    // Calibrate similarity score from 100 down to 80% for matching resumes
+    if (scored.length > 0) {
+      const topRaw = scored[0].rawScore || 1;
+      scored.forEach((c, idx) => {
+        const relRatio = Math.max(0, Math.min(1, c.rawScore / topRaw));
+        let score = Math.round(80 + (relRatio * 20));
+        if (idx === 0) score = 100;
+        else if (idx === 1 && score < 99) score = 99;
+        else if (idx === 2 && score < 98) score = 98;
+        
+        if (idx > 0 && score > scored[idx - 1].similarityScore) {
+          score = scored[idx - 1].similarityScore;
+        }
+
+        c.similarityScore = Math.max(80, Math.min(100, score));
+        c.recommendation = c.similarityScore >= 95 ? 'Top Match' : (c.similarityScore >= 88 ? 'Recommended' : 'Good Match');
+      });
+    }
+
+    // Filter to show all resumes matching down till 80% (similarityScore >= 80)
+    const matchingCandidates = scored.filter(c => c.similarityScore >= 80);
+    const maxLimit = Math.min(Number(limit) || 1000, 1000);
+    const topSimilar = matchingCandidates.slice(0, maxLimit);
 
     res.json({
       success: true,
       count: topSimilar.length,
-      totalMatched: scored.length,
+      totalMatched: matchingCandidates.length,
       candidates: topSimilar
     });
   } catch (err) {
