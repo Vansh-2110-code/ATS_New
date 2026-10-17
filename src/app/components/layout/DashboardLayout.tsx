@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Outlet, Navigate, useNavigate } from 'react-router';
-import { Menu, Bell, Search, X, CheckCircle2, AlertTriangle, Info, Phone, Clock, Wifi, Monitor, Fingerprint } from 'lucide-react';
+import { Outlet, Navigate, useNavigate, useLocation } from 'react-router';
+import { Menu, Bell, Search, X, CheckCircle2, AlertTriangle, Info, Phone, Clock, Wifi, Monitor, Fingerprint, ChevronRight, FileText } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Sidebar } from './Sidebar';
 import api from '../../services/api';
@@ -32,6 +32,9 @@ interface GlobalSearchResult {
   title: string;
   subtitle?: string;
   path: string;
+  hasResume?: boolean;
+  resumeUrl?: string;
+  resumeOriginalName?: string;
 }
 
 // ─── localStorage key helpers ────────────────────────────────
@@ -44,19 +47,97 @@ const reminderKey = (userId: string) => {
   return `att_reminder_${userId}_${d}`;
 };
 
+// ─── Route Breadcrumb Map ────────────────────────────────────
+const ROUTE_BREADCRUMBS: Record<string, { section: string; title: string }> = {
+  '/recruiter': { section: 'Overview', title: 'Recruiter Dashboard' },
+  '/tl': { section: 'Overview', title: 'Team Lead Dashboard' },
+  '/manager': { section: 'Overview', title: 'Manager Dashboard' },
+  '/admin': { section: 'Overview', title: 'Admin Command Center' },
+  '/business-development': { section: 'Growth', title: 'Business Development' },
+  '/recruiter/resumes': { section: 'Candidate Pipeline', title: 'Candidate Management' },
+  '/recruiter/eligible-tracker': { section: 'Candidate Pipeline', title: 'Eligible Tracker' },
+  '/tl/eligible-tracker': { section: 'Candidate Pipeline', title: 'Eligible Tracker' },
+  '/manager/eligible-tracker': { section: 'Candidate Pipeline', title: 'Eligible Tracker' },
+  '/admin/eligible-tracker': { section: 'Candidate Pipeline', title: 'Eligible Tracker' },
+  '/recruiter/add': { section: 'Candidate Pipeline', title: 'Add Candidate' },
+  '/recruiter/walkin-queue': { section: 'Candidate Pipeline', title: 'Walk-In Queue' },
+  '/recruiter/walkins': { section: 'Candidate Pipeline', title: 'Walk-In Management' },
+  '/recruiter/interviews': { section: 'Candidate Pipeline', title: 'Interview Scheduling' },
+  '/recruiter/rejected': { section: 'Candidate Pipeline', title: 'Rejected Bucket' },
+  '/admin/joining': { section: 'Candidate Pipeline', title: 'Joining Approvals' },
+  '/recruiter/joining': { section: 'Candidate Pipeline', title: 'Joining Form' },
+  '/admin/offer-letters': { section: 'Candidate Pipeline', title: 'Offer Letters' },
+  '/recruiter/scan': { section: 'Sourcing & Database', title: 'ATS Resume Scanner' },
+  '/recruiter/ats-database': { section: 'Sourcing & Database', title: 'ATS Database' },
+  '/admin/ats-records': { section: 'Sourcing & Database', title: 'ATS Scan Records' },
+  '/admin/candidates': { section: 'Sourcing & Database', title: 'Candidate Database' },
+  '/mis': { section: 'Sourcing & Database', title: 'MIS Sourcing Hub' },
+  '/admin/mis-tracker': { section: 'Sourcing & Database', title: 'MIS Tracker' },
+  '/admin/excel-import': { section: 'Sourcing & Database', title: 'Excel Import' },
+  '/recruiter-portals': { section: 'Sourcing & Database', title: 'Recruiter Portals' },
+  '/admin/jobs': { section: 'Jobs & Requirements', title: 'Job Requirements' },
+  '/recruiter/jobs/new': { section: 'Jobs & Requirements', title: 'Create Job (JR)' },
+  '/recruiter/jobs/bulk': { section: 'Jobs & Requirements', title: 'Bulk Job Post' },
+  '/admin/companies': { section: 'Jobs & Requirements', title: 'Client Companies' },
+  '/tl/my-team': { section: 'Team & Operations', title: 'My Team' },
+  '/admin/attendance': { section: 'Team & Operations', title: 'Attendance' },
+  '/admin/leaves': { section: 'Team & Operations', title: 'Leave Approvals' },
+  '/tl/leaves': { section: 'Team & Operations', title: 'Leave Approvals' },
+  '/manager/leaves': { section: 'Team & Operations', title: 'Leave Approvals' },
+  '/employee/leaves': { section: 'Team & Operations', title: 'My Leaves' },
+  '/admin/tasks': { section: 'Team & Operations', title: 'Tasks' },
+  '/admin/tl-activity': { section: 'Team & Operations', title: 'TL Activity' },
+  '/manager/tl-activity': { section: 'Team & Operations', title: 'TL Activity' },
+  '/payroll/dashboard': { section: 'Payroll & Financials', title: 'Payroll Overview' },
+  '/payroll/run': { section: 'Payroll & Financials', title: 'Run Payroll' },
+  '/payroll/employees': { section: 'Payroll & Financials', title: 'Salary CTC' },
+  '/payroll/payslips': { section: 'Payroll & Financials', title: 'Salary Slips' },
+  '/salary-slip': { section: 'Payroll & Financials', title: 'My Salary Slip' },
+  '/payroll/incentives': { section: 'Payroll & Financials', title: 'Incentives' },
+  '/revenue': { section: 'Payroll & Financials', title: 'Revenue Analytics' },
+  '/salary': { section: 'Payroll & Financials', title: 'Salary Disbursal' },
+  '/credit-notes': { section: 'Payroll & Financials', title: 'Credit Notes' },
+  '/admin/users': { section: 'System & Security', title: 'User Management' },
+  '/admin/access': { section: 'System & Security', title: 'Role Access Control' },
+  '/admin/field-config': { section: 'System & Security', title: 'Field Configuration' },
+  '/email': { section: 'System & Security', title: 'Email Center' },
+  '/chat': { section: 'Communication', title: 'Team Chat' },
+  '/admin/logs': { section: 'System & Security', title: 'System Logs' },
+};
+
 export function DashboardLayout() {
   const { isAuthenticated, user, pendingOTP, logout, login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const notifRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [globalSearch, setGlobalSearch] = useState('');
   const [searchingGlobal, setSearchingGlobal] = useState(false);
   const [globalResults, setGlobalResults] = useState<GlobalSearchResult[]>([]);
   const [showGlobalResults, setShowGlobalResults] = useState(false);
+
+  // Active breadcrumb resolution
+  const currentBreadcrumb = ROUTE_BREADCRUMBS[location.pathname] || {
+    section: 'White Horse Manpower',
+    title: location.pathname.split('/').filter(Boolean).pop()?.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Dashboard'
+  };
+
+  // Global Ctrl+K / Cmd+K search shortcut listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // ── Attendance state ─────────────────────────────────────────
   const [attMarked, setAttMarked] = useState(false);
@@ -394,13 +475,23 @@ export function DashboardLayout() {
             <button
               className="lg:hidden p-1.5 text-slate-500 hover:text-slate-700 rounded-md"
               onClick={() => setSidebarOpen(true)}
+              aria-label="Toggle navigation menu"
             >
               <Menu className="w-5 h-5" />
             </button>
+
+            {/* Breadcrumb Hierarchy */}
+            <div className="hidden md:flex items-center gap-1.5 text-xs text-slate-500 font-medium select-none">
+              <span className="text-slate-400 hover:text-slate-600 transition-colors">{currentBreadcrumb.section}</span>
+              <ChevronRight className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+              <span className="text-slate-800 font-semibold truncate max-w-[180px] xl:max-w-[280px]">{currentBreadcrumb.title}</span>
+            </div>
+
             <div ref={searchRef} className="hidden sm:block relative">
-              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
-                <Search className="w-4 h-4 text-slate-400" />
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 focus-within:bg-white focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 transition-all">
+                <Search className="w-4 h-4 text-slate-400 flex-shrink-0" />
                 <input
+                  ref={searchInputRef}
                   type="text"
                   placeholder="Global search..."
                   value={globalSearch}
@@ -408,10 +499,14 @@ export function DashboardLayout() {
                   onFocus={() => {
                     if (globalResults.length > 0) setShowGlobalResults(true);
                   }}
-                  className="bg-transparent text-sm text-slate-600 outline-none w-56 placeholder:text-slate-400"
+                  className="bg-transparent text-sm text-slate-700 outline-none w-44 md:w-56 placeholder:text-slate-400"
                 />
-                {searchingGlobal && (
-                  <span className="w-3 h-3 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin inline-block" />
+                {searchingGlobal ? (
+                  <span className="w-3 h-3 border-2 border-slate-300 border-t-emerald-600 rounded-full animate-spin inline-block flex-shrink-0" />
+                ) : (
+                  <kbd className="hidden lg:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono font-medium text-slate-400 bg-slate-100 border border-slate-200 rounded select-none">
+                    Ctrl K
+                  </kbd>
                 )}
               </div>
 
@@ -422,15 +517,38 @@ export function DashboardLayout() {
                   ) : (
                     <div className="max-h-80 overflow-y-auto">
                       {globalResults.map((result) => (
-                        <button
+                        <div
                           key={`${result.type}-${result.id}`}
                           onClick={() => handleGlobalSelect(result)}
-                          className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-b-0 transition-colors"
+                          className="w-full text-left px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-b-0 transition-colors flex items-center justify-between group cursor-pointer"
                         >
-                          <p className="text-sm text-slate-800" style={{ fontWeight: 600 }}>{result.title}</p>
-                          {result.subtitle && <p className="text-xs text-slate-500 mt-0.5">{result.subtitle}</p>}
-                          <p className="text-[11px] text-green-700 mt-1">{result.module}</p>
-                        </button>
+                          <div className="flex-1 min-w-0 pr-3">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm text-slate-800 group-hover:text-emerald-700 transition-colors truncate" style={{ fontWeight: 600 }}>{result.title}</p>
+                              {result.hasResume && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">
+                                  <FileText className="w-3 h-3 text-emerald-600" />
+                                  Resume
+                                </span>
+                              )}
+                            </div>
+                            {result.subtitle && <p className="text-xs text-slate-500 mt-0.5 truncate">{result.subtitle}</p>}
+                            <p className="text-[11px] text-green-700 mt-1 font-medium">{result.module}</p>
+                          </div>
+                          {result.resumeUrl && (
+                            <a
+                              href={result.resumeUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition-all flex-shrink-0"
+                              title="Open resume in new tab"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>View Resume</span>
+                            </a>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}
@@ -443,8 +561,12 @@ export function DashboardLayout() {
             {needsAttendance && (
               <div className="relative" ref={wfhRef}>
                 {attMarked ? (
-                  <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-xs cursor-default select-none" style={{ fontWeight: 500 }}>
-                    <CheckCircle2 className="w-3.5 h-3.5" />
+                  <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-xs cursor-default select-none font-medium">
+                    <span className="relative flex h-2 w-2 mr-0.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Attendance Marked</span>
                     {attMarkedAt && <span className="text-emerald-500">· {attMarkedAt}</span>}
                     {attIsWFH && <Wifi className="w-3 h-3 text-blue-500 ml-0.5" />}

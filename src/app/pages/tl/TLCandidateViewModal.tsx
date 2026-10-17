@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import {
   X, Calendar, Loader2, Lock, Shield, CheckCircle2, AlertCircle, User,
-  Phone, Mail, Briefcase, MapPin, Award,
+  Phone, Mail, Briefcase, MapPin, Award, ExternalLink,
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -40,6 +41,7 @@ interface Props {
 }
 
 export function TLCandidateViewModal({ candidate, onClose, onSaved }: Props) {
+  const navigate = useNavigate();
   const [interviewStatus, setInterviewStatus] = useState(candidate.interviewStatus || '');
   const [finalInterviewSlotStatus, setFinalInterviewSlotStatus] = useState(candidate.finalInterviewSlotStatus || '');
   const [scheduledDate, setScheduledDate] = useState(
@@ -119,9 +121,21 @@ export function TLCandidateViewModal({ candidate, onClose, onSaved }: Props) {
               Recruiter-filled sections are read-only · Only Interview Status is editable
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-white rounded-lg transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                onClose();
+                navigate(`/recruiter/candidate/${candidate._id || candidate.id}`);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-semibold hover:bg-violet-700 transition-colors shadow-sm"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              Full Profile &amp; Reassign
+            </button>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-white rounded-lg transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-6 space-y-5">

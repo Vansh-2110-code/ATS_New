@@ -425,3 +425,139 @@ exports.updateRecord = async (req, res, next) => {
     next(err);
   }
 };
+
+/* ─── GET /api/ats-records/:id/resume ─────────────────────── */
+exports.downloadResume = async (req, res, next) => {
+  try {
+    const record = await AtsRecord.findById(req.params.id);
+    if (!record) return res.status(404).json({ message: 'ATS Record not found' });
+
+    const path = require('path');
+    const fs = require('fs');
+    const Candidate = require('../models/Candidate');
+    const WalkIn = require('../models/WalkIn');
+
+    let resumePath = record.resumePath;
+    let originalName = record.resumeOriginalName || `${(record.name || 'Candidate').replace(/\s+/g, '_')}_Resume.pdf`;
+
+    if (!resumePath && record.candidateRef) {
+      const cand = await Candidate.findById(record.candidateRef).select('resumePath resumeOriginalName');
+      if (cand && cand.resumePath) {
+        resumePath = cand.resumePath;
+        if (cand.resumeOriginalName) originalName = cand.resumeOriginalName;
+      }
+    }
+
+    if (!resumePath && (record.email || record.phone)) {
+      const orClauses = [];
+      if (record.email) orClauses.push({ email: record.email });
+      if (record.phone) orClauses.push({ phone: record.phone });
+      const cand = await Candidate.findOne({ $or: orClauses, resumePath: { $exists: true, $ne: '' } }).select('resumePath resumeOriginalName');
+      if (cand && cand.resumePath) {
+        resumePath = cand.resumePath;
+        if (cand.resumeOriginalName) originalName = cand.resumeOriginalName;
+      }
+    }
+
+    if (!resumePath && (record.email || record.phone)) {
+      const orClauses = [];
+      if (record.email) orClauses.push({ candidateEmail: record.email });
+      if (record.phone) orClauses.push({ candidatePhone: record.phone });
+      const walk = await WalkIn.findOne({ $or: orClauses, resumePath: { $exists: true, $ne: '' } }).select('resumePath resumeOriginalName');
+      if (walk && walk.resumePath) {
+        resumePath = walk.resumePath;
+        if (walk.resumeOriginalName) originalName = walk.resumeOriginalName;
+      }
+    }
+
+    if (resumePath) {
+      const cleanPath = resumePath.replace(/^\//, '');
+      const possiblePaths = [
+        path.join(__dirname, '..', '..', cleanPath),
+        path.join(__dirname, '..', '..', 'uploads', cleanPath),
+        path.join(__dirname, '..', '..', 'uploads', 'resumes', path.basename(cleanPath)),
+        path.resolve(cleanPath)
+      ];
+
+      for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+          return res.download(p, originalName);
+        }
+      }
+    }
+
+    // Dynamic Doc fallback for records without raw file on disk
+    const safeName = (record.name || 'Candidate').replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_');
+    const cleanDocName = `${safeName}_Resume.doc`;
+    const docContent = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${record.name || 'Candidate'} - Resume</title>
+<style>
+body { font-family: Arial, sans-serif; line-height: 1.6; color: #1e293b; margin: 40px; }
+h1 { color: #15803d; margin-bottom: 4px; font-size: 24px; }
+.sub { font-size: 13px; color: #64748b; margin-bottom: 20px; border-bottom: 2px solid #16a34a; padding-bottom: 8px; }
+.section { margin-bottom: 18px; }
+.sec-title { font-size: 14px; font-weight: bold; text-transform: uppercase; color: #15803d; margin-bottom: 6px; border-bottom: 1px solid #e2e8f0; }
+table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+td { padding: 4px 6px; font-size: 13px; vertical-align: top; }
+td.lbl { font-weight: bold; width: 25%; color: #475569; }
+</style>
+</head>
+<body>
+<h1>${record.name || 'Candidate Profile'}</h1>
+<div class="sub">
+  ${[record.phone, record.email, record.currentLocation].filter(Boolean).join(' | ')}
+</div>
+
+<div class="section">
+  <div class="sec-title">Professional Overview</div>
+  <table>
+    <tr><td class="lbl">Designation / Role:</td><td>${record.role || record.currentCompanyDesignation || record.jobTitle || 'N/A'}</td></tr>
+    <tr><td class="lbl">Current Company:</td><td>${record.currentCompanyName || 'N/A'}</td></tr>
+    <tr><td class="lbl">Total Experience:</td><td>${record.totalExperience || 'N/A'}</td></tr>
+    ${record.annualSalary ? `<tr><td class="lbl">Annual Salary:</td><td>${record.annualSalary}</td></tr>` : ''}
+    ${record.noticePeriod ? `<tr><td class="lbl">Notice Period:</td><td>${record.noticePeriod}</td></tr>` : ''}
+  </table>
+</div>
+
+${record.keySkills ? `
+<div class="section">
+  <div class="sec-title">Key Skills</div>
+  <p>${record.keySkills}</p>
+</div>` : ''}
+
+${record.summary ? `
+<div class="section">
+  <div class="sec-title">Summary</div>
+  <p>${record.summary}</p>
+</div>` : ''}
+
+<div class="section">
+  <div class="sec-title">Education</div>
+  <table>
+    ${record.ugDegree ? `<tr><td class="lbl">Undergraduate (UG):</td><td>${record.ugDegree} ${record.ugInstitute ? ' - ' + record.ugInstitute : ''} ${record.ugGraduationYear ? '(' + record.ugGraduationYear + ')' : ''}</td></tr>` : ''}
+    ${record.pgDegree ? `<tr><td class="lbl">Postgraduate (PG):</td><td>${record.pgDegree} ${record.pgInstitute ? ' - ' + record.pgInstitute : ''} ${record.pgGraduationYear ? '(' + record.pgGraduationYear + ')' : ''}</td></tr>` : ''}
+  </table>
+</div>
+
+<div class="section">
+  <div class="sec-title">ATS Screening Data</div>
+  <table>
+    <tr><td class="lbl">ATS Match Score:</td><td>${record.atsScore || 0}% (${record.atsStatus || 'Screened'})</td></tr>
+    <tr><td class="lbl">Sourced / Scanned By:</td><td>${record.scannedByName || 'System'}</td></tr>
+    <tr><td class="lbl">Scan Date:</td><td>${record.scanDate ? new Date(record.scanDate).toLocaleDateString('en-IN') : 'N/A'}</td></tr>
+  </table>
+</div>
+
+</body>
+</html>`;
+
+    res.setHeader('Content-Type', 'application/msword');
+    res.setHeader('Content-Disposition', `attachment; filename="${cleanDocName}"`);
+    return res.send(docContent);
+  } catch (err) {
+    next(err);
+  }
+};

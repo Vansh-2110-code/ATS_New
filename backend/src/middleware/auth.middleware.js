@@ -68,9 +68,19 @@ const authorize = (...roles) => {
     if (!req.user) {
       return res.status(403).json({ message: 'Insufficient permissions' });
     }
-    const userRole = req.user.role;
-    const effectiveRoles = ROLE_INHERITANCE[userRole] || [userRole];
-    const hasAccess = roles.some(role => effectiveRoles.includes(role));
+    const userRoles = [
+      req.user.role,
+      ...(Array.isArray(req.user.roles) ? req.user.roles : [])
+    ].filter(Boolean);
+
+    const effectiveRoles = new Set();
+    userRoles.forEach(r => {
+      effectiveRoles.add(r);
+      const inherited = ROLE_INHERITANCE[r] || [];
+      inherited.forEach(i => effectiveRoles.add(i));
+    });
+
+    const hasAccess = roles.some(role => effectiveRoles.has(role));
     if (!hasAccess) {
       return res.status(403).json({ message: 'Insufficient permissions' });
     }

@@ -80,6 +80,8 @@ const atsRecordSchema = new mongoose.Schema({
 
   /* ── Link to Candidate record (if later added) ───────────── */
   candidateRef:           { type: mongoose.Schema.Types.ObjectId, ref: 'Candidate', default: null },
+  resumePath:             { type: String, default: '' },
+  resumeOriginalName:     { type: String, default: '' },
 
 }, { timestamps: true });
 

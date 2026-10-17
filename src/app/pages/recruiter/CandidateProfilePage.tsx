@@ -137,6 +137,7 @@ export function CandidateProfilePage() {
   const [reassignReason, setReassignReason] = useState('');
   const [reassigning, setReassigning] = useState(false);
   const [reassignError, setReassignError] = useState('');
+  const [reassignKeepStatus, setReassignKeepStatus] = useState(true);
 
   // ── Tag Recruiter state (TL/Admin) ───────────────────────────
   const [tagOpen, setTagOpen] = useState(false);

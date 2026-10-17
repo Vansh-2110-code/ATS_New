@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Candidate = require('../models/Candidate');
 const Employee = require('../models/Employee');
 const User = require('../models/User');
@@ -11,9 +12,6 @@ const validator = require('validator');
 // Statuses where the 30-Day Lock is removed and any recruiter can tag the candidate to their name
 const UNLOCKED_REASSIGN_STATUSES = [
   'Not Eligible',
-  'No Response',
-  'Call Back',
-  'Hold',
   'No Show',
   'VNA Reject',
   'Test Reject',
@@ -987,7 +985,7 @@ exports.checkDuplicate = async (req, res, next) => {
       isUnlockedStatus: isUnlockedStatus || inGeneralPool,
       is30DayLocked,
       inGeneralPool,
-      canReassign: !is30DayLocked || inGeneralPool || req.user?.role === 'admin',
+      canReassign: !is30DayLocked || inGeneralPool || ['admin', 'tl', 'manager'].includes(req.user?.role) || (Array.isArray(req.user?.roles) && req.user.roles.some(r => ['admin', 'tl', 'manager'].includes(r))),
       candidate: {
         id: existing._id,
         name: existing.name,
@@ -1074,7 +1072,8 @@ if (typeof data.skills === 'string') {
     const daysSinceAssignment = Math.floor((Date.now() - new Date(lastActivity).getTime()) / (1000 * 60 * 60 * 24));
     const isUnlockedStatus = isStatusUnlockedForReassignment(existing.status) || isExistingExpiredOwnership;
 
-    if (req.user.role === 'recruiter') {
+    const isLeadershipUser = ['admin', 'tl', 'manager'].includes(req.user.role) || (Array.isArray(req.user.roles) && req.user.roles.some(r => ['admin', 'tl', 'manager'].includes(r)));
+    if (!isLeadershipUser && req.user.role === 'recruiter') {
       const candRecId = existing.assignedRecruiter ? String(existing.assignedRecruiter) : '';
       const reqUserId = req.user._id ? String(req.user._id) : (req.user.id ? String(req.user.id) : '');
       const candRecName = String(existing.assignedRecruiterName || '').trim().toLowerCase();
@@ -1091,8 +1090,26 @@ if (typeof data.skills === 'string') {
       }
     }
 
+    // TL and Admin manual ownership reassignment support
+    const isTLOrAdmin = ['admin', 'tl', 'manager'].includes(req.user.role) || (Array.isArray(req.user.roles) && req.user.roles.some(r => ['admin', 'tl', 'manager'].includes(r)));
+    if (isTLOrAdmin && data.assignedRecruiter) {
+      const targetUser = await User.findById(data.assignedRecruiter).select('name').lean();
+      if (targetUser) {
+        data.assignedRecruiterName = cleanRecruiterName(targetUser.name);
+        data.assignedAt = new Date();
+        data.ownershipStatus = 'Assigned';
+        if (!existing.stageHistory) existing.stageHistory = [];
+        existing.stageHistory.push({
+          stage: 'Re-assigned',
+          subStatus: `Ownership assigned to ${data.assignedRecruiterName} by ${req.user.name} (${req.user.role})`,
+          changedAt: new Date(),
+          changedBy: req.user._id,
+        });
+      }
+    }
+
     // Auto-assign to recruiter if candidate is unassigned, expired, unlocked status, or general data
-    if (req.user.role === 'recruiter') {
+    if (!isLeadershipUser && req.user.role === 'recruiter') {
       const isOwner = String(existing.assignedRecruiter || '') === String(req.user._id);
       const isExpired = !existing.assignedRecruiter || daysSinceAssignment >= 30 || isExistingExpiredOwnership;
       const isGeneral = inGeneralPool || existing.ownershipStatus === 'General Data';
@@ -1107,10 +1124,10 @@ if (typeof data.skills === 'string') {
       }
     }
 
-    if (existing.tlCallSubmitted && req.user.role !== 'admin' && !inGeneralPool) {
+    if (existing.tlCallSubmitted && !isLeadershipUser && !inGeneralPool) {
       return res.status(403).json({ message: 'Profile is locked after TL submission. Only Admin can edit.' });
     }
-    if (existing.isDuplicate && req.user.role !== 'admin') {
+    if (existing.isDuplicate && !isLeadershipUser) {
       return res.status(403).json({ message: 'This candidate is flagged as a duplicate. Contact Admin.' });
     }
     // ── Interview Status role enforcement ────────────────────────
@@ -1742,25 +1759,27 @@ exports.reassign = async (req, res, next) => {
 
     const inGeneralPool = isCandidateInGeneralPool(candidate);
 
-    if (req.user.role === 'recruiter') {
+    const userRoles = Array.isArray(req.user.roles) ? req.user.roles : [req.user.role];
+    const isLeadership = ['admin', 'tl', 'manager'].some(r => r === req.user.role || userRoles.includes(r));
+
+    if (!isLeadership) {
       if (!inGeneralPool && !isStatusUnlockedForReassignment(candidate.status)) {
         return res.status(403).json({
           message: 'Recruiters can only reassign candidates who are in the General Pool or have completed the 30-day validity period.'
         });
       }
-    } else if (req.user.role === 'tl') {
-      const allowedStatuses = ['Not Eligible', 'Client Duplicate', 'Duplicate-Client', 'No Response', 'Hold'];
-      if (!inGeneralPool && !allowedStatuses.includes(candidate.status)) {
-        return res.status(403).json({
-          message: `Team Leads can only reassign candidates with status "Not Eligible", "Client Duplicate", "No Response", or "Hold". Current candidate status is "${candidate.status}".`
-        });
-      }
     }
+
+    let targetRecruiter = null;
+    if (mongoose.Types.ObjectId.isValid(newRecruiterId)) {
+      targetRecruiter = await User.findById(newRecruiterId).select('name role roles').lean();
+    }
+    const resolvedRecruiterName = targetRecruiter ? targetRecruiter.name : cleanRecruiterName(newRecruiterName || '');
 
     // Preserve history before reset
     candidate.stageHistory.push({
       stage: candidate.currentStage || 'Applied',
-      subStatus: `Reassigned from ${candidate.assignedRecruiterName || 'previous recruiter'} to ${newRecruiterName}. Reason: ${reason || 'N/A'}`,
+      subStatus: `Reassigned from ${candidate.assignedRecruiterName || 'previous recruiter'} to ${resolvedRecruiterName}. Reason: ${reason || 'N/A'}`,
       changedAt: new Date(),
       changedBy: req.user._id,
       notes: `First call: ${candidate.firstCallStatus || 'N/A'} | Second call: ${candidate.secondCallStatus || 'N/A'} | Interview: ${candidate.interviewStatus || 'N/A'}`,
@@ -1805,7 +1824,7 @@ exports.reassign = async (req, res, next) => {
 
     // Reassign
     candidate.assignedRecruiter = newRecruiterId;
-    candidate.assignedRecruiterName = cleanRecruiterName(newRecruiterName || '');
+    candidate.assignedRecruiterName = resolvedRecruiterName;
     candidate.assignedAt = new Date();
     candidate.ownershipStatus = 'Assigned';
     candidate.recruiterChangedBy = req.user._id;
@@ -1818,7 +1837,7 @@ exports.reassign = async (req, res, next) => {
     await createLog({
       type: 'reassign', user: req.user._id, userName: req.user.name,
       role: req.user.role,
-      action: `Reassigned ${candidate.name} to ${newRecruiterName}. Reason: ${reason || 'N/A'}`,
+      action: `Reassigned ${candidate.name} to ${resolvedRecruiterName}. Reason: ${reason || 'N/A'}`,
       target: candidate._id.toString(), ip: req.ip,
     });
 

@@ -1021,7 +1021,7 @@ class ApiService {
     });
   }
 
-  async reassignCandidate(id: string, data: { newRecruiterId: string; newRecruiterName: string; reason?: string }) {
+  async reassignCandidate(id: string, data: { newRecruiterId: string; newRecruiterName?: string; reason?: string; keepStatus?: boolean }) {
     return this.request<any>(`/candidates/${id}/reassign`, {
       method: 'POST',
       body: JSON.stringify(data),
@@ -1219,6 +1219,11 @@ class ApiService {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
+  }
+
+  getAtsRecordResumeUrl(id: string) {
+    const token = this.getToken() || localStorage.getItem('ats_token') || '';
+    return `${API_BASE}/ats-records/${id}/resume?token=${token}`;
   }
 
   // ─── Recruiter Portals ───

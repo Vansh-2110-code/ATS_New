@@ -1,3 +1,4 @@
+const AtsRecord = require('../models/AtsRecord');
 const Candidate = require('../models/Candidate');
 const WalkIn = require('../models/WalkIn');
 const Job = require('../models/Job');
@@ -82,13 +83,46 @@ const buildTaskVisibilityQuery = async (user) => {
   return { $or: [{ assignedTo: user._id }, { assignedBy: user._id }] };
 };
 
-const formatCandidateResult = (candidate) => ({
-  id: candidate._id,
-  type: 'candidate',
-  module: 'Candidates',
-  title: candidate.name || 'Unnamed Candidate',
-  subtitle: [candidate.phone, candidate.email, candidate.positionApplied, candidate.clientName, candidate.status, candidate.assignedRecruiterName ? `Recruiter: ${candidate.assignedRecruiterName}` : ''].filter(Boolean).join(' • '),
-  path: `/recruiter/candidate/${candidate._id}`,
+const formatCandidateResult = (candidate) => {
+  const hasResume = Boolean(candidate.resumePath);
+  let resumeUrl = null;
+  if (candidate.resumePath) {
+    resumeUrl = candidate.resumePath.startsWith('http')
+      ? candidate.resumePath
+      : `${candidate.resumePath.startsWith('/') ? '' : '/'}${candidate.resumePath}`;
+  }
+
+  const subtitleParts = [
+    candidate.phone,
+    candidate.email,
+    candidate.positionApplied,
+    candidate.clientName || candidate.companyName,
+    candidate.status,
+    candidate.assignedRecruiterName ? `Recruiter: ${candidate.assignedRecruiterName}` : '',
+    hasResume ? '📄 Resume Available' : 'No Resume'
+  ].filter(Boolean);
+
+  return {
+    id: candidate._id,
+    type: 'candidate',
+    module: 'Candidates',
+    title: candidate.name || 'Unnamed Candidate',
+    subtitle: subtitleParts.join(' • '),
+    path: `/recruiter/candidate/${candidate._id}`,
+    hasResume,
+    resumeUrl,
+    resumeOriginalName: candidate.resumeOriginalName || (hasResume ? 'Candidate_Resume.pdf' : null),
+  };
+};
+
+const formatAtsRecordResult = (rec) => ({
+  id: rec._id,
+  type: 'atsRecord',
+  module: 'ATS Resumes',
+  title: rec.name || 'Scanned Resume',
+  subtitle: [`Score: ${rec.atsScore || 0}%`, rec.jobTitle, rec.phone, rec.email, rec.atsStatus].filter(Boolean).join(' • '),
+  path: '/admin/ats-records',
+  hasResume: false,
 });
 
 const formatWalkInResult = (walkIn) => ({
@@ -170,23 +204,28 @@ exports.globalSearch = async (req, res, next) => {
     const perBucket = Math.max(4, Math.ceil(limit / 8));
 
     const qRegex = { $regex: escapeRegex(q), $options: 'i' };
-    const candidateQuery = {
-      $or: [
-        { name: qRegex },
-        { phone: qRegex },
-        { email: qRegex },
-        { skills: qRegex },
-        { candidateId: qRegex },
-        { clientName: qRegex },
-        { companyName: qRegex },
-        { positionApplied: qRegex },
-        { jrNumber: qRegex },
-        { status: qRegex },
-        { currentStage: qRegex },
-        { assignedRecruiterName: qRegex },
-        { location: qRegex }
-      ]
-    };
+    const isResumeSearch = ['resume', 'resumes', 'cv', 'cvs'].includes(q.toLowerCase());
+    const candidateOrList = [
+      { name: qRegex },
+      { phone: qRegex },
+      { email: qRegex },
+      { skills: qRegex },
+      { candidateId: qRegex },
+      { clientName: qRegex },
+      { companyName: qRegex },
+      { positionApplied: qRegex },
+      { jrNumber: qRegex },
+      { status: qRegex },
+      { currentStage: qRegex },
+      { assignedRecruiterName: qRegex },
+      { location: qRegex },
+      { resumeOriginalName: qRegex },
+      { resumePath: qRegex }
+    ];
+    if (isResumeSearch) {
+      candidateOrList.push({ resumePath: { $exists: true, $ne: null, $ne: '' } });
+    }
+    const candidateQuery = { $or: candidateOrList };
     const walkInQuery = buildDynamicQuery(WalkIn, q);
     const jobQuery = buildDynamicQuery(Job, q);
     const companyQuery = buildDynamicQuery(Company, q);
@@ -202,7 +241,7 @@ exports.globalSearch = async (req, res, next) => {
         Candidate.find({ ...candidateVisibility, ...candidateQuery })
           .sort('-updatedAt')
           .limit(candidateLimit)
-          .select('name email phone status positionApplied clientName companyName assignedRecruiterName source updatedAt')
+          .select('name email phone status positionApplied clientName companyName assignedRecruiterName resumePath resumeOriginalName source updatedAt')
           .lean()
           .then(items => items.map(formatCandidateResult))
       );

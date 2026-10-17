@@ -956,6 +956,17 @@ export function AtsDashboardPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={api.getAtsRecordResumeUrl(viewingRecord._id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  download
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                  title="Download candidate resume"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download Resume
+                </a>
                 <button
                   type="button"
                   onClick={() => {
@@ -1131,6 +1142,17 @@ export function AtsDashboardPage() {
                 Record ID: <span className="font-mono text-slate-600">{viewingRecord._id}</span>
               </div>
               <div className="flex items-center gap-2">
+                <a
+                  href={api.getAtsRecordResumeUrl(viewingRecord._id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  download
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                  title="Download candidate resume"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download Resume
+                </a>
                 <button
                   type="button"
                   onClick={() => {

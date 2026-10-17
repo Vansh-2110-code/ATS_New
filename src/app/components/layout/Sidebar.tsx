@@ -7,7 +7,7 @@ import {
   DollarSign, TrendingUp, UserCog, Activity, ChevronRight,
   ScanLine, CalendarCheck, UserPlus, ListChecks, Briefcase, FileCheck,
   Building2, Database, ClipboardCheck, CheckSquare, MonitorCheck, Mail, LayoutGrid, Upload, Settings, Globe, XCircle, RotateCcw,
-  BookOpen, Play, ShieldCheck, Award, MessageSquare, FileSignature,
+  BookOpen, Play, ShieldCheck, Award, MessageSquare, FileSignature, ChevronDown, Layers,
 } from 'lucide-react';
 import { useAuth, Role, ROLE_DASHBOARD } from '../../context/AuthContext';
 import { useInternalChat } from '../../context/InternalChatContext';
@@ -144,6 +144,115 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
+interface NavGroupDef {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  hrefs: string[];
+}
+
+const NAV_GROUPS: NavGroupDef[] = [
+  {
+    id: 'pipeline',
+    label: 'Candidate Pipeline',
+    icon: Users,
+    hrefs: [
+      '/recruiter/resumes',
+      '/recruiter/eligible-tracker',
+      '/tl/eligible-tracker',
+      '/manager/eligible-tracker',
+      '/admin/eligible-tracker',
+      '/recruiter/add',
+      '/recruiter/walkin-queue',
+      '/recruiter/walkins',
+      '/recruiter/interviews',
+      '/admin/joining',
+      '/recruiter/joining',
+      '/admin/offer-letters',
+      '/recruiter/rejected',
+    ],
+  },
+  {
+    id: 'sourcing',
+    label: 'Sourcing & Database',
+    icon: Database,
+    hrefs: [
+      '/recruiter/scan',
+      '/recruiter/ats-database',
+      '/admin/ats-records',
+      '/admin/candidates',
+      '/mis',
+      '/admin/mis-tracker',
+      '/admin/excel-import',
+      '/recruiter-portals',
+    ],
+  },
+  {
+    id: 'jobs',
+    label: 'Jobs & Requirements',
+    icon: Briefcase,
+    hrefs: [
+      '/admin/jobs',
+      '/recruiter/jobs/new',
+      '/recruiter/jobs/bulk',
+      '/admin/companies',
+    ],
+  },
+  {
+    id: 'team',
+    label: 'Team & Operations',
+    icon: UserCheck,
+    hrefs: [
+      '/tl/my-team',
+      '/admin/attendance',
+      '/admin/leaves',
+      '/tl/leaves',
+      '/manager/leaves',
+      '/employee/leaves',
+      '/admin/tasks',
+      '/tl/performance-reviews',
+      '/manager/performance-reviews',
+      '/admin/performance-reviews',
+      '/manager/reports',
+      '/admin/tl-activity',
+      '/manager/tl-activity',
+      '/recruiter/policy',
+      '/tl/policy',
+      '/manager/policy',
+    ],
+  },
+  {
+    id: 'payroll',
+    label: 'Payroll & Financials',
+    icon: DollarSign,
+    hrefs: [
+      '/payroll/dashboard',
+      '/payroll/run',
+      '/payroll/employees',
+      '/payroll/payslips',
+      '/salary-slip',
+      '/payroll/incentives',
+      '/recruiter/incentives',
+      '/payroll/masters',
+      '/revenue',
+      '/salary',
+      '/credit-notes',
+    ],
+  },
+  {
+    id: 'system',
+    label: 'System & Security',
+    icon: Settings,
+    hrefs: [
+      '/admin/users',
+      '/admin/access',
+      '/admin/field-config',
+      '/email',
+      '/admin/logs',
+    ],
+  },
+];
+
 const ROLE_CATEGORIES: Record<string, string[]> = {
   superadmin: ['Admin', 'Payroll', 'Manager', 'Team Lead', 'Recruiter'],
   admin: ['Admin', 'Payroll', 'Manager', 'Team Lead', 'Recruiter'],
@@ -164,6 +273,43 @@ export function Sidebar({ onClose }: SidebarProps) {
   const navigate = useNavigate();
   const [showCheckOutFaceModal, setShowCheckOutFaceModal] = useState(false);
   const [joiningApproved, setJoiningApproved] = useState(false);
+
+  // Grouped dropdown mode vs Classic flat mode (toggleable & remembers preference)
+  const [isGroupedView, setIsGroupedView] = useState(() => {
+    return localStorage.getItem('ats_sidebar_mode') !== 'flat';
+  });
+
+  const toggleViewMode = () => {
+    const next = !isGroupedView;
+    setIsGroupedView(next);
+    localStorage.setItem('ats_sidebar_mode', next ? 'grouped' : 'flat');
+  };
+
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    NAV_GROUPS.forEach(g => {
+      if (g.hrefs.some(h => location.pathname.startsWith(h))) {
+        initial[g.id] = true;
+      }
+    });
+    if (Object.keys(initial).length === 0) {
+      initial['pipeline'] = true;
+    }
+    return initial;
+  });
+
+  // Auto-expand group when active route changes
+  useEffect(() => {
+    NAV_GROUPS.forEach(g => {
+      if (g.hrefs.some(h => location.pathname.startsWith(h))) {
+        setOpenGroups(prev => ({ ...prev, [g.id]: true }));
+      }
+    });
+  }, [location.pathname]);
+
+  const toggleGroup = (groupId: string) => {
+    setOpenGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+  };
 
   useEffect(() => {
     if (user && ['recruiter', 'tl'].includes(user.role) && user.employeeId) {
@@ -228,6 +374,27 @@ export function Sidebar({ onClose }: SidebarProps) {
     return location.pathname.startsWith(href);
   };
 
+  // Grouping partitions
+  const isTopItem = (href: string) => {
+    return ['/recruiter', '/tl', '/manager', '/admin', '/mis', '/business-development'].includes(href);
+  };
+  const isBottomItem = (href: string) => href === '/chat';
+
+  const topItems = filteredNav.filter(item => isTopItem(item.href));
+  const bottomItems = filteredNav.filter(item => isBottomItem(item.href));
+
+  const allGroupHrefs = new Set(NAV_GROUPS.flatMap(g => g.hrefs));
+  const groupsWithItems = NAV_GROUPS.map(group => {
+    const items = filteredNav.filter(item => group.hrefs.includes(item.href));
+    return { ...group, items };
+  }).filter(group => group.items.length > 0);
+
+  const otherItems = filteredNav.filter(item => 
+    !isTopItem(item.href) && 
+    !isBottomItem(item.href) && 
+    !allGroupHrefs.has(item.href)
+  );
+
   return (
     <div className="flex flex-col h-full bg-white border-r border-slate-100">
       {/* Logo */}
@@ -265,18 +432,14 @@ export function Sidebar({ onClose }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 overflow-y-auto">
-        <div className="space-y-4">
-          {allowedCategories.filter(cat => filteredNav.some(item => item.category === cat)).map((category) => {
-            const categoryItems = filteredNav.filter(item => item.category === category);
-            return (
-              <div key={category} className="space-y-1">
-                {allowedCategories.length > 1 && (
-                  <p className="text-[10px] font-bold text-slate-400 px-3 uppercase tracking-wider mb-2 mt-2">
-                    {category} Portal
-                  </p>
-                )}
-                {categoryItems.map((item) => {
+      <nav className="flex-1 px-3 py-3 overflow-y-auto">
+        {isGroupedView ? (
+          /* ── Modern Collapsible Grouped Mode ── */
+          <div className="space-y-3">
+            {/* Top Standalone Quick Links (Dashboard, BD) */}
+            {topItems.length > 0 && (
+              <div className="space-y-1">
+                {topItems.map((item) => {
                   const active = isActive(item.href);
                   const Icon = item.icon;
                   return (
@@ -284,17 +447,141 @@ export function Sidebar({ onClose }: SidebarProps) {
                       key={item.href}
                       to={item.href}
                       onClick={onClose}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors group ${
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all group ${
                         active
-                          ? 'bg-green-600 text-white'
-                          : 'text-slate-600 hover:bg-green-50 hover:text-green-800'
+                          ? 'bg-green-600 text-white font-semibold shadow-sm'
+                          : 'text-slate-700 hover:bg-green-50 hover:text-green-800'
                       }`}
-                      style={{ fontWeight: active ? 600 : 400 }}
                     >
                       <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-white' : 'text-slate-400 group-hover:text-green-600'}`} />
-                      <span className="flex-1">
-                        {item.href === '/admin/tasks' && user.role !== 'admin' ? 'My Tasks' : item.label}
+                      <span className="flex-1 font-medium">{item.label}</span>
+                      {active && <ChevronRight className="w-3.5 h-3.5 opacity-80" />}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Accordion Groups */}
+            <div className="space-y-2 pt-1">
+              {groupsWithItems.map((group) => {
+                const isOpen = openGroups[group.id] ?? false;
+                const isGroupActive = group.items.some(i => isActive(i.href));
+                const GroupIcon = group.icon;
+
+                return (
+                  <div key={group.id} className="rounded-xl overflow-hidden">
+                    {/* Group Header Button */}
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-xs font-semibold rounded-lg transition-all select-none ${
+                        isGroupActive
+                          ? 'text-emerald-800 bg-emerald-50/80 font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <GroupIcon className={`w-4 h-4 flex-shrink-0 ${isGroupActive ? 'text-emerald-600' : 'text-slate-400'}`} />
+                        <span className="tracking-tight text-[12px]">{group.label}</span>
+                        {isGroupActive && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" title="Active Section"></span>
+                        )}
                       </span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-500">
+                          {group.items.length}
+                        </span>
+                        <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-90 text-slate-600' : ''}`} />
+                      </span>
+                    </button>
+
+                    {/* Group Children Links */}
+                    {isOpen && (
+                      <div className="ml-3 pl-2.5 border-l-2 border-slate-100 space-y-0.5 py-1 mt-0.5">
+                        {group.items.map((item) => {
+                          const active = isActive(item.href);
+                          const Icon = item.icon;
+                          return (
+                            <Link
+                              key={item.href}
+                              to={item.href}
+                              onClick={onClose}
+                              className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm transition-all group ${
+                                active
+                                  ? 'bg-green-600 text-white font-semibold shadow-sm'
+                                  : 'text-slate-600 hover:bg-green-50 hover:text-green-800'
+                              }`}
+                            >
+                              <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${active ? 'text-white' : 'text-slate-400 group-hover:text-green-600'}`} />
+                              <span className="flex-1 text-[13px] truncate">
+                                {item.href === '/admin/tasks' && user.role !== 'admin' ? 'My Tasks' : item.label}
+                              </span>
+                              {item.href === '/chat' && totalUnread > 0 && (
+                                <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full transition-colors ${
+                                  active ? 'bg-white text-emerald-700' : 'bg-emerald-600 text-white shadow-sm'
+                                }`}>
+                                  {totalUnread > 99 ? '99+' : totalUnread}
+                                </span>
+                              )}
+                              {active && <ChevronRight className="w-3 h-3 opacity-70" />}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Other Items Fallback (if any) */}
+              {otherItems.length > 0 && (
+                <div className="rounded-xl overflow-hidden">
+                  <div className="ml-3 pl-2.5 border-l-2 border-slate-100 space-y-0.5 py-1">
+                    {otherItems.map((item) => {
+                      const active = isActive(item.href);
+                      const Icon = item.icon;
+                      return (
+                        <Link
+                          key={item.href}
+                          to={item.href}
+                          onClick={onClose}
+                          className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm transition-all group ${
+                            active
+                              ? 'bg-green-600 text-white font-semibold shadow-sm'
+                              : 'text-slate-600 hover:bg-green-50 hover:text-green-800'
+                          }`}
+                        >
+                          <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${active ? 'text-white' : 'text-slate-400 group-hover:text-green-600'}`} />
+                          <span className="flex-1 text-[13px] truncate">{item.label}</span>
+                          {active && <ChevronRight className="w-3 h-3 opacity-70" />}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Standalone Items (Team Chat) */}
+            {bottomItems.length > 0 && (
+              <div className="pt-2 border-t border-slate-100 space-y-1">
+                {bottomItems.map((item) => {
+                  const active = isActive(item.href);
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      to={item.href}
+                      onClick={onClose}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all group ${
+                        active
+                          ? 'bg-green-600 text-white font-semibold shadow-sm'
+                          : 'text-slate-700 hover:bg-green-50 hover:text-green-800'
+                      }`}
+                    >
+                      <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-white' : 'text-slate-400 group-hover:text-green-600'}`} />
+                      <span className="flex-1 font-medium">{item.label}</span>
                       {item.href === '/chat' && totalUnread > 0 && (
                         <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full transition-colors ${
                           active ? 'bg-white text-emerald-700' : 'bg-emerald-600 text-white shadow-sm'
@@ -302,49 +589,108 @@ export function Sidebar({ onClose }: SidebarProps) {
                           {totalUnread > 99 ? '99+' : totalUnread}
                         </span>
                       )}
-                      {active && <ChevronRight className="w-3 h-3 opacity-70" />}
+                      {active && <ChevronRight className="w-3.5 h-3.5 opacity-80" />}
                     </Link>
                   );
                 })}
               </div>
-            );
-          })}
-        </div>
+            )}
+          </div>
+        ) : (
+          /* ── Classic Flat Category List (100% Original Fallback) ── */
+          <div className="space-y-4">
+            {allowedCategories.filter(cat => filteredNav.some(item => item.category === cat)).map((category) => {
+              const categoryItems = filteredNav.filter(item => item.category === category);
+              return (
+                <div key={category} className="space-y-1">
+                  {allowedCategories.length > 1 && (
+                    <p className="text-[10px] font-bold text-slate-400 px-3 uppercase tracking-wider mb-2 mt-2">
+                      {category} Portal
+                    </p>
+                  )}
+                  {categoryItems.map((item) => {
+                    const active = isActive(item.href);
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.href}
+                        to={item.href}
+                        onClick={onClose}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors group ${
+                          active
+                            ? 'bg-green-600 text-white'
+                            : 'text-slate-600 hover:bg-green-50 hover:text-green-800'
+                        }`}
+                        style={{ fontWeight: active ? 600 : 400 }}
+                      >
+                        <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-white' : 'text-slate-400 group-hover:text-green-600'}`} />
+                        <span className="flex-1">
+                          {item.href === '/admin/tasks' && user.role !== 'admin' ? 'My Tasks' : item.label}
+                        </span>
+                        {item.href === '/chat' && totalUnread > 0 && (
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full transition-colors ${
+                            active ? 'bg-white text-emerald-700' : 'bg-emerald-600 text-white shadow-sm'
+                          }`}>
+                            {totalUnread > 99 ? '99+' : totalUnread}
+                          </span>
+                        )}
+                        {active && <ChevronRight className="w-3 h-3 opacity-70" />}
+                      </Link>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </nav>
 
       {/* Bottom Actions */}
-      <div className="border-t border-slate-100">
+      <div className="border-t border-slate-100 p-3 space-y-1.5">
+        {/* View Mode Switcher Toggle */}
+        <button
+          type="button"
+          onClick={toggleViewMode}
+          className="flex items-center justify-between px-2.5 py-1.5 w-full text-[11px] font-medium rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors border border-dashed border-slate-200"
+          title="Toggle between grouped dropdowns and flat list"
+        >
+          <span className="flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-slate-400" />
+            <span>Menu Layout:</span>
+          </span>
+          <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px] border border-emerald-200">
+            {isGroupedView ? 'Dropdowns' : 'Classic Flat'}
+          </span>
+        </button>
+
         {(user?.isDemoAccount || user?.email?.toLowerCase().includes('demo')) && (
-          <div className="px-3 pt-3">
-            <button
-              onClick={async () => {
-                if (window.confirm('Reset corporate demo environment? All temporary test additions will be purged and baseline demo data restored.')) {
-                  try {
-                    await api.resetDemoData();
-                    alert('✅ Demo environment reset successfully! Baseline demo data restored.');
-                    window.location.reload();
-                  } catch (err: any) {
-                    alert('Failed to reset demo environment: ' + (err.message || 'Error'));
-                  }
-                }
-              }}
-              className="flex items-center justify-center gap-2 px-3 py-2 w-full text-xs font-bold rounded-lg text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Reset Demo Data
-            </button>
-          </div>
-        )}
-        {/* Logout Button */}
-        <div className="px-3 py-3 space-y-0.5">
           <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2.5 w-full text-left rounded-lg text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
+            onClick={async () => {
+              if (window.confirm('Reset corporate demo environment? All temporary test additions will be purged and baseline demo data restored.')) {
+                try {
+                  await api.resetDemoData();
+                  alert('Demo environment reset successfully! Baseline demo data restored.');
+                  window.location.reload();
+                } catch (err: any) {
+                  alert('Failed to reset demo environment: ' + (err.message || 'Error'));
+                }
+              }
+            }}
+            className="flex items-center justify-center gap-2 px-3 py-2 w-full text-xs font-bold rounded-lg text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 transition-colors"
           >
-            <LogOut className="w-4 h-4 text-slate-400" />
-            Sign Out
+            <RotateCcw className="w-3.5 h-3.5" />
+            Reset Demo Data
           </button>
-        </div>
+        )}
+
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-3 py-2 w-full text-left rounded-lg text-sm text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
+        >
+          <LogOut className="w-4 h-4 text-slate-400" />
+          Sign Out
+        </button>
       </div>
 
       <FaceVerificationModal
