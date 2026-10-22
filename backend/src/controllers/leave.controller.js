@@ -162,6 +162,11 @@ exports.getPendingRequests = async (req, res, next) => {
       query.$or = [{ user: { $in: memberIds } }, { user: req.user._id }];
     }
 
+    if (req.user.role === 'tl') {
+      query.status = { $in: ['Pending', 'Pending TL Approval'] };
+    } else if (['admin', 'manager', 'superadmin'].includes(req.user.role)) {
+      query.status = { $in: ['Pending', 'Pending Admin Approval', 'Pending TL Approval'] };
+    }
     const requests = await LeaveRequest.find(query)
       .populate('user', 'name email role employeeId')
       .sort('-createdAt')
@@ -185,13 +190,45 @@ exports.reviewRequest = async (req, res, next) => {
     if (!leaveReq) {
       return res.status(404).json({ message: 'Leave request not found' });
     }
-    if (leaveReq.status !== 'Pending') {
+    const pendingStatuses = ['Pending', 'Pending TL Approval', 'Pending Admin Approval'];
+    if (!pendingStatuses.includes(leaveReq.status)) {
       return res.status(400).json({ message: `Leave request is already ${leaveReq.status}` });
+    }
+
+    const isTL = req.user.role === 'tl';
+    const isAdminOrManager = ['admin', 'manager', 'superadmin'].includes(req.user.role);
+
+    if (isTL && leaveReq.status === 'Pending Admin Approval') {
+      return res.status(400).json({ message: 'Already approved by Team Leader. Awaiting Admin/Manager approval.' });
     }
 
     const balance = await getOrInitLeaveBalance(leaveReq.user);
 
     if (action === 'Approve') {
+      // Step 1: TL Approval moves request to 'Pending Admin Approval'
+      if (isTL && leaveReq.status !== 'Pending Admin Approval') {
+        leaveReq.status = 'Pending Admin Approval';
+        leaveReq.tlApproval = {
+          approvedBy: req.user._id,
+          approvedByName: req.user.name,
+          approvedAt: new Date(),
+          remarks: reviewRemarks || ''
+        };
+        await leaveReq.save();
+
+        await createLog({
+          type: 'leave', user: req.user._id, userName: req.user.name,
+          role: req.user.role, action: `TL Approved leave for ${leaveReq.name} (forwarded to Admin/Manager)`,
+          details: { requestId: leaveReq._id, remarks: reviewRemarks },
+        });
+
+        return res.json({
+          message: 'Leave approved by Team Leader and forwarded to Admin/Manager for final approval',
+          leaveRequest: leaveReq
+        });
+      }
+
+      // Step 2: Final Admin/Manager Approval
       leaveReq.status = 'Approved';
       leaveReq.reviewedBy = req.user._id;
       leaveReq.reviewedByName = req.user.name;

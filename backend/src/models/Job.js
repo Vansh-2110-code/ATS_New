@@ -31,7 +31,19 @@ const jobSchema = new mongoose.Schema({
   hrEmail: { type: String, trim: true },
   spocName: { type: String, trim: true },
 
-  // Multi-recruiter assignment
+  // Allocation & Priority
+  allocationType: { type: String, enum: ['Open to all', 'Select names'], default: 'Open to all' },
+  allocatedUsers: [{
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    name: { type: String, trim: true },
+    email: { type: String, trim: true },
+    role: { type: String, trim: true },
+    employeeId: { type: String, trim: true },
+  }],
+  postedByName: { type: String, trim: true },
+  postedByEmail: { type: String, trim: true },
+
+  // Multi-recruiter assignment (legacy compatibility)
   assignedRecruiters: [{
     recruiterId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     recruiterName: { type: String },

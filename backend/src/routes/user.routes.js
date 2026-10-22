@@ -15,5 +15,6 @@ router.delete('/:id', authorize('admin'), ctrl.remove);
 router.patch('/:id/status', authorize('admin'), ctrl.toggleStatus);
 router.post('/:id/reset-password', authorize('admin'), ctrl.resetPassword);
 router.post('/reset-demo-data', authorize('admin'), ctrl.resetDemoData);
+router.post('/activate-all-suspended', authorize('admin'), ctrl.activateAllSuspended);
 
 module.exports = router;

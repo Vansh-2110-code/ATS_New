@@ -17,7 +17,7 @@ const STATUS_COLORS: Record<string, string> = {
 const EMPTY_FORM = {
   companyName: '', jrNumber: '', jobTitle: '', division: 'BPO',
   jobType: '', experience: '', location: '', positions: 1,
-  skills: '', description: '', requirements: '', status: 'Open',
+  skills: '', description: '', requirements: '', status: 'Open', priority: 'Medium', allocationType: 'Open to all', allocatedUsers: [] as any[],
 };
 
 export function JobsListPage() {
@@ -32,6 +32,13 @@ export function JobsListPage() {
 
   const [jobs, setJobs] = useState<any[]>([]);
   const [companiesList, setCompaniesList] = useState<any[]>([]);
+  const [assigneesList, setAssigneesList] = useState<any[]>([]);
+  useEffect(() => {
+    api.getRecruiters().then((res: any) => {
+      const list = Array.isArray(res) ? res : (res.users || res.recruiters || []);
+      setAssigneesList(list.filter((u: any) => u.status !== 'Suspended'));
+    }).catch(() => {});
+  }, []);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -444,6 +451,97 @@ export function JobsListPage() {
                     <option value="Lateral">Lateral</option>
                   </select>
                 </div>
+                {/* Priority */}
+                <div>
+                  <label className="text-xs text-slate-500 mb-1 block" style={{ fontWeight: 500 }}>Priority *</label>
+                  <select
+                    value={form.priority}
+                    onChange={e => setForm(prev => ({ ...prev, priority: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none"
+                  >
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+
+                {/* Allocation */}
+                <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50 space-y-2">
+                  <label className="text-xs text-slate-700 block font-semibold">Allocation *</label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer font-medium">
+                      <input
+                        type="radio"
+                        name="allocationType"
+                        value="Open to all"
+                        checked={form.allocationType !== 'Select names'}
+                        onChange={() => setForm(prev => ({ ...prev, allocationType: 'Open to all' }))}
+                      />
+                      <span>Open to all</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-slate-700 cursor-pointer font-medium">
+                      <input
+                        type="radio"
+                        name="allocationType"
+                        value="Select names"
+                        checked={form.allocationType === 'Select names'}
+                        onChange={() => setForm(prev => ({ ...prev, allocationType: 'Select names' }))}
+                      />
+                      <span>Select names (Recruiters & Team Leaders)</span>
+                    </label>
+                  </div>
+
+                  {form.allocationType === 'Select names' && (
+                    <div className="space-y-2 pt-1">
+                      <div className="flex flex-wrap gap-1.5 min-h-[32px] p-2 bg-white border border-slate-200 rounded-lg">
+                        {(form.allocatedUsers || []).map((u: any) => (
+                          <span key={u.userId || u._id || u.id || u.name} className="inline-flex items-center gap-1 text-xs bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full font-medium">
+                            <span>{u.name} ({u.role?.toUpperCase() || 'REC'})</span>
+                            <button
+                              type="button"
+                              onClick={() => setForm(prev => ({ ...prev, allocatedUsers: prev.allocatedUsers.filter((au: any) => (au.userId || au._id || au.id || au.name) !== (u.userId || u._id || u.id || u.name)) }))}
+                              className="text-emerald-600 hover:text-red-500"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                        {(!form.allocatedUsers || form.allocatedUsers.length === 0) && (
+                          <span className="text-xs text-slate-400 italic">No assignees selected yet</span>
+                        )}
+                      </div>
+
+                      <select
+                        onChange={e => {
+                          const uid = e.target.value;
+                          if (!uid) return;
+                          const found = assigneesList.find((u: any) => (u._id || u.id) === uid);
+                          if (found) {
+                            setForm(prev => ({
+                              ...prev,
+                              allocatedUsers: [
+                                ...(prev.allocatedUsers || []).filter((au: any) => (au.userId || au._id || au.id) !== uid),
+                                { userId: found._id || found.id, name: found.name, role: found.role, email: found.email, employeeId: found.employeeId }
+                              ]
+                            }));
+                          }
+                          e.target.value = '';
+                        }}
+                        className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg outline-none"
+                      >
+                        <option value="">+ Add Recruiter or Team Leader (Active only)...</option>
+                        {assigneesList
+                          .filter((u: any) => u.status !== 'Suspended' && !(form.allocatedUsers || []).some((au: any) => (au.userId || au._id || au.id) === (u._id || u.id)))
+                          .map((u: any) => (
+                            <option key={u._id || u.id} value={u._id || u.id}>
+                              {u.name} — {u.role === 'tl' ? 'Team Lead' : 'Recruiter'} ({u.employeeId})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <label className="text-xs text-slate-500 mb-1 block" style={{ fontWeight: 500 }}>Status</label>
                   <select value={form.status} onChange={e => setForm(prev => ({ ...prev, status: e.target.value }))}

@@ -1,3 +1,9 @@
+
+function cleanRecNameRegex(name) {
+  if (!name || typeof name !== 'string') return null;
+  const escaped = name.trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+  return new RegExp('^' + escaped + '$', 'i');
+}
 const mongoose = require('mongoose');
 const Candidate = require('../models/Candidate');
 const CallLog = require('../models/CallLog');
@@ -78,9 +84,14 @@ exports.recruiterDashboard = async (req, res, next) => {
       const recOr = [];
       if (filterRecruiter) recOr.push({ assignedRecruiter: filterRecruiter });
       if (filterRecruiterName) {
-        recOr.push({ assignedRecruiterName: filterRecruiterName });
-        recOr.push({ sourcedBy: filterRecruiterName });
-        recOr.push({ recruiterName: filterRecruiterName });
+        const rReg = cleanRecNameRegex(filterRecruiterName);
+        if (rReg) {
+          recOr.push({ assignedRecruiterName: rReg });
+          recOr.push({ sourcedBy: rReg });
+          recOr.push({ recruiterName: rReg });
+        } else {
+          recOr.push({ assignedRecruiterName: filterRecruiterName });
+        }
       }
       andConditions.push({ $or: recOr });
     } else if (teamScopeFilter) {
@@ -306,9 +317,9 @@ exports.tlDashboard = async (req, res, next) => {
         {
           $or: [
             { assignedRecruiter: rId },
-            { assignedRecruiterName: rName },
-            { sourcedBy: rName },
-            { recruiterName: rName }
+            { assignedRecruiterName: cleanRecNameRegex(rName) || rName },
+            { sourcedBy: cleanRecNameRegex(rName) || rName },
+            { recruiterName: cleanRecNameRegex(rName) || rName }
           ]
         }
       ];

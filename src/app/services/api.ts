@@ -317,6 +317,10 @@ class ApiService {
     return this.request<any>('/users/reset-demo-data', { method: 'POST' });
   }
 
+  async activateAllSuspendedUsers() {
+    return this.request<any>('/users/activate-all-suspended', { method: 'POST' });
+  }
+
   async updateCandidate(id: string, data: FormData | Record<string, any>) {
     const body = data instanceof FormData ? data : JSON.stringify(data);
     return this.request<any>(`/candidates/${id}`, { method: 'PUT', body: body as any });

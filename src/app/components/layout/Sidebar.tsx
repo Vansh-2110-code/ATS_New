@@ -27,7 +27,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard',        href: '/recruiter',               icon: LayoutDashboard, roles: ['recruiter', 'spoc'], category: 'Recruiter' },
   { label: 'Business Development', href: '/business-development', icon: TrendingUp, roles: ['admin', 'manager', 'tl', 'recruiter', 'bd', 'business_developer', 'spoc'], category: 'Recruiter' },
   { label: 'Candidate Management', href: '/recruiter/resumes',       icon: Users,           roles: ['recruiter', 'spoc', 'tl'], category: 'Recruiter' },
-  { label: 'Eligible Tracker', href: '/recruiter/eligible-tracker',  icon: ClipboardCheck,  roles: ['recruiter', 'spoc', 'tl', 'manager', 'admin'], category: 'Recruiter' },
+  { label: 'Eligible Tracker', href: '/recruiter/eligible-tracker',  icon: ClipboardCheck,  roles: ['recruiter', 'spoc'], category: 'Recruiter' },
   { label: 'Rejected Bucket',  href: '/recruiter/rejected',      icon: XCircle,         roles: ['recruiter', 'spoc', 'tl', 'manager', 'admin'], category: 'Recruiter' },
   { label: 'Add Candidate',    href: '/recruiter/add',           icon: UserPlus,        roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
   { label: 'Walk-In Queue',    href: '/recruiter/walkin-queue',  icon: ListChecks,      roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
@@ -52,7 +52,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Leave Approvals',  href: '/tl/leaves',               icon: CalendarCheck,   roles: ['tl'], category: 'Team Lead' },
   { label: 'Joining Approvals', href: '/admin/joining',          icon: FileCheck,       roles: ['tl'], category: 'Team Lead' },
   { label: 'Candidate Management', href: '/recruiter/resumes',   icon: Users,           roles: ['tl', 'manager', 'admin'], category: 'Team Lead' },
-  { label: 'Eligible Tracker', href: '/tl/eligible-tracker',     icon: ClipboardCheck,  roles: ['tl', 'manager', 'admin'], category: 'Team Lead' },
+  { label: 'Eligible Tracker', href: '/tl/eligible-tracker',     icon: ClipboardCheck,  roles: ['tl'], category: 'Team Lead' },
   { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['tl'], category: 'Team Lead' },
   { label: 'Create Job (JR)',  href: '/recruiter/jobs/new',      icon: FileText,         roles: ['tl', 'manager'], category: 'Team Lead' },
   { label: 'Bulk Job Post',    href: '/recruiter/jobs/bulk',     icon: LayoutGrid,       roles: ['tl', 'manager'], category: 'Team Lead' },
@@ -78,14 +78,14 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Manager Policy & SOP', href: '/manager/policy',      icon: BookOpen,        roles: ['manager'], category: 'Manager' },
 
   // Admin
-  { label: 'Dashboard',        href: '/admin',                   icon: LayoutDashboard, roles: ['admin', 'bd', 'business_developer'], category: 'Admin' },
-  { label: 'Business Development', href: '/business-development', icon: TrendingUp, roles: ['admin', 'manager', 'tl', 'recruiter', 'bd', 'business_developer'], category: 'Admin' },
-  { label: 'User Management',  href: '/admin/users',             icon: UserCog,          roles: ['admin'], category: 'Admin' },
-  { label: 'Attendance',       href: '/admin/attendance',        icon: Clock,            roles: ['admin'], category: 'Admin' },
-  { label: 'Leave Approvals',  href: '/admin/leaves',            icon: CalendarCheck,   roles: ['admin'], category: 'Admin' },
-  { label: 'Access Control',   href: '/admin/access',            icon: Shield,           roles: ['admin'], category: 'Admin' },
-  { label: 'Candidate DB',     href: '/admin/candidates',        icon: Database,         roles: ['admin'], category: 'Admin' },
-  { label: 'Eligible Tracker', href: '/admin/eligible-tracker',  icon: ClipboardCheck,   roles: ['admin'], category: 'Admin' },
+  { label: 'Dashboard',        href: '/admin',                   icon: LayoutDashboard, roles: ['admin', 'superadmin', 'bd', 'business_developer'], category: 'Admin' },
+  { label: 'Business Development', href: '/business-development', icon: TrendingUp, roles: ['admin', 'superadmin', 'manager', 'tl', 'recruiter', 'bd', 'business_developer'], category: 'Admin' },
+  { label: 'User Management',  href: '/admin/users',             icon: UserCog,          roles: ['admin', 'superadmin'], category: 'Admin' },
+  { label: 'Attendance',       href: '/admin/attendance',        icon: Clock,            roles: ['admin', 'superadmin'], category: 'Admin' },
+  { label: 'Leave Approvals',  href: '/admin/leaves',            icon: CalendarCheck,   roles: ['admin', 'superadmin'], category: 'Admin' },
+  { label: 'Access Control',   href: '/admin/access',            icon: Shield,           roles: ['admin', 'superadmin'], category: 'Admin' },
+  { label: 'Candidate DB',     href: '/admin/candidates',        icon: Database,         roles: ['admin', 'superadmin'], category: 'Admin' },
+  { label: 'Eligible Tracker', href: '/admin/eligible-tracker',  icon: ClipboardCheck,   roles: ['admin', 'superadmin'], category: 'Admin' },
   { label: 'ATS Scan Database',href: '/admin/ats-records',       icon: ScanLine,         roles: ['admin'], category: 'Admin' },
   { label: 'Excel Import',     href: '/admin/excel-import',      icon: Upload,           roles: ['admin', 'mis', 'data_entry'], category: 'Admin' },
   { label: 'MIS Sourcing Tracker', href: '/admin/mis-tracker',   icon: Users,            roles: ['admin'], category: 'Admin' },
@@ -340,16 +340,19 @@ export function Sidebar({ onClose }: SidebarProps) {
     if (item.href === '/business-development') {
       return hasBDRole;
     }
-    return allowedCategories.includes(item.category);
+    const roleMatch = item.roles.some(r => userRoles.includes(r as any));
+    return roleMatch && allowedCategories.includes(item.category);
   });
   
-  // Deduplicate by href
+  // Deduplicate by href and label
   const seenHrefs = new Set<string>();
+  const seenLabels = new Set<string>();
   const filteredNav = rawFilteredNav.filter(item => {
-    if (seenHrefs.has(item.href)) {
+    if (seenHrefs.has(item.href) || seenLabels.has(item.label)) {
       return false;
     }
     seenHrefs.add(item.href);
+    seenLabels.add(item.label);
     return true;
   });
 

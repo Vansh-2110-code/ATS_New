@@ -328,3 +328,25 @@ exports.resetDemoData = async (req, res, next) => {
     next(err);
   }
 };
+
+// POST /api/users/activate-all-suspended (Reactivate all suspended users)
+exports.activateAllSuspended = async (req, res, next) => {
+  try {
+    const result = await User.updateMany(
+      { status: 'Suspended' },
+      { $set: { status: 'Active' } }
+    );
+    await createLog({
+      type: 'edit',
+      user: req.user._id,
+      userName: req.user.name,
+      role: req.user.role,
+      action: `Activated all suspended user accounts (${result.modifiedCount} accounts reactivated)`,
+      target: 'all_suspended_users',
+      ip: req.ip,
+    });
+    res.json({ success: true, message: `Successfully activated ${result.modifiedCount} suspended user account(s).`, count: result.modifiedCount });
+  } catch (err) {
+    next(err);
+  }
+};

@@ -162,11 +162,58 @@ exports.getEmployeeProfiles = async (req, res) => {
     if (branchId) query.branch = branchId;
     if (status) query.status = status;
 
-    const profiles = await EmployeePayrollProfile.find(query)
+    // exclude suspended users from payroll
+    const User = require('../models/User');
+    const Employee = require('../models/Employee');
+    const suspended = await User.find({ status: 'Suspended' }).select('_id');
+    const suspendedIds = suspended.map(u => u._id);
+    if (query.user) {
+      query.user = { $in: Array.isArray(query.user) ? query.user.filter(id => !suspendedIds.some(sid => sid.equals(id))) : query.user };
+    } else {
+      query.user = { $nin: suspendedIds };
+    }
+
+    let profiles = await EmployeePayrollProfile.find(query)
       .populate('user', 'name email employeeId role status joinedDate avatar')
       .populate('branch', 'name code state')
       .populate('salaryStructure', 'name code')
       .sort({ createdAt: -1 });
+
+    // Auto-sync bank & salary from Employee (joining form) if not set
+    const userEmails = profiles.map(p => p.user?.email).filter(Boolean);
+    const empJoiningRecords = await Employee.find({ email: { $in: userEmails } }).lean();
+    const empByEmail = {};
+    empJoiningRecords.forEach(e => { if (e.email) empByEmail[e.email.toLowerCase()] = e; });
+
+    profiles = profiles.map(p => {
+      const pObj = p.toObject();
+      const joiningData = empByEmail[(p.user?.email || '').toLowerCase()];
+      if (joiningData) {
+        if (!pObj.bank?.accountNumber || pObj.bank.accountNumber === 'N/A') {
+          pObj.bank = {
+            bankName: joiningData.bankName || pObj.bank?.bankName || 'HDFC Bank',
+            accountNumber: joiningData.accountNumber || pObj.bank?.accountNumber || 'N/A',
+            ifscCode: joiningData.ifscCode || pObj.bank?.ifscCode || 'N/A',
+            accountHolderName: joiningData.accountHolderName || joiningData.fullName || pObj.user?.name || '',
+            paymentMode: 'bank_transfer'
+          };
+        }
+        if (!pObj.grossSalary || pObj.grossSalary === 0) {
+          const sal = Number(joiningData.fixedSalary || joiningData.stipend || 0);
+          if (sal > 0) {
+            pObj.grossSalary = sal;
+            pObj.annualCTC = sal * 12;
+          }
+        }
+        if (!pObj.statutory?.panNumber || pObj.statutory.panNumber === 'N/A') {
+          pObj.statutory = {
+            ...pObj.statutory,
+            panNumber: joiningData.panCardNumber || joiningData.pan || pObj.statutory?.panNumber || 'N/A'
+          };
+        }
+      }
+      return pObj;
+    });
 
     res.json(profiles);
   } catch (err) {

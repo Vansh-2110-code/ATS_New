@@ -115,6 +115,11 @@ exports.create = async (req, res, next) => {
     if (typeof data.assignedRecruiters === 'string') {
       try { data.assignedRecruiters = JSON.parse(data.assignedRecruiters); } catch { delete data.assignedRecruiters; }
     }
+    if (typeof data.allocatedUsers === 'string') {
+      try { data.allocatedUsers = JSON.parse(data.allocatedUsers); } catch { delete data.allocatedUsers; }
+    }
+    data.postedByName = req.user.name;
+    data.postedByEmail = req.user.email;
     if (req.file) {
       data.jdFilePath = `/uploads/jd/${req.file.filename}`;
       data.jdOriginalName = req.file.originalname;
@@ -208,6 +213,9 @@ exports.update = async (req, res, next) => {
     }
     if (typeof data.assignedRecruiters === 'string') {
       try { data.assignedRecruiters = JSON.parse(data.assignedRecruiters); } catch { delete data.assignedRecruiters; }
+    }
+    if (typeof data.allocatedUsers === 'string') {
+      try { data.allocatedUsers = JSON.parse(data.allocatedUsers); } catch { delete data.allocatedUsers; }
     }
     if (req.file) {
       data.jdFilePath = `/uploads/jd/${req.file.filename}`;

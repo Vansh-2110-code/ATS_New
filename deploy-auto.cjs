@@ -13,11 +13,9 @@ async function run() {
     execSync('npm run build', { stdio: 'inherit' });
 
     console.log('Creating zip archive...');
-    const sourceDir = path.join(__dirname);
-    // Ignore node_modules, .git, temp files
-    const cmd = `powershell -Command "Get-ChildItem -Path '${sourceDir}' -Exclude 'node_modules','.git','scratch','deploy-payload.zip' | Compress-Archive -DestinationPath '${zipPath}' -Force"`;
-    execSync(cmd, { stdio: 'inherit' });
-    console.log('Archive created at:', zipPath);
+    if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
+    execSync('tar -a -c -f deploy-payload.zip --exclude="node_modules" --exclude=".git" --exclude="scratch" --exclude="deploy-payload.zip" dist backend src public index.html package.json', { stdio: 'inherit' });
+    console.log('Archive created at:', zipPath, 'Size:', (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2), 'MB');
 
     console.log('Connecting to SSH...');
     await ssh.connect({
@@ -39,7 +37,7 @@ async function run() {
     console.log('Unzip stderr:', unzipCmd.stderr);
 
     console.log('Restarting PM2...');
-    const pm2Restart = await ssh.execCommand('export PATH=$PATH:~/.npm-global/bin:~/.nvm/versions/node/v18.17.0/bin:~/.nvm/versions/node/v20.18.0/bin:$(find ~/.nvm -name bin 2>/dev/null | tr "\\n" ":"); pm2 restart all || npx pm2 restart all', { cwd: remotePath });
+    const pm2Restart = await ssh.execCommand('export PATH=$PATH:/home/whitehorsemanpower/.nvm/versions/node/v22.23.1/bin:~/.npm-global/bin:~/.nvm/versions/node/v18.17.0/bin:~/.nvm/versions/node/v20.18.0/bin:$(find ~/.nvm -name bin 2>/dev/null | tr "\\n" ":"); pm2 restart ats-backend || pm2 restart all || npx pm2 restart all', { cwd: remotePath });
     console.log('PM2 restart stdout:', pm2Restart.stdout);
     console.log('PM2 restart stderr:', pm2Restart.stderr);
 

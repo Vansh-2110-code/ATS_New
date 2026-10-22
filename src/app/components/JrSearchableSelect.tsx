@@ -21,6 +21,7 @@ export const JrSearchableSelect: React.FC<JrSearchableSelectProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -31,16 +32,29 @@ export const JrSearchableSelect: React.FC<JrSearchableSelectProps> = ({
     return jobs.find((j: any) => j.jrNumber === value) || null;
   }, [jobs, value]);
 
-  // Dynamic filter matching JR Number, Job Title, Client Name, Location, or Recruiter
+  // Separate Active and Inactive JRs
+  const { activeJobs, inactiveJobs } = useMemo(() => {
+    const act: any[] = [];
+    const inact: any[] = [];
+    jobs.forEach((j: any) => {
+      const isAct = !j.status || j.status === 'Open';
+      if (isAct) act.push(j);
+      else inact.push(j);
+    });
+    return { activeJobs: act, inactiveJobs: inact };
+  }, [jobs]);
+
+  // Dynamic filter matching JR Number, Job Title, Client Name, Location, or Owner within current tab
   const filteredJobs = useMemo(() => {
-    if (!query.trim()) return jobs;
+    const pool = activeTab === 'active' ? activeJobs : inactiveJobs;
+    if (!query.trim()) return pool;
     const q = query.toLowerCase().trim();
-    return jobs.filter((j: any) => {
+    return pool.filter((j: any) => {
       const jrNum = (j.jrNumber || '').toLowerCase();
       const title = (j.jobTitle || '').toLowerCase();
       const client = (j.client || j.companyName || '').toLowerCase();
       const loc = (j.location || '').toLowerCase();
-      const owner = (j.recruiterName || '').toLowerCase();
+      const owner = (j.postedByName || j.createdByName || j.createdBy?.name || j.recruiterName || '').toLowerCase();
       return (
         jrNum.includes(q) ||
         title.includes(q) ||
@@ -49,7 +63,7 @@ export const JrSearchableSelect: React.FC<JrSearchableSelectProps> = ({
         owner.includes(q)
       );
     });
-  }, [jobs, query]);
+  }, [activeTab, activeJobs, inactiveJobs, query]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -202,10 +216,38 @@ export const JrSearchableSelect: React.FC<JrSearchableSelectProps> = ({
           {/* Dropdown Menu */}
           {isOpen && (
             <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden animate-in fade-in-50 zoom-in-95 duration-100">
+              {/* Active & Inactive Tabs */}
+              <div className="flex border-b border-slate-100 bg-slate-50 p-1.5 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('active'); setHighlightedIndex(0); }}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    activeTab === 'active'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-300" />
+                  Active JRs ({activeJobs.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActiveTab('inactive'); setHighlightedIndex(0); }}
+                  className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    activeTab === 'inactive'
+                      ? 'bg-slate-700 text-white shadow-sm'
+                      : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-slate-400" />
+                  Inactive JRs ({inactiveJobs.length})
+                </button>
+              </div>
+
               {/* Header Info */}
-              <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <div className="px-3.5 py-2 bg-slate-50/50 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500">
                 <span className="font-medium">
-                  Showing <strong>{filteredJobs.length}</strong> of {jobs.length} JRs
+                  Showing <strong>{filteredJobs.length}</strong> {activeTab === 'active' ? 'Active' : 'Inactive'} JRs
                 </span>
                 <span className="text-[11px] text-slate-400">
                   Use ↑ ↓ to navigate, Enter to select

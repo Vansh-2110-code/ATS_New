@@ -100,6 +100,22 @@ export function UserManagementPage() {
     currentAuthUser?.id === 'WH000001';
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [search, setSearch] = useState('');
+  const [activatingAll, setActivatingAll] = useState(false);
+  const handleActivateAllSuspended = async () => {
+    const suspended = users.filter(u => u.status === 'Suspended');
+    if (!suspended.length) return alert('No suspended users found.');
+    if (!window.confirm(`Are you sure you want to activate all ${suspended.length} suspended users?`)) return;
+    try {
+      setActivatingAll(true);
+      await api.activateAllSuspendedUsers();
+      setUsers(prev => prev.map(u => ({ ...u, status: 'Active' as const })));
+      alert(`All ${suspended.length} suspended users have been activated successfully!`);
+    } catch(e: any) {
+      alert(e.message || 'Failed to activate users');
+    } finally {
+      setActivatingAll(false);
+    }
+  };
   const [roleFilter, setRoleFilter] = useState<string>('All');
   const [showModal, setShowModal] = useState(false);
   const [editUser, setEditUser] = useState<SystemUser | null>(null);
@@ -314,14 +330,26 @@ const getHighestRole = (roles: Role[]): Role => {
           <h1 className="text-slate-800" style={{ fontWeight: 700, fontSize: '1.4rem' }}>User Management</h1>
           <p className="text-slate-500 text-sm mt-0.5">Add, edit, and manage system user accounts</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700 transition-colors"
-          style={{ fontWeight: 600 }}
-        >
-          <UserPlus className="w-4 h-4" />
-          Add User
-        </button>
+        <div className="flex items-center gap-2">
+          {users.length - activeCount > 0 && (
+            <button
+              onClick={handleActivateAllSuspended}
+              disabled={activatingAll}
+              className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-xl transition-all shadow-sm font-semibold disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              {activatingAll ? 'Activating...' : `Activate All Suspended (${users.length - activeCount})`}
+            </button>
+          )}
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700 transition-colors"
+            style={{ fontWeight: 600 }}
+          >
+            <UserPlus className="w-4 h-4" />
+            Add User
+          </button>
+        </div>
       </div>
 
       {/* Summary */}

@@ -86,7 +86,17 @@ function isCandidateInGeneralPool(candidate) {
     return true;
   }
 
-  // Active candidates assigned to a recruiter are NEVER forced into General Pool
+  // Suspended employees: their candidates become available in general pool after 30-day lock-in
+  if (candidate.assignedRecruiter) {
+    const isOwnerSuspended = Boolean(candidate.assignedRecruiterStatus === 'Suspended' || candidate.isOwnerSuspended);
+    const assignedTime = new Date(candidate.assignedAt || candidate.createdAt || 0).getTime();
+    const daysSince = (Date.now() - assignedTime) / (1000 * 60 * 60 * 24);
+    if (isOwnerSuspended && daysSince >= 30) {
+      return true;
+    }
+  }
+
+  // Active candidates assigned to an active recruiter are NEVER forced into General Pool
   return false;
 }
 
