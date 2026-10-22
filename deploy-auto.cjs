@@ -14,7 +14,7 @@ async function run() {
 
     console.log('Creating zip archive...');
     if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
-    execSync('tar -a -c -f deploy-payload.zip --exclude="node_modules" --exclude=".git" --exclude="scratch" --exclude="deploy-payload.zip" dist backend src public index.html package.json', { stdio: 'inherit' });
+    execSync('tar -a -c -f deploy-payload.zip --exclude="node_modules" --exclude=".git" --exclude="scratch" --exclude="*.env*" --exclude="deploy-payload.zip" dist backend src public index.html package.json', { stdio: 'inherit' });
     console.log('Archive created at:', zipPath, 'Size:', (fs.statSync(zipPath).size / (1024 * 1024)).toFixed(2), 'MB');
 
     console.log('Connecting to SSH...');
