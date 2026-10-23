@@ -149,7 +149,7 @@ const bulkZipFilter = (req, file, cb) => {
 const uploadBulkZip = multer({
   storage: bulkZipStorage,
   fileFilter: bulkZipFilter,
-  limits: { fileSize: 250 * 1024 * 1024 }, // 250MB limit
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit for up to 1000 resumes in ZIP
 });
 
 module.exports = {

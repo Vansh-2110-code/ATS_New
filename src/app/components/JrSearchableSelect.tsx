@@ -309,6 +309,33 @@ export const JrSearchableSelect: React.FC<JrSearchableSelectProps> = ({
                                 <span className="text-slate-500">Owner: {j.recruiterName}</span>
                               </>
                             )}
+                            {j.allocationType === 'specific' ? (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200" title={j.allocatedUsers?.map((u: any) => u.name).join(', ')}>
+                                  Allocated ({j.allocatedUsers?.length || 0})
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  Open to All
+                                </span>
+                              </>
+                            )}
+                            {j.priority && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                  j.priority === 'High' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                                  j.priority === 'Low' ? 'bg-slate-50 text-slate-600 border border-slate-200' :
+                                  'bg-amber-50 text-amber-700 border border-amber-200'
+                                }`}>
+                                  {j.priority}
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
 

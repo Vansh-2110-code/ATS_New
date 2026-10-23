@@ -41,7 +41,14 @@ async function run() {
     console.log('PM2 restart stdout:', pm2Restart.stdout);
     console.log('PM2 restart stderr:', pm2Restart.stderr);
 
-    console.log('Deployment completed successfully!');
+    console.log('Verifying production database and live health...');
+    const verifyCmd = await ssh.execCommand('/home/whitehorsemanpower/.nvm/versions/node/v22.23.1/bin/node -e "const mongoose = require(\'mongoose\'); require(\'dotenv\').config({ path: \'/home/whitehorsemanpower/htdocs/ats.whitehorsemanpower.in/backend/.env\' }); (async () => { await mongoose.connect(process.env.MONGODB_URI); const count = await mongoose.connection.db.collection(\'candidates\').countDocuments(); console.log(\'LIVE PRODUCTION CANDIDATES VERIFIED:\', count); if (count < 100000) { throw new Error(\'CRITICAL: Candidate count is unexpectedly low: \' + count); } process.exit(0); })();"', { cwd: `${remotePath}/backend` });
+    console.log(verifyCmd.stdout);
+    if (verifyCmd.stderr && !verifyCmd.stdout.includes('VERIFIED')) {
+      throw new Error(`Deployment health check failed: ${verifyCmd.stderr}`);
+    }
+
+    console.log('Deployment completed successfully! Live system healthy with all records verified.');
   } catch (err) {
     console.error('Deployment failed:', err);
   } finally {

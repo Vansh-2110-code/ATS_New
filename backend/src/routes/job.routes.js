@@ -17,6 +17,8 @@ router.get('/:id', ctrl.getById);
 router.post('/', authorize('tl', 'admin', 'manager'), uploadJD.single('jdFile'), ctrl.create);
 // Admin, Manager, and TL can edit posted jobs
 router.put('/:id', authorize('tl', 'admin', 'manager'), uploadJD.single('jdFile'), ctrl.update);
+router.patch('/:id/allocate', authorize('tl', 'admin', 'manager'), ctrl.allocate);
+router.put('/:id/allocate', authorize('tl', 'admin', 'manager'), ctrl.allocate);
 router.delete('/:id', authorize('admin'), ctrl.remove);
 router.post('/:id/extract-keywords', authorize('tl', 'admin', 'manager'), ctrl.extractKeywords);
 

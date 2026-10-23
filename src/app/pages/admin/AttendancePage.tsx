@@ -55,7 +55,10 @@ const formatAttendanceTime = (val: any): string => {
 
 export function AttendancePage() {
   const [search, setSearch] = useState('');
+  const [dateMode, setDateMode] = useState<'single' | 'range'>('single');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [filter, setFilter] = useState('All');
   const [holidayYear, setHolidayYear] = useState(String(new Date().getFullYear()));
   const [activeTab, setActiveTab] = useState<'attendance' | 'holidays'>('attendance');
@@ -77,7 +80,14 @@ export function AttendancePage() {
     const load = async () => {
       try {
         setLoading(true);
-        const data = await api.getAttendance({ date });
+        const params: Record<string, string> = {};
+        if (dateMode === 'range') {
+          params.startDate = startDate;
+          params.endDate = endDate;
+        } else {
+          params.date = date;
+        }
+        const data = await api.getAttendance(params);
         const list = (data.records || data.attendance || data.employees || data || []).map((e: any) => ({
           id: e.employeeId || e._id || e.id,
           name: e.user?.name || e.name || '',
@@ -95,7 +105,7 @@ export function AttendancePage() {
       }
     };
     load();
-  }, [date]);
+  }, [date, dateMode, startDate, endDate]);
 
   useEffect(() => {
     const loadHolidays = async () => {
@@ -252,12 +262,48 @@ export function AttendancePage() {
                   className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-green-400 bg-white"
                 />
               </div>
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                className="px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-green-400 bg-white"
-              />
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs">
+                <button
+                  type="button"
+                  onClick={() => setDateMode('single')}
+                  className={`px-2.5 py-1.5 rounded-md transition-colors ${dateMode === 'single' ? 'bg-white text-slate-800 font-semibold shadow-2xs' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Single Day
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDateMode('range')}
+                  className={`px-2.5 py-1.5 rounded-md transition-colors ${dateMode === 'range' ? 'bg-white text-slate-800 font-semibold shadow-2xs' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Date Range (From – To)
+                </button>
+              </div>
+
+              {dateMode === 'single' ? (
+                <input
+                  type="date"
+                  value={date}
+                  onChange={e => setDate(e.target.value)}
+                  className="px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-green-400 bg-white"
+                />
+              ) : (
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2 py-1 rounded-lg">
+                  <span className="text-xs font-semibold text-slate-500">From:</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="px-2 py-1 border border-slate-200 rounded text-xs outline-none focus:border-green-400 bg-white"
+                  />
+                  <span className="text-xs font-semibold text-slate-500">To:</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="px-2 py-1 border border-slate-200 rounded text-xs outline-none focus:border-green-400 bg-white"
+                  />
+                </div>
+              )}
               <div className="flex gap-1.5">
                 {['All', 'Present', 'Absent', 'WFH', 'Break'].map(f => (
                   <button

@@ -93,10 +93,16 @@ exports.mark = async (req, res, next) => {
 // GET /api/attendance
 exports.list = async (req, res, next) => {
   try {
-    const { date, status, search, page = 1, limit = 50 } = req.query;
+    const { date, startDate, endDate, status, search, page = 1, limit = 50 } = req.query;
     const query = {};
 
-    if (date) {
+    if (startDate && endDate) {
+      const s = new Date(startDate);
+      s.setHours(0, 0, 0, 0);
+      const e = new Date(endDate);
+      e.setHours(23, 59, 59, 999);
+      query.date = { $gte: s, $lte: e };
+    } else if (date) {
       const d = new Date(date);
       d.setHours(0, 0, 0, 0);
       const end = new Date(d);

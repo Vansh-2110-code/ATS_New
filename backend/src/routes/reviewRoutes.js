@@ -7,6 +7,7 @@ router.use(auth);
 router.use(authorize('admin', 'tl', 'manager'));
 
 router.get('/', reviewController.getReviews);
+router.get('/employee-metrics', reviewController.getEmployeeMetrics);
 router.post('/', reviewController.createReview);
 router.get('/:id', reviewController.getReview);
 router.patch('/:id', reviewController.updateReview);

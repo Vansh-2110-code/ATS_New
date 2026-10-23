@@ -47,6 +47,40 @@ async function getAllActiveJobsAndCustomJds() {
   return openJobs;
 }
 
+// Helper to resolve full JD text from Job description or JR Number (Requirement 16)
+async function resolveJdTextFromInput(jobDescription, targetJrNumber, openJobs = []) {
+  if (jobDescription && jobDescription.trim().length > 20) {
+    return jobDescription.trim();
+  }
+  if (!targetJrNumber) return '';
+
+  const cleanJr = String(targetJrNumber).trim();
+  let job = (openJobs || []).find(j => j.jrNumber === cleanJr || String(j._id) === cleanJr);
+  if (!job) {
+    try {
+      job = await Job.findOne({
+        $or: [
+          { jrNumber: cleanJr },
+          ...(cleanJr.match(/^[0-9a-fA-F]{24}$/) ? [{ _id: cleanJr }] : [])
+        ]
+      }).lean();
+    } catch (_) {}
+  }
+
+  if (!job) return '';
+
+  const skillsStr = Array.isArray(job.skills) ? job.skills.join(', ') : (job.skills || '');
+  return [
+    `Job Title: ${job.jobTitle || ''}`,
+    `Client: ${job.companyName || job.client || ''}`,
+    `Skills: ${skillsStr}`,
+    `Experience: ${job.experience || ''}`,
+    `Location: ${job.location || ''}`,
+    `Description: ${job.description || ''}`,
+    `Requirements: ${job.requirements || ''}`
+  ].filter(Boolean).join('\n');
+}
+
 /* ─── Derive ATS status from score ─────────────────────────── */
 function deriveAtsStatus(score) {
   if (score >= 78) return 'Selected';
@@ -194,14 +228,16 @@ exports.scan = async (req, res, next) => {
     let parsed = await parseResume(filePath);
     parsed.format = path.extname(req.file.originalname).replace('.', '').toUpperCase();
 
-    // If JD text provided, match against it
-    const { jobDescription, jobTitle } = req.body;
-    if (jobDescription) {
-      parsed = matchWithJD(parsed, jobDescription);
-    }
-
     // Universal Role Classification & Open JRs Matching (active jobs + custom JDs)
     const openJobs = await getAllActiveJobsAndCustomJds();
+
+    // If JD text or target JR provided, resolve full JD and match against it
+    const { jobDescription, jobTitle, targetJrNumber, jrNumber } = req.body;
+    const effectiveJd = await resolveJdTextFromInput(jobDescription, targetJrNumber || jrNumber, openJobs);
+    if (effectiveJd) {
+      parsed = matchWithJD(parsed, effectiveJd);
+    }
+
     const universalProfile = classifyUniversalRole(parsed, openJobs);
     parsed.universalRoleProfile = universalProfile;
 
@@ -230,13 +266,13 @@ exports.scanWithJD = async (req, res, next) => {
     let parsed = await parseResume(filePath);
     parsed.format = path.extname(req.file.originalname).replace('.', '').toUpperCase();
 
-    const { jobDescription, jobTitle } = req.body;
-    if (jobDescription) {
-      parsed = matchWithJD(parsed, jobDescription);
+    const openJobs = await getAllActiveJobsAndCustomJds();
+    const { jobDescription, jobTitle, targetJrNumber, jrNumber } = req.body;
+    const effectiveJd = await resolveJdTextFromInput(jobDescription, targetJrNumber || jrNumber, openJobs);
+    if (effectiveJd) {
+      parsed = matchWithJD(parsed, effectiveJd);
     }
 
-    // Universal Role Classification & Open JRs Matching
-    const openJobs = await getAllActiveJobsAndCustomJds();
     const universalProfile = classifyUniversalRole(parsed, openJobs);
     parsed.universalRoleProfile = universalProfile;
 
@@ -365,7 +401,8 @@ exports.bulkScan = async (req, res, next) => {
 
     // Load active jobs and custom JDs for matching
     const openJobs = await getAllActiveJobsAndCustomJds();
-    const { jobDescription, targetJrNumber } = req.body;
+    const { jobDescription, targetJrNumber, jrNumber } = req.body;
+    const effectiveJd = await resolveJdTextFromInput(jobDescription, targetJrNumber || jrNumber, openJobs);
     const filesToProcess = [];
 
     if (isZip) {
@@ -438,8 +475,8 @@ exports.bulkScan = async (req, res, next) => {
         parsed.format = item.format;
         parsed.fileName = item.originalName;
 
-        if (jobDescription) {
-          parsed = matchWithJD(parsed, jobDescription);
+        if (effectiveJd) {
+          parsed = matchWithJD(parsed, effectiveJd);
         }
 
         const universalProfile = classifyUniversalRole(parsed, openJobs);
@@ -498,6 +535,13 @@ exports.bulkScan = async (req, res, next) => {
         errors.push({ fileName: item.originalName, error: parseErr.message });
       }
     }
+
+    // Automatic Sorting by Best Match / ATS score descending (Requirement 16)
+    results.sort((a, b) => {
+      const scoreA = Number(a.atsScore || a.bestFitJr?.matchScore || 0);
+      const scoreB = Number(b.atsScore || b.bestFitJr?.matchScore || 0);
+      return scoreB - scoreA;
+    });
 
     if (tempExtractDir && fs.existsSync(tempExtractDir)) {
       try {

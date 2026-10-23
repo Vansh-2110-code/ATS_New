@@ -178,31 +178,76 @@ exports.getPendingRequests = async (req, res, next) => {
   }
 };
 
-// POST /api/leaves/:id/review — Approve or Reject leave
+// POST /api/leaves/:id/review — Approve, Reject, or Revoke leave
 exports.reviewRequest = async (req, res, next) => {
   try {
-    const { action, reviewRemarks } = req.body; // action: 'Approve' | 'Reject'
-    if (!['Approve', 'Reject'].includes(action)) {
-      return res.status(400).json({ message: 'Action must be Approve or Reject' });
+    const { action, reviewRemarks } = req.body; // action: 'Approve' | 'Reject' | 'Revoke'
+    if (!['Approve', 'Reject', 'Revoke'].includes(action)) {
+      return res.status(400).json({ message: 'Action must be Approve, Reject, or Revoke' });
     }
 
     const leaveReq = await LeaveRequest.findById(req.params.id);
     if (!leaveReq) {
       return res.status(404).json({ message: 'Leave request not found' });
     }
+
+    const isTL = req.user.role === 'tl';
+    const isAdminOrManager = ['admin', 'manager', 'superadmin'].includes(req.user.role);
+    const balance = await getOrInitLeaveBalance(leaveReq.user);
+
+    // Handle Revoking an already approved leave (Requirement 10)
+    if (leaveReq.status === 'Approved' && (action === 'Revoke' || action === 'Reject')) {
+      if (!isAdminOrManager) {
+        return res.status(403).json({ message: 'Only Admin or Manager can revoke an already approved leave.' });
+      }
+
+      leaveReq.status = 'Rejected';
+      leaveReq.reviewedBy = req.user._id;
+      leaveReq.reviewedByName = req.user.name;
+      leaveReq.reviewRemarks = `Revoked and rejected by ${req.user.name}: ${reviewRemarks || ''}`;
+      leaveReq.reviewedAt = new Date();
+      await leaveReq.save();
+
+      // Refund the used leaves back to the balance
+      if (leaveReq.leaveType !== 'Unpaid Leave') {
+        balance.usedLeaves = Math.max(0, (balance.usedLeaves || 0) - leaveReq.daysCount);
+        balance.currentBalance = Math.min(balance.accruedLeaves, balance.accruedLeaves - balance.usedLeaves);
+        balance.history.push({
+          month: `${getKolkataDate().getFullYear()}-${String(getKolkataDate().getMonth() + 1).padStart(2, '0')}`,
+          credited: leaveReq.daysCount,
+          used: 0,
+          description: `Revoked Approved ${leaveReq.leaveType} (${leaveReq.daysCount} days)`,
+          date: new Date(),
+        });
+        await balance.save();
+      }
+
+      // Remove the Attendance leave records
+      const cur = new Date(leaveReq.fromDate);
+      const end = new Date(leaveReq.toDate);
+      while (cur <= end) {
+        const dUtc = new Date(Date.UTC(cur.getFullYear(), cur.getMonth(), cur.getDate(), 0, 0, 0, 0));
+        await Attendance.deleteOne({ user: leaveReq.user, date: dUtc, leaveRequestId: leaveReq._id });
+        cur.setDate(cur.getDate() + 1);
+      }
+
+      await createLog({
+        type: 'leave', user: req.user._id, userName: req.user.name,
+        role: req.user.role, action: `Revoked approved leave for ${leaveReq.name}`,
+        details: { requestId: leaveReq._id, remarks: reviewRemarks },
+      });
+
+      return res.json({ message: 'Approved leave has been successfully revoked and rejected', leaveRequest: leaveReq });
+    }
+
     const pendingStatuses = ['Pending', 'Pending TL Approval', 'Pending Admin Approval'];
     if (!pendingStatuses.includes(leaveReq.status)) {
       return res.status(400).json({ message: `Leave request is already ${leaveReq.status}` });
     }
 
-    const isTL = req.user.role === 'tl';
-    const isAdminOrManager = ['admin', 'manager', 'superadmin'].includes(req.user.role);
-
     if (isTL && leaveReq.status === 'Pending Admin Approval') {
       return res.status(400).json({ message: 'Already approved by Team Leader. Awaiting Admin/Manager approval.' });
     }
-
-    const balance = await getOrInitLeaveBalance(leaveReq.user);
 
     if (action === 'Approve') {
       // Step 1: TL Approval moves request to 'Pending Admin Approval'
@@ -319,3 +364,29 @@ exports.getAllRequests = async (req, res, next) => {
     next(err);
   }
 };
+
+// POST /api/leaves/deduct-absent — auto minus paid leave for absence upon manager approval (Requirement 11)
+exports.deductPaidLeaveForAbsence = async (req, res, next) => {
+  try {
+    const { userId, date, remarks } = req.body;
+    if (!userId || !date) {
+      return res.status(400).json({ message: 'userId and date are required' });
+    }
+    const balance = await getOrInitLeaveBalance(userId);
+    balance.usedLeaves = (balance.usedLeaves || 0) + 1;
+    balance.currentBalance = Math.max(0, balance.accruedLeaves - balance.usedLeaves);
+    balance.history.push({
+      month: `${getKolkataDate().getFullYear()}-${String(getKolkataDate().getMonth() + 1).padStart(2, '0')}`,
+      credited: 0,
+      used: 1,
+      description: `Auto-deducted paid leave for absence on ${new Date(date).toLocaleDateString('en-IN')}${remarks ? ` (${remarks})` : ''}`,
+      date: new Date()
+    });
+    await balance.save();
+
+    res.json({ success: true, message: '1 Paid leave deducted for absence after manager approval', balance });
+  } catch (err) {
+    next(err);
+  }
+};
+

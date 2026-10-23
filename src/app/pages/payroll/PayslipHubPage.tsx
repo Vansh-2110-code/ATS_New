@@ -512,7 +512,7 @@ export function PayslipHubPage() {
                     <div className="flex items-center gap-3 text-[11px] text-slate-500 font-mono mt-1">
                       {activeSlip.company?.cin && <span>CIN: {activeSlip.company.cin}</span>}
                       {activeSlip.company?.gstin && <span>GSTIN: {activeSlip.company.gstin}</span>}
-                      <span>PAN: AABCW1234F</span>
+                      <span>PAN: {activeSlip.company?.pan || (activeSlip.company?.gstin && activeSlip.company.gstin.length >= 12 ? activeSlip.company.gstin.substring(2, 12) : 'AAFCM1368M')}</span>
                     </div>
                   </div>
                 </div>

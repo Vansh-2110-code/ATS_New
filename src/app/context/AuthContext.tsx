@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import api from '../services/api';
 
 export type Role = 'superadmin' | 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin' | 'bd' | 'business_developer' | 'mis' | 'data_entry';
@@ -95,6 +95,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('ats_user');
     localStorage.removeItem('ats_token');
   };
+
+  // Auto-logout after 30 minutes of inactivity (Requirement 9)
+  useEffect(() => {
+    if (!user) return;
+    let timer: any;
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        console.warn('[Session] User inactive for 30 minutes. Auto logging out...');
+        logout();
+      }, INACTIVITY_TIMEOUT);
+    };
+
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    activityEvents.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      clearTimeout(timer);
+      activityEvents.forEach(evt => window.removeEventListener(evt, resetTimer));
+    };
+  }, [user]);
 
   const otpUserId = user ? (user.id || user._id || null) : null;
 

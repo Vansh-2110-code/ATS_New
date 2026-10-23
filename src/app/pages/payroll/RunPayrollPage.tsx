@@ -23,6 +23,9 @@ export function RunPayrollPage() {
   const [payrollRun, setPayrollRun] = useState<any>(null);
   const [records, setRecords] = useState<any[]>([]);
   const [error, setError] = useState('');
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
 
   useEffect(() => {
     loadCompanies();
@@ -31,8 +34,9 @@ export function RunPayrollPage() {
   useEffect(() => {
     if (selectedCompanyId) {
       loadBranches(selectedCompanyId);
+      loadEmployees(selectedCompanyId, selectedBranchId);
     }
-  }, [selectedCompanyId]);
+  }, [selectedCompanyId, selectedBranchId]);
 
   const loadCompanies = async () => {
     try {
@@ -55,6 +59,20 @@ export function RunPayrollPage() {
     }
   };
 
+  const loadEmployees = async (companyId: string, branchId?: string) => {
+    try {
+      setLoadingEmployees(true);
+      const data = await api.getPayrollEmployees({ companyId, branchId: branchId || undefined });
+      const nonDemo = (data || []).filter((p: any) => p.user?.status !== 'Suspended' && !p.user?.isDemoAccount && !p.user?.employeeId?.toUpperCase()?.startsWith('DEMO'));
+      setEmployees(nonDemo);
+      setSelectedEmployees(nonDemo.map((p: any) => p._id));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingEmployees(false);
+    }
+  };
+
   const handleCalculate = async () => {
     setError('');
     try {
@@ -64,7 +82,8 @@ export function RunPayrollPage() {
         branchId: selectedBranchId || undefined,
         month: selectedMonth,
         year: selectedYear,
-        baseDays: baseDays
+        baseDays: baseDays,
+        includedEmployeeIds: selectedEmployees
       });
       setPayrollRun(res.run);
       const recs = await api.getPayrollRunRecords(res.run._id);
@@ -223,6 +242,80 @@ export function RunPayrollPage() {
             <div className="text-xs text-slate-600 leading-relaxed">
               <strong>Automated Attendance Sync Active:</strong> The engine automatically aggregates daily biometric check-ins, approved leaves, and unauthorized absences. Loss of Pay (LOP) will be calculated on a per-day basis as <code>Gross Salary ÷ {baseDays} × LOP Days</code>.
             </div>
+          </div>
+
+          {/* Employee Selection Section */}
+          <div className="border border-slate-200/80 rounded-xl p-4 bg-slate-50/50 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                  Employees Included in this Run ({selectedEmployees.length} of {employees.length} Selected)
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Select which employees should be processed in this payroll cycle. Suspended and demo accounts are automatically excluded.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedEmployees(employees.map(e => e._id))}
+                  className="text-xs text-emerald-700 hover:text-emerald-800 font-semibold underline"
+                >
+                  Select All
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEmployees([])}
+                  className="text-xs text-rose-600 hover:text-rose-700 font-semibold underline"
+                >
+                  Deselect All
+                </button>
+              </div>
+            </div>
+
+            {loadingEmployees ? (
+              <div className="py-6 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin" /> Loading employees...
+              </div>
+            ) : employees.length === 0 ? (
+              <div className="py-6 text-center text-slate-400 text-xs">
+                No active employee profiles found for this scope.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto p-1 bg-white rounded-lg border border-slate-200">
+                {employees.map((emp) => {
+                  const isChecked = selectedEmployees.includes(emp._id);
+                  return (
+                    <label
+                      key={emp._id}
+                      className={`flex items-center gap-2.5 p-2 rounded-lg border cursor-pointer transition-colors text-xs ${
+                        isChecked ? 'bg-emerald-50/60 border-emerald-200' : 'bg-white border-slate-100 opacity-60'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedEmployees(prev => [...prev, emp._id]);
+                          } else {
+                            setSelectedEmployees(prev => prev.filter(id => id !== emp._id));
+                          }
+                        }}
+                        className="rounded text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-slate-800 truncate">{emp.user?.name || 'Staff'}</p>
+                        <p className="text-[11px] text-slate-400 font-mono">
+                          {emp.user?.employeeId || 'No ID'} · ₹{(emp.grossSalary || 0).toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end pt-4">

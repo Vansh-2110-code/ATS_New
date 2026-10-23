@@ -1522,6 +1522,10 @@ export function ResumeScanPage() {
       const formData = new FormData();
       formData.append('resume', f);
       if (jobDesc) formData.append('jobDescription', jobDesc);
+      if (selectedJr?.jrNumber) {
+        formData.append('targetJrNumber', selectedJr.jrNumber);
+        formData.append('jrNumber', selectedJr.jrNumber);
+      }
       
       // Add a safety timeout for the API call
       const scanPromise = api.scanResume(formData);
@@ -1874,11 +1878,24 @@ export function ResumeScanPage() {
 
         const formData = new FormData();
         batch.forEach(f => formData.append('resumes', f));
+        if (selectedJr?.jrNumber) {
+          formData.append('targetJrNumber', selectedJr.jrNumber);
+          formData.append('jrNumber', selectedJr.jrNumber);
+        }
+        if (jobDesc) {
+          formData.append('jobDescription', jobDesc);
+        }
 
         try {
           const res = await api.scanBulkResumes(formData);
           if (res && res.candidates && res.candidates.length > 0) {
             allCandidates = allCandidates.concat(res.candidates);
+            // Automatic Sorting by Best Match / ATS score descending (Requirement 16)
+            allCandidates.sort((a, b) => {
+              const scoreA = (a.bestFitJr?.matchScore) ?? a.atsScore ?? 0;
+              const scoreB = (b.bestFitJr?.matchScore) ?? b.atsScore ?? 0;
+              return scoreB - scoreA;
+            });
             setBulkResults([...allCandidates]);
             const allIds = new Set<string>(allCandidates.map((c: any) => c.id));
             setSelectedCandidateIds(allIds);
@@ -1897,6 +1914,12 @@ export function ResumeScanPage() {
       }
 
       if (allCandidates.length > 0) {
+        allCandidates.sort((a, b) => {
+          const scoreA = (a.bestFitJr?.matchScore) ?? a.atsScore ?? 0;
+          const scoreB = (b.bestFitJr?.matchScore) ?? b.atsScore ?? 0;
+          return scoreB - scoreA;
+        });
+        setBulkResults([...allCandidates]);
         const finalSummary = {
           totalFilesFound: filesToProcess.length,
           parsedSuccess: allCandidates.length,
@@ -2164,7 +2187,7 @@ export function ResumeScanPage() {
           <Archive className="w-4 h-4 text-amber-300" />
           <span>📦 Bulk ZIP / Multi-Resume Scanner</span>
           <span className="bg-amber-400/20 text-amber-300 border border-amber-400/30 text-[10px] px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wide">
-            50-250+ Resumes
+            Up to 1,000 Resumes
           </span>
         </button>
       </div>
@@ -2203,10 +2226,10 @@ export function ResumeScanPage() {
               <div>
                 <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <FolderArchive className="w-5 h-5 text-indigo-600" />
-                  Batch Upload Resumes (.ZIP or Multiple PDF / DOCX)
+                  Batch Upload Resumes (.ZIP up to 1,000 Resumes)
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Upload a <strong>.zip file with 50-250+ resumes</strong> or select multiple resume files at once. All resumes will be extracted, parsed, role-classified, and matched against open JRs automatically!
+                  Upload a <strong>.zip file with up to 1,000 resumes (Max 500MB)</strong> or select multiple resume files at once. All resumes will be extracted, parsed, matched against selected/open JRs, and automatically sorted with best fits at the top!
                 </p>
               </div>
 
@@ -2226,6 +2249,51 @@ export function ResumeScanPage() {
                   Clear Batch
                 </button>
               )}
+            </div>
+
+            {/* Target JR Option for Bulk Mode */}
+            <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+                <span className="text-slate-700 font-semibold">
+                  Target JR Matching:
+                </span>
+                <span className="text-slate-500 truncate max-w-xs">
+                  {selectedJr ? `${selectedJr.jrNumber} - ${selectedJr.jobTitle}` : 'Auto-evaluating all open JRs with best fit on top'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedJr?.jrNumber || ''}
+                  onChange={(e) => {
+                    const jrNum = e.target.value;
+                    if (!jrNum) {
+                      setSelectedJr(null);
+                      setJobDesc('');
+                    } else {
+                      const found = existingJrs.find(j => j.jrNumber === jrNum);
+                      if (found) handleSelectSpecificJr(found);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">⚡ Auto-Match All Open JRs ({existingJrs.length} JRs)</option>
+                  {existingJrs.map(j => (
+                    <option key={j.jrNumber || j._id} value={j.jrNumber}>
+                      {j.jrNumber} - {j.jobTitle} ({j.companyName})
+                    </option>
+                  ))}
+                </select>
+                {selectedJr && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedJr(null); setJobDesc(''); }}
+                    className="text-[11px] font-bold text-red-600 hover:text-red-700 underline"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Dropzone */}
@@ -2255,7 +2323,7 @@ export function ResumeScanPage() {
                     : 'Click to upload or drag and drop a ZIP archive / resumes here'}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
-                  Supports .ZIP, .RAR (containing PDFs, DOCX, DOC) or select up to 250 files simultaneously (Max 250MB)
+                  Supports .ZIP, .RAR (containing PDFs, DOCX, DOC) or select up to 1,000 files simultaneously (Max 500MB). Resumes will be sorted from highest match to lowest!
                 </p>
               </div>
 

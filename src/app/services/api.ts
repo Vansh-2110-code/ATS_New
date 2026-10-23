@@ -987,6 +987,13 @@ class ApiService {
     });
   }
 
+  async allocateJob(id: string, allocationType: string, allocatedUsers: any[]) {
+    return this.request<any>(`/jobs/${id}/allocate`, {
+      method: 'PATCH',
+      body: JSON.stringify({ allocationType, allocatedUsers }),
+    });
+  }
+
   async deleteJob(id: string) {
     return this.request<any>(`/jobs/${id}`, { method: 'DELETE' });
   }

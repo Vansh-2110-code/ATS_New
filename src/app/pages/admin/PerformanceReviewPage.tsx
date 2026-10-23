@@ -31,12 +31,46 @@ export function PerformanceReviewPage() {
     }
   });
 
+  const [fetchingMetrics, setFetchingMetrics] = useState(false);
+
+  const fetchLiveMetrics = async (empId: string, start: string, end: string) => {
+    if (!empId || !start || !end) return;
+    try {
+      setFetchingMetrics(true);
+      const res = await fetch(`/api/reviews/employee-metrics?employee=${empId}&startDate=${start}&endDate=${end}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('ats_token')}` }
+      });
+      if (res.ok) {
+        const live = await res.json();
+        setFormData(prev => ({
+          ...prev,
+          metrics: {
+            ...prev.metrics,
+            actualCalls: live.actualCalls ?? prev.metrics.actualCalls,
+            actualInterviews: live.actualInterviews ?? prev.metrics.actualInterviews,
+            actualPlacements: live.actualPlacements ?? prev.metrics.actualPlacements,
+          }
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch live metrics:', err);
+    } finally {
+      setFetchingMetrics(false);
+    }
+  };
+
   useEffect(() => {
     // Fetch users for dropdown
     (api as any).getUsers({ role: 'recruiter' }).then((data: any) => {
       setUsers(data?.users || []);
     }).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (formData.employee && formData.reviewPeriodStart && formData.reviewPeriodEnd) {
+      fetchLiveMetrics(formData.employee, formData.reviewPeriodStart, formData.reviewPeriodEnd);
+    }
+  }, [formData.employee, formData.reviewPeriodStart, formData.reviewPeriodEnd]);
 
   useEffect(() => {
     fetchReviews();
@@ -216,7 +250,17 @@ export function PerformanceReviewPage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-bold text-slate-800 mb-3 border-b pb-2">Metrics</h3>
+                <div className="flex items-center justify-between mb-3 border-b pb-2">
+                  <h3 className="text-sm font-bold text-slate-800">Metrics</h3>
+                  <button
+                    type="button"
+                    onClick={() => fetchLiveMetrics(formData.employee, formData.reviewPeriodStart, formData.reviewPeriodEnd)}
+                    disabled={fetchingMetrics || !formData.employee}
+                    className="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg font-semibold transition-colors disabled:opacity-50"
+                  >
+                    {fetchingMetrics ? 'Fetching DB Stats...' : 'Auto-Fill Live Stats from DB'}
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs text-slate-500 mb-1">Target Calls</label>

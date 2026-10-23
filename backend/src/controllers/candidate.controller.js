@@ -96,6 +96,20 @@ function isCandidateInGeneralPool(candidate) {
     }
   }
 
+  // Eligible candidates not utilised within 30 days go to General Pool (Requirement 15)
+  const isEligibleCandidate = Boolean(
+    candidate.isEligible ||
+    candidate.trackerStage === 'Eligible' ||
+    String(candidate.status || '').toLowerCase() === 'eligible'
+  );
+  if (isEligibleCandidate) {
+    const lastActiveTime = new Date(candidate.lastActivityAt || candidate.updatedAt || candidate.assignedAt || candidate.createdAt || 0).getTime();
+    const daysSinceActivity = (Date.now() - lastActiveTime) / (1000 * 60 * 60 * 24);
+    if (daysSinceActivity >= 30) {
+      return true;
+    }
+  }
+
   // Active candidates assigned to an active recruiter are NEVER forced into General Pool
   return false;
 }
@@ -268,7 +282,15 @@ exports.list = async (req, res, next) => {
         { ownershipStatus: 'Unassigned' },
         { ownershipStatus: 'Expired' },
         { availableInGeneralPoolAfter: { $lte: new Date() } },
-        { tlRejectedAt: { $lte: thirtyDaysAgo } }
+        { tlRejectedAt: { $lte: thirtyDaysAgo } },
+        {
+          $or: [
+            { isEligible: true },
+            { trackerStage: 'Eligible' },
+            { status: 'Eligible' }
+          ],
+          updatedAt: { $lte: thirtyDaysAgo }
+        }
       ];
       if (query.$or) {
         query.$and = [{ $or: query.$or }, { $or: poolCond }];
@@ -504,7 +526,15 @@ exports.list = async (req, res, next) => {
           { ownershipStatus: 'Unassigned' },
           { ownershipStatus: 'Expired' },
           { availableInGeneralPoolAfter: { $lte: new Date() } },
-          { tlRejectedAt: { $lte: thirtyDaysAgoForPool } }
+          { tlRejectedAt: { $lte: thirtyDaysAgoForPool } },
+          {
+            $or: [
+              { isEligible: true },
+              { trackerStage: 'Eligible' },
+              { status: 'Eligible' }
+            ],
+            updatedAt: { $lte: thirtyDaysAgoForPool }
+          }
         ]
       })
     ]);

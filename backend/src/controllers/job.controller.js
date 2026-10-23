@@ -17,6 +17,29 @@ exports.list = async (req, res, next) => {
     if (company) query.companyName = { $regex: company.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), $options: 'i' };
     if (division && division !== 'All') query.division = { $regex: new RegExp(`^${division.trim()}$`, 'i') };
 
+    // For recruiters: only show JRs that are Open to All or specifically allocated to them
+    if (req.user && req.user.role === 'recruiter') {
+      const userAllocFilter = {
+        $or: [
+          { allocationType: 'open_to_all' },
+          { allocationType: { $exists: false } },
+          { allocationType: null },
+          { allocationType: '' },
+          { 'allocatedUsers.userId': req.user._id },
+          { 'allocatedUsers.email': req.user.email?.toLowerCase() },
+          { 'allocatedUsers.name': { $regex: new RegExp(`^${(req.user.name || '').trim()}$`, 'i') } },
+          { assignedRecruiters: req.user._id },
+          { recruiterEmail: req.user.email?.toLowerCase() },
+          { recruiterName: { $regex: new RegExp(`^${(req.user.name || '').trim()}$`, 'i') } }
+        ]
+      };
+      if (query.$and) {
+        query.$and.push(userAllocFilter);
+      } else {
+        query.$and = [userAllocFilter];
+      }
+    }
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [jobs, total, totalPositionsResult] = await Promise.all([
       Job.find(query).populate('createdBy', 'name email employeeId role').sort('-createdAt').skip(skip).limit(parseInt(limit)),
@@ -228,6 +251,42 @@ exports.update = async (req, res, next) => {
       role: req.user.role, action: `Updated job: ${job.jobTitle} (${job.jrNumber})`,
       target: job._id.toString(), ip: req.ip,
     });
+    res.json(job);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PATCH /api/jobs/:id/allocate — TL, Admin, Manager allocate/reallocate JR to recruiters/TLs
+exports.allocate = async (req, res, next) => {
+  try {
+    const { allocationType = 'open_to_all', allocatedUsers = [] } = req.body;
+    let parsedUsers = allocatedUsers;
+    if (typeof parsedUsers === 'string') {
+      try { parsedUsers = JSON.parse(parsedUsers); } catch { parsedUsers = []; }
+    }
+
+    const job = await Job.findByIdAndUpdate(
+      req.params.id,
+      {
+        allocationType,
+        allocatedUsers: allocationType === 'specific' ? parsedUsers : []
+      },
+      { new: true, runValidators: true }
+    ).populate('createdBy', 'name email employeeId role');
+
+    if (!job) return res.status(404).json({ message: 'Job not found' });
+
+    await createLog({
+      type: 'edit',
+      user: req.user._id,
+      userName: req.user.name,
+      role: req.user.role,
+      action: `Allocated JR: ${job.jobTitle} (${job.jrNumber}) to ${allocationType === 'specific' ? parsedUsers.map(u => u.name).join(', ') : 'Open to All'}`,
+      target: job._id.toString(),
+      ip: req.ip,
+    });
+
     res.json(job);
   } catch (err) {
     next(err);

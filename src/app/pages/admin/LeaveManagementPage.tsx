@@ -264,6 +264,7 @@ export function LeaveManagementPage() {
                   <th className="px-6 py-3.5">Reason</th>
                   <th className="px-6 py-3.5">Status</th>
                   <th className="px-6 py-3.5">Approvals / Remarks</th>
+                  <th className="px-6 py-3.5 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -307,6 +308,22 @@ export function LeaveManagementPage() {
                           {r.reviewRemarks && <div className="text-[11px] text-slate-400 italic">"{r.reviewRemarks}"</div>}
                         </div>
                       ) : !r.tlApproval?.approvedByName ? '—' : null}
+                    </td>
+                    <td className="px-6 py-4 text-right whitespace-nowrap">
+                      {r.status === 'Approved' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Revoke and reject approved leave for ${r.name}? Leave balance will be refunded.`)) {
+                              handleReview(r._id, 'Revoke' as any);
+                            }
+                          }}
+                          disabled={actionLoading === r._id}
+                          className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 transition-colors"
+                        >
+                          {actionLoading === r._id ? 'Revoking...' : 'Revoke (Reject)'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

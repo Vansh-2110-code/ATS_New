@@ -103,23 +103,41 @@ function buildFilterQuery(query, user) {
     });
   }
 
-  // 5. Positive Keywords / Search
+  // 5. Positive Keywords / Multi-Keyword Search (Unlimited keywords supported)
   if (search && search.trim()) {
-    const sTerm = search.trim();
-    const sRe = { $regex: sTerm, $options: 'i' };
-    andClauses.push({
-      $or: [
-        { name: sRe },
-        { email: sRe },
-        { phone: sRe },
-        { keySkills: sRe },
-        { jobTitle: sRe },
-        { currentCompanyName: sRe },
-        { summary: sRe },
-        { resumeHeadline: sRe },
-        { currentCompanyDesignation: sRe }
-      ]
+    const rawSearch = search.trim();
+    const rawKeywords = rawSearch.includes(',') || rawSearch.includes(';') || rawSearch.includes('|')
+      ? rawSearch.split(/[,;|]+/).map(k => k.trim()).filter(Boolean)
+      : rawSearch.split(/\s{2,}/).map(k => k.trim()).filter(Boolean);
+
+    const keywords = rawKeywords.length > 0 ? rawKeywords : [rawSearch];
+
+    const keywordConditions = keywords.map(kw => {
+      const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const kwRe = { $regex: escaped, $options: 'i' };
+      return {
+        $or: [
+          { name: kwRe },
+          { email: kwRe },
+          { phone: kwRe },
+          { keySkills: kwRe },
+          { matchedSkills: kwRe },
+          { jobTitle: kwRe },
+          { currentCompanyName: kwRe },
+          { summary: kwRe },
+          { resumeHeadline: kwRe },
+          { currentCompanyDesignation: kwRe },
+          { 'experience.title': kwRe },
+          { 'experience.company': kwRe }
+        ]
+      };
     });
+
+    if (keywordConditions.length === 1) {
+      andClauses.push(keywordConditions[0]);
+    } else if (keywordConditions.length > 1) {
+      andClauses.push({ $or: keywordConditions });
+    }
   }
 
   // 6. Exclude Keywords

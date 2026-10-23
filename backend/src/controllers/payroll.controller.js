@@ -157,21 +157,70 @@ exports.saveStatutoryConfig = async (req, res) => {
 exports.getEmployeeProfiles = async (req, res) => {
   try {
     const { companyId, branchId, status } = req.query;
-    const query = {};
+    const User = require('../models/User');
+    const Employee = require('../models/Employee');
+
+    // Default tenant company (White Horse)
+    const defaultCompany = companyId ? await Company.findById(companyId) : (await Company.findOne({ isPayrollTenant: true }) || await Company.findOne());
+
+    // Exclude suspended users and demo accounts from payroll
+    const excludedUsers = await User.find({
+      $or: [
+        { status: 'Suspended' },
+        { isDemoAccount: true },
+        { employeeId: /^DEMO/i }
+      ]
+    }).select('_id');
+    const excludedIds = excludedUsers.map(u => u._id);
+
+    // Fetch all active non-suspended, non-demo ATS users
+    const activeUsers = await User.find({
+      _id: { $nin: excludedIds },
+      status: { $ne: 'Suspended' }
+    }).select('name email employeeId role status joinedDate avatar branch').lean();
+
+    const activeUserIds = activeUsers.map(u => u._id);
+    const userEmails = activeUsers.map(u => (u.email || '').toLowerCase()).filter(Boolean);
+    const empJoiningRecords = await Employee.find({ email: { $in: userEmails } }).lean();
+    const empByEmail = {};
+    empJoiningRecords.forEach(e => { if (e.email) empByEmail[e.email.toLowerCase()] = e; });
+
+    // Ensure all active employees have a payroll profile
+    const existingProfiles = await EmployeePayrollProfile.find({ user: { $in: activeUserIds } });
+    const existingUserIdsSet = new Set(existingProfiles.map(p => p.user.toString()));
+
+    for (const u of activeUsers) {
+      if (!existingUserIdsSet.has(u._id.toString()) && defaultCompany) {
+        const joiningData = empByEmail[(u.email || '').toLowerCase()];
+        const sal = Number(joiningData?.fixedSalary || joiningData?.stipend || 0);
+        try {
+          await EmployeePayrollProfile.create({
+            user: u._id,
+            company: defaultCompany._id,
+            branch: u.branch,
+            grossSalary: sal,
+            annualCTC: sal * 12,
+            statutory: {
+              panNumber: joiningData?.panCardNumber || joiningData?.pan || 'N/A',
+              taxRegime: 'new'
+            },
+            bank: {
+              bankName: joiningData?.bankName || 'HDFC Bank',
+              accountNumber: joiningData?.accountNumber || 'N/A',
+              ifscCode: joiningData?.ifscCode || 'N/A',
+              accountHolderName: joiningData?.accountHolderName || joiningData?.fullName || u.name,
+              paymentMode: 'bank_transfer'
+            },
+            status: 'active'
+          });
+        } catch (_) {}
+      }
+    }
+
+    const query = { user: { $in: activeUserIds } };
     if (companyId) query.company = companyId;
     if (branchId) query.branch = branchId;
     if (status) query.status = status;
-
-    // exclude suspended users from payroll
-    const User = require('../models/User');
-    const Employee = require('../models/Employee');
-    const suspended = await User.find({ status: 'Suspended' }).select('_id');
-    const suspendedIds = suspended.map(u => u._id);
-    if (query.user) {
-      query.user = { $in: Array.isArray(query.user) ? query.user.filter(id => !suspendedIds.some(sid => sid.equals(id))) : query.user };
-    } else {
-      query.user = { $nin: suspendedIds };
-    }
 
     let profiles = await EmployeePayrollProfile.find(query)
       .populate('user', 'name email employeeId role status joinedDate avatar')
@@ -179,12 +228,7 @@ exports.getEmployeeProfiles = async (req, res) => {
       .populate('salaryStructure', 'name code')
       .sort({ createdAt: -1 });
 
-    // Auto-sync bank & salary from Employee (joining form) if not set
-    const userEmails = profiles.map(p => p.user?.email).filter(Boolean);
-    const empJoiningRecords = await Employee.find({ email: { $in: userEmails } }).lean();
-    const empByEmail = {};
-    empJoiningRecords.forEach(e => { if (e.email) empByEmail[e.email.toLowerCase()] = e; });
-
+    // Sync bank & salary from Employee joining form if empty
     profiles = profiles.map(p => {
       const pObj = p.toObject();
       const joiningData = empByEmail[(p.user?.email || '').toLowerCase()];
@@ -225,25 +269,60 @@ exports.updateEmployeeProfile = async (req, res) => {
   try {
     const { id } = req.params;
     const data = req.body;
-    const existing = await EmployeePayrollProfile.findById(id);
-    if (!existing) return res.status(404).json({ message: 'Payroll profile not found' });
+    let existing = await EmployeePayrollProfile.findById(id);
+    if (!existing) {
+      existing = await EmployeePayrollProfile.findOne({ user: id });
+    }
+    if (!existing) {
+      const defaultCompany = await Company.findOne({ isPayrollTenant: true }) || await Company.findOne();
+      existing = new EmployeePayrollProfile({
+        user: id,
+        company: data.company || defaultCompany?._id,
+        grossSalary: Number(data.grossSalary) || 0,
+        annualCTC: Number(data.annualCTC) || (Number(data.grossSalary) * 12) || 0,
+        status: data.status || 'active'
+      });
+    }
 
+    if (data.grossSalary !== undefined) {
+      existing.grossSalary = Number(data.grossSalary);
+      existing.annualCTC = Number(data.annualCTC) || (Number(data.grossSalary) * 12);
+    }
     if (data.statutory) {
       existing.statutory = {
         ...(existing.statutory ? (typeof existing.statutory.toObject === 'function' ? existing.statutory.toObject() : existing.statutory) : {}),
         ...data.statutory
       };
-      delete data.statutory;
     }
     if (data.bank) {
       existing.bank = {
         ...(existing.bank ? (typeof existing.bank.toObject === 'function' ? existing.bank.toObject() : existing.bank) : {}),
         ...data.bank
       };
-      delete data.bank;
     }
-    Object.assign(existing, data);
+    if (data.status) existing.status = data.status;
+
     await existing.save();
+
+    // Also update Employee joining form record so both stay 100% in sync
+    const populated = await EmployeePayrollProfile.findById(existing._id).populate('user', 'email name');
+    if (populated?.user?.email) {
+      const Employee = require('../models/Employee');
+      await Employee.findOneAndUpdate(
+        { email: populated.user.email.toLowerCase() },
+        {
+          $set: {
+            bankName: existing.bank?.bankName,
+            accountNumber: existing.bank?.accountNumber,
+            ifscCode: existing.bank?.ifscCode,
+            accountHolderName: existing.bank?.accountHolderName,
+            panCardNumber: existing.statutory?.panNumber,
+            fixedSalary: existing.grossSalary
+          }
+        }
+      );
+    }
+
     res.json(existing);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -334,12 +413,23 @@ exports.getDashboardStats = async (req, res) => {
 // ─── 8. Calculate & Run Monthly Payroll ─────────────────────────────────
 exports.calculatePayroll = async (req, res) => {
   try {
-    const { companyId, branchId, month, year, baseDays = 30 } = req.body;
+    const { companyId, branchId, month, year, baseDays = 30, includedEmployeeIds } = req.body;
     const calcMonth = Number(month);
     const calcYear = Number(year);
 
     const company = await Company.findById(companyId);
     if (!company) return res.status(404).json({ message: 'Company not found' });
+
+    // Exclude suspended and demo users
+    const User = require('../models/User');
+    const excludedUsers = await User.find({
+      $or: [
+        { status: 'Suspended' },
+        { isDemoAccount: true },
+        { employeeId: /^DEMO/i }
+      ]
+    }).select('_id');
+    const excludedIds = excludedUsers.map(u => u._id.toString());
 
     // Fetch Statutory Config
     const statConfig = await StatutoryConfig.findOne({ company: company._id }) || {
@@ -367,10 +457,26 @@ exports.calculatePayroll = async (req, res) => {
       run.status = 'CALCULATED';
     }
 
-    // Fetch Eligible Profiles
+    // Fetch Eligible Profiles (Active, non-suspended, non-demo)
     const profileQuery = { company: company._id, status: 'active' };
     if (branchId) profileQuery.branch = branchId;
-    const profiles = await EmployeePayrollProfile.find(profileQuery).populate('user');
+    const allProfiles = await EmployeePayrollProfile.find(profileQuery).populate('user');
+
+    // Filter profiles: remove suspended/demo and restrict to includedEmployeeIds if provided
+    const profiles = allProfiles.filter(p => {
+      if (!p.user) return false;
+      const uId = p.user._id ? p.user._id.toString() : '';
+      const profId = p._id.toString();
+      if (excludedIds.includes(uId)) return false;
+      if (p.user.status === 'Suspended') return false;
+      if (p.user.isDemoAccount) return false;
+      if (p.user.employeeId && p.user.employeeId.toUpperCase().startsWith('DEMO')) return false;
+
+      if (Array.isArray(includedEmployeeIds) && includedEmployeeIds.length > 0) {
+        return includedEmployeeIds.includes(uId) || includedEmployeeIds.includes(profId);
+      }
+      return true;
+    });
 
     // Remove existing draft employee records for this run
     await PayrollEmployeeRecord.deleteMany({ payrollRun: run._id });
@@ -607,8 +713,22 @@ exports.getPayslips = async (req, res) => {
       ];
     }
 
+    // Exclude suspended and demo users unless specifically queried by user
+    if (!query.user) {
+      const User = require('../models/User');
+      const excludedUsers = await User.find({
+        $or: [
+          { status: 'Suspended' },
+          { isDemoAccount: true },
+          { employeeId: /^DEMO/i }
+        ]
+      }).select('_id');
+      const excludedIds = excludedUsers.map(u => u._id);
+      query.user = { $nin: excludedIds };
+    }
+
     const records = await PayrollEmployeeRecord.find(query)
-      .populate('company', 'companyName legalName logo address gstin cin')
+      .populate('company', 'companyName legalName logo address gstin cin pan')
       .populate('branch', 'branchName address city state')
       .sort({ year: -1, month: -1, name: 1 });
 
