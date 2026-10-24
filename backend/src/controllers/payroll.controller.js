@@ -173,26 +173,77 @@ exports.getEmployeeProfiles = async (req, res) => {
     }).select('_id');
     const excludedIds = excludedUsers.map(u => u._id);
 
-    // Fetch all active non-suspended, non-demo ATS users
-    const activeUsers = await User.find({
-      _id: { $nin: excludedIds },
-      status: { $ne: 'Suspended' }
-    }).select('name email employeeId role status joinedDate avatar branch').lean();
+    const isExitedTab = req.query.employmentStatus === 'exited' || req.query.status === 'exited' || req.query.status === 'Former Staff';
 
-    const activeUserIds = activeUsers.map(u => u._id);
-    const userEmails = activeUsers.map(u => (u.email || '').toLowerCase()).filter(Boolean);
-    const empJoiningRecords = await Employee.find({ email: { $in: userEmails } }).lean();
+    let userFilter = { _id: { $nin: excludedIds } };
+    if (isExitedTab) {
+      userFilter.$or = [
+        { status: 'Exited' },
+        { status: 'Inactive' },
+        { employmentStatus: 'Former Staff' }
+      ];
+    } else {
+      userFilter.status = { $nin: ['Suspended', 'Exited', 'Inactive'] };
+      userFilter.employmentStatus = { $ne: 'Former Staff' };
+    }
+
+    const targetUsers = await User.find(userFilter)
+      .select('name email employeeId role status employmentStatus lastWorkingDay joinedDate avatar branch')
+      .lean();
+
+    const targetUserIds = targetUsers.map(u => u._id);
+    const userEmails = targetUsers.map(u => (u.email || '').toLowerCase().trim()).filter(Boolean);
+    const userEmpIds = targetUsers.map(u => (u.employeeId || '').toUpperCase().trim()).filter(Boolean);
+
+    const empJoiningRecords = await Employee.find({
+      $or: [
+        { email: { $in: userEmails } },
+        { employeeId: { $in: userEmpIds } }
+      ]
+    }).lean();
+
     const empByEmail = {};
-    empJoiningRecords.forEach(e => { if (e.email) empByEmail[e.email.toLowerCase()] = e; });
+    const empByEmpId = {};
+    empJoiningRecords.forEach(e => {
+      if (e.email) empByEmail[e.email.toLowerCase().trim()] = e;
+      if (e.employeeId) empByEmpId[e.employeeId.toUpperCase().trim()] = e;
+    });
 
-    // Ensure all active employees have a payroll profile
-    const existingProfiles = await EmployeePayrollProfile.find({ user: { $in: activeUserIds } });
+    const getJoiningData = (user) => {
+      if (!user) return null;
+      if (user.employeeId && empByEmpId[user.employeeId.toUpperCase().trim()]) {
+        return empByEmpId[user.employeeId.toUpperCase().trim()];
+      }
+      if (user.email && empByEmail[user.email.toLowerCase().trim()]) {
+        return empByEmail[user.email.toLowerCase().trim()];
+      }
+      return null;
+    };
+
+    const extractMonthlySalary = (joiningData) => {
+      if (!joiningData) return 0;
+      const cleanNum = (str) => {
+        if (!str) return 0;
+        if (typeof str === 'number') return str;
+        const c = String(str).replace(/[₹,\s]/g, '');
+        const n = parseFloat(c);
+        return isNaN(n) ? 0 : n;
+      };
+      let sal = cleanNum(joiningData.salaryOffered || joiningData.offeredCTC || joiningData.currentCTC);
+      if (sal > 100000) {
+        return Math.round(sal / 12);
+      }
+      return sal;
+    };
+
+    // Ensure all target employees have a payroll profile
+    const existingProfiles = await EmployeePayrollProfile.find({ user: { $in: targetUserIds } });
     const existingUserIdsSet = new Set(existingProfiles.map(p => p.user.toString()));
 
-    for (const u of activeUsers) {
+    for (const u of targetUsers) {
       if (!existingUserIdsSet.has(u._id.toString()) && defaultCompany) {
-        const joiningData = empByEmail[(u.email || '').toLowerCase()];
-        const sal = Number(joiningData?.fixedSalary || joiningData?.stipend || 0);
+        const joiningData = getJoiningData(u);
+        const sal = extractMonthlySalary(joiningData);
         try {
           await EmployeePayrollProfile.create({
             user: u._id,
@@ -201,7 +252,7 @@ exports.getEmployeeProfiles = async (req, res) => {
             grossSalary: sal,
             annualCTC: sal * 12,
             statutory: {
-              panNumber: joiningData?.panCardNumber || joiningData?.pan || 'N/A',
+              panNumber: joiningData?.panNumber || joiningData?.panCardNumber || joiningData?.pan || 'N/A',
               taxRegime: 'new'
             },
             bank: {
@@ -211,19 +262,19 @@ exports.getEmployeeProfiles = async (req, res) => {
               accountHolderName: joiningData?.accountHolderName || joiningData?.fullName || u.name,
               paymentMode: 'bank_transfer'
             },
-            status: 'active'
+            status: isExitedTab ? 'exited' : 'active'
           });
         } catch (_) {}
       }
     }
 
-    const query = { user: { $in: activeUserIds } };
+    const query = { user: { $in: targetUserIds } };
     if (companyId) query.company = companyId;
     if (branchId) query.branch = branchId;
-    if (status) query.status = status;
+    if (status && !isExitedTab) query.status = status;
 
     let profiles = await EmployeePayrollProfile.find(query)
-      .populate('user', 'name email employeeId role status joinedDate avatar')
+      .populate('user', 'name email employeeId role status employmentStatus lastWorkingDay joinedDate avatar')
       .populate('branch', 'name code state')
       .populate('salaryStructure', 'name code')
       .sort({ createdAt: -1 });
@@ -231,8 +282,9 @@ exports.getEmployeeProfiles = async (req, res) => {
     // Sync bank & salary from Employee joining form if empty
     profiles = profiles.map(p => {
       const pObj = p.toObject();
-      const joiningData = empByEmail[(p.user?.email || '').toLowerCase()];
+      const joiningData = getJoiningData(p.user);
       if (joiningData) {
+        let modified = false;
         if (!pObj.bank?.accountNumber || pObj.bank.accountNumber === 'N/A') {
           pObj.bank = {
             bankName: joiningData.bankName || pObj.bank?.bankName || 'HDFC Bank',
@@ -241,19 +293,28 @@ exports.getEmployeeProfiles = async (req, res) => {
             accountHolderName: joiningData.accountHolderName || joiningData.fullName || pObj.user?.name || '',
             paymentMode: 'bank_transfer'
           };
+          modified = true;
         }
         if (!pObj.grossSalary || pObj.grossSalary === 0) {
-          const sal = Number(joiningData.fixedSalary || joiningData.stipend || 0);
+          const sal = extractMonthlySalary(joiningData);
           if (sal > 0) {
             pObj.grossSalary = sal;
             pObj.annualCTC = sal * 12;
+            modified = true;
           }
         }
         if (!pObj.statutory?.panNumber || pObj.statutory.panNumber === 'N/A') {
           pObj.statutory = {
             ...pObj.statutory,
-            panNumber: joiningData.panCardNumber || joiningData.pan || pObj.statutory?.panNumber || 'N/A'
+            panNumber: joiningData.panNumber || joiningData.panCardNumber || joiningData.pan || pObj.statutory?.panNumber || 'N/A'
           };
+          modified = true;
+        }
+        if (modified) {
+          EmployeePayrollProfile.updateOne(
+            { _id: p._id },
+            { $set: { grossSalary: pObj.grossSalary, annualCTC: pObj.annualCTC, bank: pObj.bank, statutory: pObj.statutory } }
+          ).catch(() => {});
         }
       }
       return pObj;
@@ -285,8 +346,20 @@ exports.updateEmployeeProfile = async (req, res) => {
     }
 
     if (data.grossSalary !== undefined) {
-      existing.grossSalary = Number(data.grossSalary);
-      existing.annualCTC = Number(data.annualCTC) || (Number(data.grossSalary) * 12);
+      const newGross = Number(data.grossSalary);
+      if (existing.grossSalary !== newGross && newGross > 0) {
+        if (!existing.revisions) existing.revisions = [];
+        existing.revisions.push({
+          effectiveDate: data.effectiveDate ? new Date(data.effectiveDate) : new Date(),
+          grossSalary: newGross,
+          annualCTC: Number(data.annualCTC) || (newGross * 12),
+          reason: data.incrementReason || data.reason || 'Increment / Salary Revision',
+          revisedBy: req.user?._id,
+          createdAt: new Date()
+        });
+      }
+      existing.grossSalary = newGross;
+      existing.annualCTC = Number(data.annualCTC) || (newGross * 12);
     }
     if (data.statutory) {
       existing.statutory = {
@@ -305,22 +378,28 @@ exports.updateEmployeeProfile = async (req, res) => {
     await existing.save();
 
     // Also update Employee joining form record so both stay 100% in sync
-    const populated = await EmployeePayrollProfile.findById(existing._id).populate('user', 'email name');
-    if (populated?.user?.email) {
+    const populated = await EmployeePayrollProfile.findById(existing._id).populate('user', 'email employeeId name');
+    if (populated?.user) {
       const Employee = require('../models/Employee');
-      await Employee.findOneAndUpdate(
-        { email: populated.user.email.toLowerCase() },
-        {
-          $set: {
-            bankName: existing.bank?.bankName,
-            accountNumber: existing.bank?.accountNumber,
-            ifscCode: existing.bank?.ifscCode,
-            accountHolderName: existing.bank?.accountHolderName,
-            panCardNumber: existing.statutory?.panNumber,
-            fixedSalary: existing.grossSalary
+      const orFilter = [];
+      if (populated.user.employeeId) orFilter.push({ employeeId: populated.user.employeeId });
+      if (populated.user.email) orFilter.push({ email: populated.user.email.toLowerCase().trim() });
+      if (orFilter.length > 0) {
+        await Employee.updateMany(
+          { $or: orFilter },
+          {
+            $set: {
+              bankName: existing.bank?.bankName,
+              accountNumber: existing.bank?.accountNumber,
+              ifscCode: existing.bank?.ifscCode,
+              accountHolderName: existing.bank?.accountHolderName,
+              panNumber: existing.statutory?.panNumber,
+              salaryOffered: String(existing.grossSalary),
+              offeredCTC: String(existing.annualCTC)
+            }
           }
-        }
-      );
+        );
+      }
     }
 
     res.json(existing);
@@ -492,7 +571,18 @@ exports.calculatePayroll = async (req, res) => {
     for (const p of profiles) {
       if (!p.user) continue;
 
-      const monthlyGross = p.grossSalary || 0;
+      // Support increment revisions: take the latest revision effective on or before this month's end
+      let effectiveGross = p.grossSalary || 0;
+      if (Array.isArray(p.revisions) && p.revisions.length > 0) {
+        const applicableRevs = p.revisions
+          .filter(r => r.effectiveDate && new Date(r.effectiveDate) <= endDate)
+          .sort((a, b) => new Date(b.effectiveDate) - new Date(a.effectiveDate));
+        if (applicableRevs.length > 0 && applicableRevs[0].grossSalary > 0) {
+          effectiveGross = applicableRevs[0].grossSalary;
+        }
+      }
+
+      const monthlyGross = effectiveGross;
       const perDaySalary = monthlyGross / baseDays;
 
       // Sync Attendance for Month
@@ -507,9 +597,31 @@ exports.calculatePayroll = async (req, res) => {
       let presentCount = 0;
       let lopDays = 0;
       attendances.forEach(a => {
-        if (a.status === 'present' || a.status === 'wfh') presentCount++;
-        if (a.status === 'absent' || a.status === 'unpaid_leave') lopDays++;
+        const st = (a.status || '').toLowerCase().trim();
+        if (st === 'present' || st === 'wfh') {
+          presentCount++;
+        } else if (st === 'absent' || st === 'unpaid_leave') {
+          lopDays++;
+        } else if (st === 'half day') {
+          presentCount += 0.5;
+          lopDays += 0.5;
+        }
       });
+
+      // Also check approved Unpaid Leave from LeaveRequest
+      try {
+        const LeaveRequest = require('../models/LeaveRequest');
+        const unpaidLeaves = await LeaveRequest.find({
+          user: p.user._id,
+          leaveType: 'Unpaid Leave',
+          status: 'Approved',
+          fromDate: { $lte: endDate },
+          toDate: { $gte: startDate }
+        });
+        unpaidLeaves.forEach(ul => {
+          lopDays += (ul.daysCount || 1);
+        });
+      } catch (_) {}
 
       // Default to full payable days if attendance records are not explicitly marked absent
       const payableDays = Math.max(0, baseDays - lopDays);

@@ -89,7 +89,7 @@ export function AttendancePage() {
         }
         const data = await api.getAttendance(params);
         const list = (data.records || data.attendance || data.employees || data || []).map((e: any) => ({
-          id: e.employeeId || e._id || e.id,
+          id: e.user?.employeeId || e.employeeId || e._id || e.id,
           name: e.user?.name || e.name || '',
           role: e.user?.role || e.role || '',
           login: formatAttendanceTime(e.loginTime || e.login),
@@ -158,7 +158,21 @@ export function AttendancePage() {
   const handleExportExcel = async () => {
     setExporting(true);
     try {
-      await api.exportAttendanceExcel({ date, status });
+      const params: Record<string, string> = {};
+      if (dateMode === 'range') {
+        if (startDate) {
+          params.startDate = startDate;
+          params.from = startDate;
+        }
+        if (endDate) {
+          params.endDate = endDate;
+          params.to = endDate;
+        }
+      } else {
+        if (date) params.date = date;
+      }
+      if (filter && filter !== 'All') params.status = filter;
+      await api.exportAttendanceExcel(params);
     } catch (err) {
       console.error('Failed to export attendance:', err);
       alert('Failed to export attendance data. Please try again.');

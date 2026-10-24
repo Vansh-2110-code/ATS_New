@@ -375,16 +375,25 @@ export function JobsListPage() {
                       </td>
                       <td className="px-4 py-3">
                         {j.allocationType === 'specific' ? (
-                          <span
-                            className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-700 max-w-[130px] truncate block"
-                            title={j.allocatedUsers?.map((u: any) => u.name).join(', ') || 'Assigned users'}
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); canEdit && openAllocateModal(j); }}
+                            className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-100 hover:bg-indigo-200 text-indigo-700 max-w-[140px] truncate inline-flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                            title={j.allocatedUsers?.map((u: any) => u.name).join(', ') || 'Click to change assigned recruiters/TLs'}
                           >
-                            Allocated ({j.allocatedUsers?.length || 0})
-                          </span>
+                            <span>Allocated ({j.allocatedUsers?.length || 0})</span>
+                            <span className="text-[10px] opacity-70">✎</span>
+                          </button>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700">
-                            Open to all
-                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); canEdit && openAllocateModal(j); }}
+                            className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-700 inline-flex items-center gap-1 transition-colors shadow-2xs cursor-pointer"
+                            title="Click to allocate this JR to specific recruiters / TLs"
+                          >
+                            <span>Open to all</span>
+                            <span className="text-[10px] opacity-70">✎</span>
+                          </button>
                         )}
                       </td>
                       <td className="px-4 py-3 text-slate-500 text-xs">{j.location || '—'}</td>

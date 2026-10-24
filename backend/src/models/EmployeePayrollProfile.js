@@ -26,7 +26,7 @@ const employeePayrollProfileSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['active', 'on_hold', 'inactive'],
+    enum: ['active', 'on_hold', 'inactive', 'exited'],
     default: 'active'
   },
   revisions: [{

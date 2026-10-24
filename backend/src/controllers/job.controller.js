@@ -141,6 +141,9 @@ exports.create = async (req, res, next) => {
     if (typeof data.allocatedUsers === 'string') {
       try { data.allocatedUsers = JSON.parse(data.allocatedUsers); } catch { delete data.allocatedUsers; }
     }
+    if (Array.isArray(data.allocatedUsers)) {
+      data.allocatedUsers = data.allocatedUsers.filter(u => u.status !== 'Suspended');
+    }
     data.postedByName = req.user.name;
     data.postedByEmail = req.user.email;
     if (req.file) {
@@ -240,6 +243,9 @@ exports.update = async (req, res, next) => {
     if (typeof data.allocatedUsers === 'string') {
       try { data.allocatedUsers = JSON.parse(data.allocatedUsers); } catch { delete data.allocatedUsers; }
     }
+    if (Array.isArray(data.allocatedUsers)) {
+      data.allocatedUsers = data.allocatedUsers.filter(u => u.status !== 'Suspended');
+    }
     if (req.file) {
       data.jdFilePath = `/uploads/jd/${req.file.filename}`;
       data.jdOriginalName = req.file.originalname;
@@ -264,6 +270,9 @@ exports.allocate = async (req, res, next) => {
     let parsedUsers = allocatedUsers;
     if (typeof parsedUsers === 'string') {
       try { parsedUsers = JSON.parse(parsedUsers); } catch { parsedUsers = []; }
+    }
+    if (Array.isArray(parsedUsers)) {
+      parsedUsers = parsedUsers.filter(u => u.status !== 'Suspended');
     }
 
     const job = await Job.findByIdAndUpdate(

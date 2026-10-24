@@ -134,7 +134,11 @@ exports.list = async (req, res, next) => {
     }
 
     const [records, total] = await Promise.all([
-      Attendance.find(query).sort('-date').skip(skip).limit(parseInt(limit)),
+      Attendance.find(query)
+        .populate('user', 'name email employeeId role')
+        .sort('-date')
+        .skip(skip)
+        .limit(parseInt(limit)),
       Attendance.countDocuments(query),
     ]);
 
@@ -474,34 +478,38 @@ exports.exportExcel = async (req, res, next) => {
   try {
     const XLSX = require('xlsx');
 
-    // Optional filters from query
-    const { date, from, to, status } = req.query;
+    // Optional filters from query (supports startDate/endDate as well as from/to)
+    const { date, from, to, startDate, endDate, status } = req.query;
     const query = {};
 
-    // Support both single date and date range
-    if (date) {
+    const rangeFrom = from || startDate;
+    const rangeTo = to || endDate;
+
+    if (rangeFrom || rangeTo) {
+      query.date = {};
+      if (rangeFrom) {
+        const f = new Date(rangeFrom);
+        f.setHours(0, 0, 0, 0);
+        query.date.$gte = f;
+      }
+      if (rangeTo) {
+        const t = new Date(rangeTo);
+        t.setHours(23, 59, 59, 999);
+        query.date.$lte = t;
+      }
+    } else if (date) {
       const d = new Date(date);
       d.setHours(0, 0, 0, 0);
       const nextDay = new Date(d);
       nextDay.setDate(nextDay.getDate() + 1);
       query.date = { $gte: d, $lt: nextDay };
-    } else if (from || to) {
-      query.date = {};
-      if (from) {
-        const f = new Date(from);
-        f.setHours(0, 0, 0, 0);
-        query.date.$gte = f;
-      }
-      if (to) {
-        const t = new Date(to);
-        t.setHours(23, 59, 59, 999);
-        query.date.$lte = t;
-      }
     }
-    if (status) query.status = status;
 
-    // Fetch all attendance records
+    if (status && status !== 'All') query.status = status;
+
+    // Fetch all attendance records with user profile populated
     const records = await Attendance.find(query)
+      .populate('user', 'name employeeId role email')
       .sort('-date')
       .lean()
       .exec();
@@ -521,10 +529,12 @@ exports.exportExcel = async (req, res, next) => {
         return `${String(h12).padStart(2, '0')}:${minutes} ${ampm}`;
       };
 
+      const empId = r.user?.employeeId || r.employeeId || 'N/A';
+
       return {
-        'Employee ID': r.employeeId || r.userId || 'N/A',
-        'Name': r.name || 'N/A',
-        'Role': r.role || 'N/A',
+        'Employee ID': empId,
+        'Name': r.user?.name || r.name || 'N/A',
+        'Role': r.user?.role || r.role || 'N/A',
         'Date': dateStr || 'N/A',
         'Login Time': toHHMM(r.loginTime),
         'Logout Time': toHHMM(r.logoutTime),

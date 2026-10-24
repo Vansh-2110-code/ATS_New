@@ -18,6 +18,8 @@ export function EmployeePayrollPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [currentProfile, setCurrentProfile] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [employmentTab, setEmploymentTab] = useState<'active' | 'exited'>('active');
+  const [incrementNote, setIncrementNote] = useState('');
 
   useEffect(() => {
     loadCompanies();
@@ -28,7 +30,7 @@ export function EmployeePayrollPage() {
       loadBranches(selectedCompanyId);
       loadProfiles();
     }
-  }, [selectedCompanyId, selectedBranchId]);
+  }, [selectedCompanyId, selectedBranchId, employmentTab]);
 
   const loadCompanies = async () => {
     try {
@@ -57,6 +59,7 @@ export function EmployeePayrollPage() {
       const data = await api.getPayrollEmployees({
         companyId: selectedCompanyId,
         branchId: selectedBranchId,
+        employmentStatus: employmentTab,
       });
       setProfiles(data);
     } catch (err) {
@@ -75,9 +78,12 @@ export function EmployeePayrollPage() {
         annualCTC: Number(currentProfile.grossSalary) * 12,
         statutory: currentProfile.statutory,
         bank: currentProfile.bank,
-        status: currentProfile.status
+        status: currentProfile.status,
+        incrementReason: incrementNote,
+        effectiveDate: new Date().toISOString()
       });
       setEditModalOpen(false);
+      setIncrementNote('');
       loadProfiles();
     } catch (err: any) {
       alert(err.message || 'Failed to update profile');
@@ -140,6 +146,34 @@ export function EmployeePayrollPage() {
         </div>
       </div>
 
+      {/* Active vs Exited Staff Tabs */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setEmploymentTab('active')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm ${
+            employmentTab === 'active'
+              ? 'bg-emerald-600 text-white shadow-emerald-200'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+          }`}
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          Active Staff
+        </button>
+        <button
+          type="button"
+          onClick={() => setEmploymentTab('exited')}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm ${
+            employmentTab === 'exited'
+              ? 'bg-rose-600 text-white shadow-rose-200'
+              : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+          }`}
+        >
+          <XCircle className="w-4 h-4" />
+          Exited Staff
+        </button>
+      </div>
+
       {/* Controls Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
@@ -153,7 +187,7 @@ export function EmployeePayrollPage() {
           />
         </div>
         <div className="text-xs font-semibold text-slate-500">
-          Showing <span className="text-slate-900">{filtered.length}</span> active payroll profiles
+          Showing <span className="text-slate-900">{filtered.length}</span> {employmentTab === 'active' ? 'active' : 'exited'} payroll profiles
         </div>
       </div>
 
@@ -296,6 +330,19 @@ export function EmployeePayrollPage() {
                     <option value="old">Old Tax Regime</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Increment / Salary Revision Reason (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Annual Appraisal, Promotion, Incentive Increment"
+                  value={incrementNote}
+                  onChange={(e) => setIncrementNote(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs"
+                />
               </div>
 
               {/* Statutory */}

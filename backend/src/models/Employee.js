@@ -69,6 +69,9 @@ const employeeSchema = new mongoose.Schema({
   approvedAt: { type: Date },
   rejectionRemarks: { type: String, trim: true },
   rejectedDocuments: [{ type: String, trim: true }],
+  employmentStatus: { type: String, enum: ['Active', 'On Leave', 'Former Staff'], default: 'Active' },
+  lastWorkingDay: { type: Date },
+  exitReason: { type: String, trim: true },
   submittedAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
