@@ -138,6 +138,36 @@ export function SalaryPage() {
     return (e.baseSalary || e.base || 0) - (e.deductions || 0) + (e.bonus || 0) + totalIncentives;
   };
 
+  const mapSalaryList = (data: any): SalaryEmployee[] => {
+    const rawList = Array.isArray(data) ? data : (data?.salaryData || data?.employees || []);
+    return rawList.map((e: any) => ({
+      ...e,
+      id: e.employeeId || e._id || e.id,
+      _id: e._id,
+      userId: e.user?._id || e.userId || (typeof e.user === 'string' ? e.user : '') || e._id || e.id,
+      name: e.user?.name || e.name || '',
+      role: e.user?.role || e.role || '',
+      baseSalary: Number(e.baseSalary ?? e.base ?? 0),
+      base: Number(e.baseSalary ?? e.base ?? 0),
+      wfh: Boolean(e.isWFH ?? e.wfh ?? false),
+      presentDays: Number(e.presentDays ?? e.daysPresent ?? 0),
+      workingDays: Number(e.workingDays ?? e.totalWorkingDays ?? 22),
+      deductions: Number(e.deductions ?? 0),
+      bonus: Number(e.bonus ?? e.incentive ?? 0),
+      netSalary: Number(e.netSalary ?? 0),
+      incentives: e.incentives || [],
+      isOverridden: Boolean(e.isOverridden),
+      overriddenBy: e.overriddenBy,
+      adminNotes: e.adminNotes,
+      isPFExempt: e.isPFExempt === true,
+      isESIExempt: e.isESIExempt === true,
+      isPTExempt: e.isPTExempt === true,
+      profileGross: Number(e.profileGross ?? e.baseSalary ?? 0),
+      panNumber: e.panNumber,
+      uanNumber: e.uanNumber,
+    }));
+  };
+
   // Handler functions
   const handleAddSalary = async () => {
     if (!addForm.userId || !addForm.baseSalary) {
@@ -167,7 +197,7 @@ export function SalaryPage() {
       setAddForm({ userId: '', name: '', role: '', baseSalary: '', deductions: '', bonus: '', wfhAllowance: '', adminNotes: '', isPFExempt: false, isESIExempt: false, isPTExempt: false });
       // Reload salaries
       const data = await api.getSalary(selectedMonth, selectedYear);
-      setEmployees(data);
+      setEmployees(mapSalaryList(data));
     } catch (err: any) {
       alert(err.message || 'Failed to add salary');
     } finally {
@@ -193,7 +223,7 @@ export function SalaryPage() {
       });
       setEditModalOpen(false);
       const data = await api.getSalary(selectedMonth, selectedYear);
-      setEmployees(data);
+      setEmployees(mapSalaryList(data));
     } catch (err: any) {
       alert(err.message || 'Failed to update salary');
     } finally {
@@ -207,7 +237,7 @@ export function SalaryPage() {
     try {
       await api.deleteSalary(id);
       const data = await api.getSalary(selectedMonth, selectedYear);
-      setEmployees(data);
+      setEmployees(mapSalaryList(data));
       setDeleting(null);
     } catch (err: any) {
       alert(err.message || 'Failed to delete salary');
@@ -230,9 +260,10 @@ export function SalaryPage() {
       });
       setIncentiveForm({ name: '', amount: '', description: '', category: 'Incentive' });
       const data = await api.getSalary(selectedMonth, selectedYear);
-      setEmployees(data);
-      const updated = data.find((e: any) => e._id === selectedSalary._id);
-      setSelectedSalary(updated);
+      const mapped = mapSalaryList(data);
+      setEmployees(mapped);
+      const updated = mapped.find((e: any) => e._id === selectedSalary._id);
+      setSelectedSalary(updated || null);
     } catch (err: any) {
       alert(err.message || 'Failed to add incentive');
     } finally {
@@ -281,9 +312,10 @@ export function SalaryPage() {
     try {
       await api.removeIncentive(selectedSalary._id, incentiveId);
       const data = await api.getSalary(selectedMonth, selectedYear);
-      setEmployees(data);
-      const updated = data.find((e: any) => e._id === selectedSalary._id);
-      setSelectedSalary(updated);
+      const mapped = mapSalaryList(data);
+      setEmployees(mapped);
+      const updated = mapped.find((e: any) => e._id === selectedSalary._id);
+      setSelectedSalary(updated || null);
     } catch (err: any) {
       alert(err.message || 'Failed to remove incentive');
     }
@@ -307,7 +339,7 @@ export function SalaryPage() {
       setOverrideModalOpen(false);
       setOverrideForm({ overrideReason: '', adminNotes: '' });
       const data = await api.getSalary(selectedMonth, selectedYear);
-      setEmployees(data);
+      setEmployees(mapSalaryList(data));
       alert('Salary marked as overridden successfully');
     } catch (err: any) {
       alert(err.message || 'Failed to override salary');
@@ -326,26 +358,7 @@ export function SalaryPage() {
       try {
         setLoading(true);
         const data = await api.getSalary(selectedMonth, selectedYear);
-        const list = (data.salaryData || data.employees || data || []).map((e: any) => ({
-          id: e.employeeId || e._id || e.id,
-          _id: e._id,
-          userId: e.user?._id || e.userId || e._id || e.id,
-          name: e.user?.name || e.name || '',
-          role: e.user?.role || e.role || '',
-          baseSalary: e.baseSalary || e.base || 0,
-          base: e.baseSalary || e.base || 0,
-          wfh: e.isWFH ?? e.wfh ?? false,
-          presentDays: e.presentDays ?? e.daysPresent ?? 0,
-          workingDays: e.workingDays ?? e.totalWorkingDays ?? 22,
-          deductions: e.deductions ?? 0,
-          bonus: e.bonus ?? e.incentive ?? 0,
-          netSalary: e.netSalary,
-          incentives: e.incentives || [],
-          isOverridden: e.isOverridden,
-          overriddenBy: e.overriddenBy,
-          adminNotes: e.adminNotes,
-        }));
-        setEmployees(list);
+        setEmployees(mapSalaryList(data));
       } catch (err) {
         console.error('Failed to load salary data:', err);
       } finally {
@@ -472,7 +485,18 @@ export function SalaryPage() {
                           >
                             {e.name}
                           </Link>
-                          <p className="text-slate-400 text-xs">{e.id}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <p className="text-slate-400 text-xs">{e.id}</p>
+                            {e.isPFExempt ? (
+                              <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded font-bold shadow-2xs">
+                                ✕ PF Opted Out (₹0)
+                              </span>
+                            ) : (
+                              <span className="text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-medium">
+                                ✓ PF (12%)
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -499,9 +523,16 @@ export function SalaryPage() {
                     </td>
                     <td className="px-4 py-3.5 text-slate-600 text-sm">{fmt(e.base)}</td>
                     <td className="px-4 py-3.5">
-                      <span className={`text-sm ${e.deductions > 0 ? 'text-red-500' : 'text-slate-400'}`} style={{ fontWeight: e.deductions > 0 ? 500 : 400 }}>
-                        {e.deductions > 0 ? `-${fmt(e.deductions)}` : '—'}
-                      </span>
+                      <div className="flex flex-col">
+                        <span className={`text-sm ${e.deductions > 0 ? 'text-red-500' : 'text-slate-400'}`} style={{ fontWeight: e.deductions > 0 ? 500 : 400 }}>
+                          {e.deductions > 0 ? `-${fmt(e.deductions)}` : '—'}
+                        </span>
+                        {e.isPFExempt && (
+                          <span className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                            PF: ₹0 (Opted Out)
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
                       <span className={`text-sm ${e.bonus > 0 ? 'text-emerald-600' : 'text-slate-400'}`} style={{ fontWeight: e.bonus > 0 ? 500 : 400 }}>

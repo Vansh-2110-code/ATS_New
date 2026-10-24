@@ -106,7 +106,12 @@ exports.getSalary = async (req, res, next) => {
       const isPayslipPFExempt = ps?.statutoryDetails?.isPFExempt === true ||
         ps?.deductions?.some(d => d.code === 'PF_EE' && (d.amount === 0 || (d.name && d.name.includes('Opted Out'))));
 
-      sObj.isPFExempt = sObj.isPFExempt === true || prof?.statutory?.isPFExempt === true || isPayslipPFExempt === true;
+      if (sObj.isOverridden && sObj.isPFExempt !== undefined) {
+        sObj.isPFExempt = sObj.isPFExempt === true;
+      } else {
+        sObj.isPFExempt = sObj.isPFExempt === true || prof?.statutory?.isPFExempt === true || isPayslipPFExempt === true;
+      }
+
       sObj.isESIExempt = sObj.isESIExempt === true || prof?.statutory?.isESIExempt === true || ps?.statutoryDetails?.isESIExempt === true;
       sObj.isPTExempt = sObj.isPTExempt === true || prof?.statutory?.isPTExempt === true || ps?.statutoryDetails?.isPTExempt === true;
       sObj.panNumber = prof?.statutory?.panNumber || ps?.statutoryDetails?.pan || 'N/A';
