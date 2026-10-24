@@ -403,6 +403,37 @@ exports.updateEmployeeProfile = async (req, res) => {
         if (data.statutory.isPTExempt !== undefined) syncUpdates.isPTExempt = Boolean(data.statutory.isPTExempt);
         if (Object.keys(syncUpdates).length > 0) {
           await Salary.updateMany({ user: existing.user }, { $set: syncUpdates });
+
+          const PayrollEmployeeRecord = require('../models/PayrollEmployeeRecord');
+          const currentMonth = new Date().getMonth() + 1;
+          const currentYear = new Date().getFullYear();
+          const payslips = await PayrollEmployeeRecord.find({ user: existing.user, month: currentMonth, year: currentYear });
+          for (const ps of payslips) {
+            if (!ps.statutoryDetails) ps.statutoryDetails = {};
+            if (data.statutory.isPFExempt !== undefined) ps.statutoryDetails.isPFExempt = Boolean(data.statutory.isPFExempt);
+            if (data.statutory.isESIExempt !== undefined) ps.statutoryDetails.isESIExempt = Boolean(data.statutory.isESIExempt);
+
+            if (data.statutory.isPFExempt !== undefined) {
+              const isExempt = Boolean(data.statutory.isPFExempt);
+              if (Array.isArray(ps.deductions)) {
+                let pfDed = ps.deductions.find(d => d.code === 'PF_EE');
+                if (pfDed) {
+                  pfDed.name = isExempt ? 'Provident Fund (Opted Out)' : 'Provident Fund (EPF)';
+                  pfDed.amount = isExempt ? 0 : Math.round(((ps.grossEarned || 0) * 0.5 * 0.12));
+                }
+              }
+              if (Array.isArray(ps.employerContributions)) {
+                let pfEr = ps.employerContributions.find(d => d.code === 'PF_ER');
+                if (pfEr) {
+                  pfEr.name = isExempt ? 'Employer EPF (Opted Out)' : 'Employer EPF';
+                  pfEr.amount = isExempt ? 0 : Math.round(((ps.grossEarned || 0) * 0.5 * 0.12));
+                }
+              }
+              ps.totalDeductions = (ps.deductions || []).reduce((sum, d) => sum + (d.amount || 0), 0);
+              ps.netSalary = Math.max(0, (ps.grossEarned || 0) - ps.totalDeductions);
+            }
+            await ps.save();
+          }
         }
       } catch (_) {}
     }

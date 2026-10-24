@@ -81,23 +81,39 @@ exports.getSalary = async (req, res, next) => {
       salaries = await Salary.find({ month: m, year: y });
     }
 
-    // Attach EmployeePayrollProfile statutory and CTC data so Salary Disbursal is fully linked
+    // Attach EmployeePayrollProfile statutory and CTC data AND Salary Slips Hub (PayrollEmployeeRecord)
     const userIds = salaries.map(s => s.user).filter(Boolean);
     const profiles = await EmployeePayrollProfile.find({ user: { $in: userIds } }).lean();
     const profileMap = {};
     profiles.forEach(p => { profileMap[p.user.toString()] = p; });
 
+    let payslipMap = {};
+    try {
+      const PayrollEmployeeRecord = require('../models/PayrollEmployeeRecord');
+      const payslips = await PayrollEmployeeRecord.find({
+        user: { $in: userIds },
+        month: m,
+        year: y
+      }).lean();
+      payslips.forEach(ps => { if (ps.user) payslipMap[ps.user.toString()] = ps; });
+    } catch (_) {}
+
     const enrichedSalaries = salaries.map(s => {
       const sObj = s.toObject ? s.toObject() : { ...s };
       const prof = sObj.user ? profileMap[sObj.user.toString()] : null;
-      sObj.isPFExempt = sObj.isPFExempt === true || prof?.statutory?.isPFExempt === true;
-      sObj.isESIExempt = sObj.isESIExempt === true || prof?.statutory?.isESIExempt === true;
-      sObj.isPTExempt = sObj.isPTExempt === true || prof?.statutory?.isPTExempt === true;
-      sObj.panNumber = prof?.statutory?.panNumber || 'N/A';
-      sObj.uanNumber = prof?.statutory?.uanNumber || 'N/A';
-      sObj.profileGross = prof?.grossSalary || sObj.baseSalary;
-      sObj.profileAnnualCTC = prof?.annualCTC || (sObj.baseSalary * 12);
-      sObj.bank = prof?.bank || null;
+      const ps = sObj.user ? payslipMap[sObj.user.toString()] : null;
+
+      const isPayslipPFExempt = ps?.statutoryDetails?.isPFExempt === true ||
+        ps?.deductions?.some(d => d.code === 'PF_EE' && (d.amount === 0 || (d.name && d.name.includes('Opted Out'))));
+
+      sObj.isPFExempt = sObj.isPFExempt === true || prof?.statutory?.isPFExempt === true || isPayslipPFExempt === true;
+      sObj.isESIExempt = sObj.isESIExempt === true || prof?.statutory?.isESIExempt === true || ps?.statutoryDetails?.isESIExempt === true;
+      sObj.isPTExempt = sObj.isPTExempt === true || prof?.statutory?.isPTExempt === true || ps?.statutoryDetails?.isPTExempt === true;
+      sObj.panNumber = prof?.statutory?.panNumber || ps?.statutoryDetails?.pan || 'N/A';
+      sObj.uanNumber = prof?.statutory?.uanNumber || ps?.statutoryDetails?.uan || 'N/A';
+      sObj.profileGross = prof?.grossSalary || ps?.grossStandard || sObj.baseSalary;
+      sObj.profileAnnualCTC = prof?.annualCTC || (sObj.profileGross * 12);
+      sObj.bank = prof?.bank || ps?.bankDetails || null;
       return sObj;
     });
 
@@ -454,7 +470,7 @@ exports.updateSalary = async (req, res, next) => {
 
     await salary.save();
 
-    // Sync statutory exemptions to EmployeePayrollProfile if user is linked
+    // Sync statutory exemptions to EmployeePayrollProfile and Salary Slips Hub (PayrollEmployeeRecord)
     if (salary.user && (isPFExempt !== undefined || isESIExempt !== undefined || isPTExempt !== undefined)) {
       try {
         const EmployeePayrollProfile = require('../models/EmployeePayrollProfile');
@@ -467,6 +483,41 @@ exports.updateSalary = async (req, res, next) => {
           { user: salary.user },
           { $set: updateFields }
         );
+
+        // Also sync directly to Salary Slips Hub (PayrollEmployeeRecord) for this employee & month
+        const PayrollEmployeeRecord = require('../models/PayrollEmployeeRecord');
+        const payslips = await PayrollEmployeeRecord.find({
+          user: salary.user,
+          month: salary.month,
+          year: salary.year
+        });
+
+        for (const ps of payslips) {
+          if (!ps.statutoryDetails) ps.statutoryDetails = {};
+          if (isPFExempt !== undefined) ps.statutoryDetails.isPFExempt = Boolean(isPFExempt);
+          if (isESIExempt !== undefined) ps.statutoryDetails.isESIExempt = Boolean(isESIExempt);
+
+          if (isPFExempt !== undefined) {
+            const isExempt = Boolean(isPFExempt);
+            if (Array.isArray(ps.deductions)) {
+              let pfDed = ps.deductions.find(d => d.code === 'PF_EE');
+              if (pfDed) {
+                pfDed.name = isExempt ? 'Provident Fund (Opted Out)' : 'Provident Fund (EPF)';
+                pfDed.amount = isExempt ? 0 : Math.round(((ps.grossEarned || salary.baseSalary || 0) * 0.5 * 0.12));
+              }
+            }
+            if (Array.isArray(ps.employerContributions)) {
+              let pfEr = ps.employerContributions.find(d => d.code === 'PF_ER');
+              if (pfEr) {
+                pfEr.name = isExempt ? 'Employer EPF (Opted Out)' : 'Employer EPF';
+                pfEr.amount = isExempt ? 0 : Math.round(((ps.grossEarned || salary.baseSalary || 0) * 0.5 * 0.12));
+              }
+            }
+            ps.totalDeductions = (ps.deductions || []).reduce((sum, d) => sum + (d.amount || 0), 0);
+            ps.netSalary = Math.max(0, (ps.grossEarned || 0) - ps.totalDeductions);
+          }
+          await ps.save();
+        }
       } catch (_) {}
     }
 
