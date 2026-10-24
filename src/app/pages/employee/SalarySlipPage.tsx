@@ -188,7 +188,12 @@ export function SalarySlipPage() {
     salaryData.wfhAllowance || 0,
     salaryData.bonus || 0,
     attendance?.presentDays || 22,
-    22
+    22,
+    {
+      isPFExempt: (salaryData as any)?.isPFExempt === true,
+      isESIExempt: (salaryData as any)?.isESIExempt === true,
+      isPTExempt: (salaryData as any)?.isPTExempt === true,
+    }
   ) : null;
 
   return (
@@ -358,6 +363,9 @@ export function SalarySlipPage() {
                 workingDays={22}
                 isDownloadLocked={isDownloadLocked}
                 firstDownloadedAt={firstDownloadedAt}
+                isPFExempt={(salaryData as any)?.isPFExempt === true}
+                isESIExempt={(salaryData as any)?.isESIExempt === true}
+                isPTExempt={(salaryData as any)?.isPTExempt === true}
                 onDownload={async () => {
                   try {
                     await api.recordSalarySlipDownload(selectedMonth, currentYear);

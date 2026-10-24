@@ -268,9 +268,12 @@ exports.getEmployeeProfiles = async (req, res) => {
       }
     }
 
+    const mongoose = require('mongoose');
+    const isValidObjectId = (id) => id && id !== 'undefined' && id !== 'null' && id !== '' && mongoose.Types.ObjectId.isValid(id);
+
     const query = { user: { $in: targetUserIds } };
-    if (companyId) query.company = companyId;
-    if (branchId) query.branch = branchId;
+    if (isValidObjectId(companyId)) query.company = companyId;
+    if (isValidObjectId(branchId)) query.branch = branchId;
     if (status && !isExitedTab) query.status = status;
 
     let profiles = await EmployeePayrollProfile.find(query)
@@ -389,6 +392,20 @@ exports.updateEmployeeProfile = async (req, res) => {
     if (data.status) existing.status = data.status;
 
     await existing.save();
+
+    // Sync statutory opt-out to Salary collection so Salary and Payroll are always in lockstep
+    if (existing.user && data.statutory) {
+      try {
+        const Salary = require('../models/Salary');
+        const syncUpdates = {};
+        if (data.statutory.isPFExempt !== undefined) syncUpdates.isPFExempt = Boolean(data.statutory.isPFExempt);
+        if (data.statutory.isESIExempt !== undefined) syncUpdates.isESIExempt = Boolean(data.statutory.isESIExempt);
+        if (data.statutory.isPTExempt !== undefined) syncUpdates.isPTExempt = Boolean(data.statutory.isPTExempt);
+        if (Object.keys(syncUpdates).length > 0) {
+          await Salary.updateMany({ user: existing.user }, { $set: syncUpdates });
+        }
+      } catch (_) {}
+    }
 
     // Also update Employee joining form record so both stay 100% in sync
     const populated = await EmployeePayrollProfile.findById(existing._id).populate('user', 'email employeeId name');
@@ -530,9 +547,12 @@ exports.calculatePayroll = async (req, res) => {
       ptSlabs: [{ minSalary: 15000, taxAmount: 200, specialFebAmount: 300 }]
     };
 
+    const mongoose = require('mongoose');
+    const isValidObjectId = (id) => id && id !== 'undefined' && id !== 'null' && id !== '' && mongoose.Types.ObjectId.isValid(id);
+
     // Find or create PayrollRun
     const runFilter = { company: company._id, month: calcMonth, year: calcYear };
-    if (branchId) runFilter.branch = branchId;
+    if (isValidObjectId(branchId)) runFilter.branch = branchId;
     let run = await PayrollRun.findOne(runFilter);
 
     if (run && run.status === 'LOCKED') {
@@ -551,7 +571,7 @@ exports.calculatePayroll = async (req, res) => {
 
     // Fetch Eligible Profiles (Active, non-suspended, non-demo)
     const profileQuery = { company: company._id, status: 'active' };
-    if (branchId) profileQuery.branch = branchId;
+    if (isValidObjectId(branchId)) profileQuery.branch = branchId;
     const allProfiles = await EmployeePayrollProfile.find(profileQuery).populate('user');
 
     // Filter profiles: remove suspended/demo and restrict to includedEmployeeIds if provided

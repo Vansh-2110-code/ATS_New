@@ -1573,8 +1573,14 @@ class ApiService {
     });
   }
 
-  async getPayrollEmployees(params: Record<string, string> = {}) {
-    const q = new URLSearchParams(params).toString();
+  async getPayrollEmployees(params: Record<string, any> = {}) {
+    const cleanParams: Record<string, string> = {};
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== null && v !== '' && v !== 'undefined' && v !== 'null') {
+        cleanParams[k] = String(v);
+      }
+    }
+    const q = new URLSearchParams(cleanParams).toString();
     return this.request<any[]>(`/payroll/employees${q ? `?${q}` : ''}`);
   }
 

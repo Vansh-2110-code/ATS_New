@@ -21,6 +21,9 @@ interface SalarySlipProps {
   workingDays?: number;
   isDownloadLocked?: boolean;
   firstDownloadedAt?: string | Date | null;
+  isPFExempt?: boolean;
+  isESIExempt?: boolean;
+  isPTExempt?: boolean;
   onDownload?: () => void;
 }
 
@@ -39,6 +42,9 @@ export function SalarySlip({
   workingDays = 22,
   isDownloadLocked = false,
   firstDownloadedAt = null,
+  isPFExempt = false,
+  isESIExempt = false,
+  isPTExempt = false,
   onDownload,
 }: SalarySlipProps) {
   const monthNames = [
@@ -51,7 +57,8 @@ export function SalarySlip({
     wfhAllowance,
     incentives,
     presentDays,
-    workingDays
+    workingDays,
+    { isPFExempt, isESIExempt, isPTExempt }
   );
 
   const handleDownload = () => {
@@ -257,7 +264,13 @@ export function SalarySlip({
                     PF (Employee 12% of Basic)
                   </td>
                   <td className="px-4 py-2.5 text-right text-slate-800 font-semibold">
-                    {formatCurrency(breakdown.deductions.employeePF)}
+                    {isPFExempt ? (
+                      <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs font-semibold">
+                        ✕ Opted Out (₹0)
+                      </span>
+                    ) : (
+                      formatCurrency(breakdown.deductions.employeePF)
+                    )}
                   </td>
                 </tr>
                 <tr>
@@ -265,7 +278,11 @@ export function SalarySlip({
                     ESI (Employee 0.75% of Gross)
                   </td>
                   <td className="px-4 py-2.5 text-right text-slate-800 font-semibold">
-                    {formatCurrency(breakdown.deductions.employeeESI)}
+                    {isESIExempt ? (
+                      <span className="text-slate-400 text-xs">Exempt</span>
+                    ) : (
+                      formatCurrency(breakdown.deductions.employeeESI)
+                    )}
                   </td>
                 </tr>
                 <tr className="bg-slate-50">

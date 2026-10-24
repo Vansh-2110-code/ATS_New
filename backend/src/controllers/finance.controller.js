@@ -66,6 +66,9 @@ exports.getSalary = async (req, res, next) => {
           deductions,
           bonus,
           netSalary: Math.max(0, netSalary),
+          isPFExempt: profile?.statutory?.isPFExempt ?? false,
+          isESIExempt: profile?.statutory?.isESIExempt ?? false,
+          isPTExempt: profile?.statutory?.isPTExempt ?? false,
         };
         // Upsert to avoid race condition with concurrent requests
         await Salary.findOneAndUpdate(
@@ -87,9 +90,9 @@ exports.getSalary = async (req, res, next) => {
     const enrichedSalaries = salaries.map(s => {
       const sObj = s.toObject ? s.toObject() : { ...s };
       const prof = sObj.user ? profileMap[sObj.user.toString()] : null;
-      sObj.isPFExempt = prof?.statutory?.isPFExempt ?? false;
-      sObj.isESIExempt = prof?.statutory?.isESIExempt ?? false;
-      sObj.isPTExempt = prof?.statutory?.isPTExempt ?? false;
+      sObj.isPFExempt = sObj.isPFExempt === true || prof?.statutory?.isPFExempt === true;
+      sObj.isESIExempt = sObj.isESIExempt === true || prof?.statutory?.isESIExempt === true;
+      sObj.isPTExempt = sObj.isPTExempt === true || prof?.statutory?.isPTExempt === true;
       sObj.panNumber = prof?.statutory?.panNumber || 'N/A';
       sObj.uanNumber = prof?.statutory?.uanNumber || 'N/A';
       sObj.profileGross = prof?.grossSalary || sObj.baseSalary;
@@ -389,10 +392,28 @@ exports.createSalary = async (req, res, next) => {
       bonus: parseFloat(bonus || 0),
       netSalary: Math.max(0, netSalary),
       adminNotes,
+      isPFExempt: Boolean(req.body.isPFExempt),
+      isESIExempt: Boolean(req.body.isESIExempt),
+      isPTExempt: Boolean(req.body.isPTExempt),
       isOverridden: true,
       overriddenBy: req.user._id,
       overriddenAt: new Date(),
     });
+
+    if (resolvedUserId && (req.body.isPFExempt !== undefined || req.body.isESIExempt !== undefined || req.body.isPTExempt !== undefined)) {
+      try {
+        const EmployeePayrollProfile = require('../models/EmployeePayrollProfile');
+        const updateFields = {};
+        if (req.body.isPFExempt !== undefined) updateFields['statutory.isPFExempt'] = Boolean(req.body.isPFExempt);
+        if (req.body.isESIExempt !== undefined) updateFields['statutory.isESIExempt'] = Boolean(req.body.isESIExempt);
+        if (req.body.isPTExempt !== undefined) updateFields['statutory.isPTExempt'] = Boolean(req.body.isPTExempt);
+
+        await EmployeePayrollProfile.findOneAndUpdate(
+          { user: resolvedUserId },
+          { $set: updateFields }
+        );
+      } catch (_) {}
+    }
 
     res.status(201).json(salary);
   } catch (err) {
@@ -404,7 +425,7 @@ exports.createSalary = async (req, res, next) => {
 exports.updateSalary = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { baseSalary, deductions, bonus, wfhAllowance, adminNotes, presentDays } = req.body;
+    const { baseSalary, deductions, bonus, wfhAllowance, adminNotes, presentDays, isPFExempt, isESIExempt, isPTExempt } = req.body;
 
     const salary = await Salary.findById(id);
     if (!salary) {
@@ -418,6 +439,9 @@ exports.updateSalary = async (req, res, next) => {
     if (wfhAllowance !== undefined) salary.wfhAllowance = parseFloat(wfhAllowance);
     if (presentDays !== undefined) salary.presentDays = parseInt(presentDays);
     if (adminNotes !== undefined) salary.adminNotes = adminNotes;
+    if (isPFExempt !== undefined) salary.isPFExempt = Boolean(isPFExempt);
+    if (isESIExempt !== undefined) salary.isESIExempt = Boolean(isESIExempt);
+    if (isPTExempt !== undefined) salary.isPTExempt = Boolean(isPTExempt);
 
     // Recalculate net salary
     const totalIncentives = (salary.incentives || []).reduce((sum, inc) => sum + (inc.amount || 0), 0);
@@ -429,7 +453,29 @@ exports.updateSalary = async (req, res, next) => {
     salary.overriddenAt = new Date();
 
     await salary.save();
-    res.json(salary);
+
+    // Sync statutory exemptions to EmployeePayrollProfile if user is linked
+    if (salary.user && (isPFExempt !== undefined || isESIExempt !== undefined || isPTExempt !== undefined)) {
+      try {
+        const EmployeePayrollProfile = require('../models/EmployeePayrollProfile');
+        const updateFields = {};
+        if (isPFExempt !== undefined) updateFields['statutory.isPFExempt'] = Boolean(isPFExempt);
+        if (isESIExempt !== undefined) updateFields['statutory.isESIExempt'] = Boolean(isESIExempt);
+        if (isPTExempt !== undefined) updateFields['statutory.isPTExempt'] = Boolean(isPTExempt);
+
+        await EmployeePayrollProfile.findOneAndUpdate(
+          { user: salary.user },
+          { $set: updateFields }
+        );
+      } catch (_) {}
+    }
+
+    const sObj = salary.toObject();
+    if (isPFExempt !== undefined) sObj.isPFExempt = Boolean(isPFExempt);
+    if (isESIExempt !== undefined) sObj.isESIExempt = Boolean(isESIExempt);
+    if (isPTExempt !== undefined) sObj.isPTExempt = Boolean(isPTExempt);
+
+    res.json(sObj);
   } catch (err) {
     next(err);
   }

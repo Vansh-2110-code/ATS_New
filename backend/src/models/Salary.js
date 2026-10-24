@@ -36,6 +36,11 @@ const salarySchema = new mongoose.Schema({
   leavesApprovedDays: { type: Number, default: 0 },
   unpaidLeavesDays: { type: Number, default: 0 },
 
+  // Statutory exemption flags
+  isPFExempt: { type: Boolean, default: false },
+  isESIExempt: { type: Boolean, default: false },
+  isPTExempt: { type: Boolean, default: false },
+
   // Override fields
   isOverridden: { type: Boolean, default: false },
   overriddenBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

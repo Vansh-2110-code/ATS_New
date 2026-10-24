@@ -70,6 +70,9 @@ export function SalaryPage() {
     bonus: '',
     wfhAllowance: '',
     adminNotes: '',
+    isPFExempt: false,
+    isESIExempt: false,
+    isPTExempt: false,
   });
 
   const [editForm, setEditForm] = useState({
@@ -79,6 +82,9 @@ export function SalaryPage() {
     wfhAllowance: '',
     presentDays: '',
     adminNotes: '',
+    isPFExempt: false,
+    isESIExempt: false,
+    isPTExempt: false,
   });
 
   const [incentiveForm, setIncentiveForm] = useState({
@@ -152,10 +158,13 @@ export function SalaryPage() {
         bonus: parseFloat(addForm.bonus || 0),
         wfhAllowance: parseFloat(addForm.wfhAllowance || 0),
         adminNotes: addForm.adminNotes,
+        isPFExempt: addForm.isPFExempt,
+        isESIExempt: addForm.isESIExempt,
+        isPTExempt: addForm.isPTExempt,
       });
       setAddModalOpen(false);
       setIsCustomEmployee(false);
-      setAddForm({ userId: '', name: '', role: '', baseSalary: '', deductions: '', bonus: '', wfhAllowance: '', adminNotes: '' });
+      setAddForm({ userId: '', name: '', role: '', baseSalary: '', deductions: '', bonus: '', wfhAllowance: '', adminNotes: '', isPFExempt: false, isESIExempt: false, isPTExempt: false });
       // Reload salaries
       const data = await api.getSalary(selectedMonth, selectedYear);
       setEmployees(data);
@@ -173,11 +182,14 @@ export function SalaryPage() {
     try {
       await api.updateSalary(selectedSalary._id, {
         baseSalary: parseFloat(editForm.baseSalary) || selectedSalary.baseSalary,
-        deductions: parseFloat(editForm.deductions) || selectedSalary.deductions,
-        bonus: parseFloat(editForm.bonus) || selectedSalary.bonus,
+        deductions: parseFloat(editForm.deductions) !== undefined ? parseFloat(editForm.deductions) : selectedSalary.deductions,
+        bonus: parseFloat(editForm.bonus) || 0,
         wfhAllowance: parseFloat(editForm.wfhAllowance) || 0,
         presentDays: parseInt(editForm.presentDays) || selectedSalary.presentDays,
         adminNotes: editForm.adminNotes,
+        isPFExempt: editForm.isPFExempt,
+        isESIExempt: editForm.isESIExempt,
+        isPTExempt: editForm.isPTExempt,
       });
       setEditModalOpen(false);
       const data = await api.getSalary(selectedMonth, selectedYear);
@@ -529,13 +541,19 @@ export function SalaryPage() {
                           <button
                             onClick={() => {
                               setSelectedSalary(e);
+                              const isPF = (e as any)?.isPFExempt === true;
+                              const isESI = (e as any)?.isESIExempt === true;
+                              const isPT = (e as any)?.isPTExempt === true;
                               setEditForm({
                                 baseSalary: e.baseSalary.toString(),
                                 deductions: e.deductions.toString(),
-                                bonus: e.bonus.toString(),
-                                wfhAllowance: (e.base - e.baseSalary).toString(),
-                                presentDays: e.presentDays.toString(),
+                                bonus: (e.bonus || 0).toString(),
+                                wfhAllowance: ((e.wfhAllowance !== undefined ? e.wfhAllowance : (e.base - e.baseSalary)) || 0).toString(),
+                                presentDays: (e.presentDays || 22).toString(),
                                 adminNotes: e.adminNotes || '',
+                                isPFExempt: isPF,
+                                isESIExempt: isESI,
+                                isPTExempt: isPT,
                               });
                               setEditModalOpen(true);
                             }}
@@ -667,11 +685,65 @@ export function SalaryPage() {
                 <label className="text-xs text-slate-500" style={{ fontWeight: 500 }}>Employee Name *</label>
                 <input type="text" value={addForm.name} onChange={e => isCustomEmployee && setAddForm({...addForm, name: e.target.value})} readOnly={!isCustomEmployee} placeholder="Full name" className={`w-full px-3 py-2.5 mt-1 rounded-lg border border-slate-200 text-sm outline-none ${isCustomEmployee ? 'focus:border-green-400' : 'bg-slate-50 text-slate-500 cursor-not-allowed'}`} />
               </div>
+              {/* PF Opt-Out / Exemption Toggle Switch */}
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800">Provident Fund (PF - 12%)</span>
+                    {addForm.isPFExempt ? (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+                        ✕ Opted Out (₹0)
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">
+                        ✓ Applicable (12%)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {addForm.isPFExempt ? 'PF deduction disabled for this entry (₹0).' : 'Standard statutory PF (12%) will be deducted.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextExempt = !addForm.isPFExempt;
+                    const nextBreakdown = generateSalaryFromNet(
+                      Number(addForm.baseSalary) || 0,
+                      Number(addForm.wfhAllowance) || 0,
+                      0,
+                      22,
+                      22,
+                      { isPFExempt: nextExempt, isESIExempt: addForm.isESIExempt, isPTExempt: addForm.isPTExempt }
+                    );
+                    setAddForm(prev => ({
+                      ...prev,
+                      isPFExempt: nextExempt,
+                      deductions: String(nextBreakdown.deductions.totalDeductions)
+                    }));
+                  }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all shadow-sm ${
+                    addForm.isPFExempt
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  }`}
+                >
+                  {addForm.isPFExempt ? 'Enable PF' : 'Disable / Opt Out PF'}
+                </button>
+              </div>
+
               <div>
                 <label className="text-xs text-slate-500" style={{ fontWeight: 500 }}>Net Take Home (Monthly) *</label>
                 <input type="number" value={addForm.baseSalary} onChange={e => setAddForm({...addForm, baseSalary: e.target.value})} placeholder="e.g. 30000" className="w-full px-3 py-2.5 mt-1 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400" />
                 {addForm.baseSalary && Number(addForm.baseSalary) > 0 && (() => {
-                  const breakdown = generateSalaryFromNet(Number(addForm.baseSalary));
+                  const breakdown = generateSalaryFromNet(
+                    Number(addForm.baseSalary),
+                    Number(addForm.wfhAllowance) || 0,
+                    0,
+                    22,
+                    22,
+                    { isPFExempt: addForm.isPFExempt, isESIExempt: addForm.isESIExempt, isPTExempt: addForm.isPTExempt }
+                  );
                   return (
                     <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
                       <div className="grid grid-cols-2 gap-4">
@@ -684,8 +756,24 @@ export function SalaryPage() {
                         </div>
                         <div>
                           <p className="font-semibold text-slate-700 mb-1 border-b pb-1">Deductions</p>
-                          <div className="flex justify-between text-slate-600"><span>PF (12%)</span> <span>{formatCurrency(breakdown.deductions.employeePF)}</span></div>
-                          <div className="flex justify-between text-slate-600"><span>ESI (0.75%)</span> <span>{formatCurrency(breakdown.deductions.employeeESI)}</span></div>
+                          <div className="flex justify-between text-slate-600">
+                            <span>PF (12%)</span> 
+                            {addForm.isPFExempt ? (
+                              <span className="text-amber-700 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]">
+                                ✕ Opted Out (₹0)
+                              </span>
+                            ) : (
+                              <span>{formatCurrency(breakdown.deductions.employeePF)}</span>
+                            )}
+                          </div>
+                          <div className="flex justify-between text-slate-600">
+                            <span>ESI (0.75%)</span> 
+                            {addForm.isESIExempt ? (
+                              <span className="text-slate-400">Exempt</span>
+                            ) : (
+                              <span>{formatCurrency(breakdown.deductions.employeeESI)}</span>
+                            )}
+                          </div>
                           <div className="flex justify-between text-slate-600"><span>Prof. Tax</span> <span>{formatCurrency(breakdown.deductions.professionalTax)}</span></div>
                           <div className="flex justify-between text-slate-700 font-semibold mt-1 pt-1 border-t"><span>Total Ded.</span> <span>{formatCurrency(breakdown.deductions.totalDeductions)}</span></div>
                         </div>
@@ -693,6 +781,15 @@ export function SalaryPage() {
                       <div className="mt-3 pt-2 border-t flex justify-between items-center">
                         <span className="font-semibold text-emerald-700">Calculated Net Pay:</span>
                         <span className="font-bold text-emerald-700 text-sm">{formatCurrency(breakdown.netPay)}</span>
+                      </div>
+                      <div className="mt-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setAddForm(prev => ({ ...prev, deductions: String(breakdown.deductions.totalDeductions) }))}
+                          className="text-[11px] text-blue-600 hover:text-blue-800 underline font-medium"
+                        >
+                          Use Calculated Deductions ({formatCurrency(breakdown.deductions.totalDeductions)})
+                        </button>
                       </div>
                     </div>
                   );
@@ -736,13 +833,62 @@ export function SalaryPage() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* PF Opt-Out / Exemption Toggle Switch */}
+              <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-800">Provident Fund (PF - 12%)</span>
+                    {editForm.isPFExempt ? (
+                      <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+                        ✕ Opted Out (₹0)
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">
+                        ✓ Applicable (12%)
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {editForm.isPFExempt
+                      ? 'PF deduction is disabled for this employee. Statutory PF is ₹0.'
+                      : 'PF is currently active and calculated from Basic Pay.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextExempt = !editForm.isPFExempt;
+                    const nextBreakdown = generateSalaryFromNet(
+                      Number(editForm.baseSalary) || 0,
+                      Number(editForm.wfhAllowance) || 0,
+                      0,
+                      Number(editForm.presentDays) || 22,
+                      22,
+                      { isPFExempt: nextExempt, isESIExempt: editForm.isESIExempt, isPTExempt: editForm.isPTExempt }
+                    );
+                    setEditForm(prev => ({
+                      ...prev,
+                      isPFExempt: nextExempt,
+                      deductions: String(nextBreakdown.deductions.totalDeductions)
+                    }));
+                  }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all shadow-sm ${
+                    editForm.isPFExempt
+                      ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  }`}
+                >
+                  {editForm.isPFExempt ? 'Enable PF' : 'Disable / Opt Out PF'}
+                </button>
+              </div>
+
               <div>
                 <label className="text-xs text-slate-500" style={{ fontWeight: 500 }}>Net Take Home (Monthly)</label>
                 <input type="number" value={editForm.baseSalary} onChange={e => setEditForm({...editForm, baseSalary: e.target.value})} className="w-full px-3 py-2.5 mt-1 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400" />
                 {editForm.baseSalary && Number(editForm.baseSalary) > 0 && (() => {
-                  const isPFExempt = (selectedSalary as any)?.isPFExempt === true;
-                  const isESIExempt = (selectedSalary as any)?.isESIExempt === true;
-                  const isPTExempt = (selectedSalary as any)?.isPTExempt === true;
+                  const isPFExempt = editForm.isPFExempt;
+                  const isESIExempt = editForm.isESIExempt;
+                  const isPTExempt = editForm.isPTExempt;
                   const breakdown = generateSalaryFromNet(
                     Number(editForm.baseSalary),
                     Number(editForm.wfhAllowance) || 0,
@@ -766,7 +912,7 @@ export function SalaryPage() {
                           <div className="flex justify-between text-slate-600">
                             <span>PF (12%)</span> 
                             {isPFExempt ? (
-                              <span className="text-amber-700 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded text-[10px]">
+                              <span className="text-amber-700 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]">
                                 ✕ Opted Out (₹0)
                               </span>
                             ) : (
@@ -788,6 +934,15 @@ export function SalaryPage() {
                       <div className="mt-3 pt-2 border-t flex justify-between items-center">
                         <span className="font-semibold text-emerald-700">Calculated Net Pay:</span>
                         <span className="font-bold text-emerald-700 text-sm">{formatCurrency(breakdown.netPay)}</span>
+                      </div>
+                      <div className="mt-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setEditForm(prev => ({ ...prev, deductions: String(breakdown.deductions.totalDeductions) }))}
+                          className="text-[11px] text-blue-600 hover:text-blue-800 underline font-medium"
+                        >
+                          Use Calculated Deductions ({formatCurrency(breakdown.deductions.totalDeductions)})
+                        </button>
                       </div>
                     </div>
                   );
@@ -1082,12 +1237,16 @@ export function SalaryPage() {
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {selectedSalary.baseSalary > 0 && (() => {
+                const isPF = (selectedSalary as any)?.isPFExempt === true;
+                const isESI = (selectedSalary as any)?.isESIExempt === true;
+                const isPT = (selectedSalary as any)?.isPTExempt === true;
                 const breakdown = generateSalaryFromNet(
                   selectedSalary.netSalary || selectedSalary.baseSalary || 0,
                   selectedSalary.base - selectedSalary.baseSalary,
                   selectedSalary.bonus,
                   selectedSalary.presentDays,
-                  selectedSalary.workingDays
+                  selectedSalary.workingDays,
+                  { isPFExempt: isPF, isESIExempt: isESI, isPTExempt: isPT }
                 );
 
                 return (
@@ -1133,11 +1292,21 @@ export function SalaryPage() {
                       <div className="space-y-2 bg-red-50 rounded-lg p-3">
                         <div className="flex justify-between text-sm">
                           <span className="text-slate-600">Employee PF</span>
-                          <span className="text-red-600 font-semibold">{formatCurrency(breakdown.deductions.employeePF)}</span>
+                          {isPF ? (
+                            <span className="text-amber-700 font-semibold bg-amber-100 border border-amber-300 px-2 py-0.5 rounded text-xs">
+                              ✕ Opted Out (₹0)
+                            </span>
+                          ) : (
+                            <span className="text-red-600 font-semibold">{formatCurrency(breakdown.deductions.employeePF)}</span>
+                          )}
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-slate-600">Employee ESI</span>
-                          <span className="text-red-600 font-semibold">{formatCurrency(breakdown.deductions.employeeESI)}</span>
+                          {isESI ? (
+                            <span className="text-slate-400">Exempt</span>
+                          ) : (
+                            <span className="text-red-600 font-semibold">{formatCurrency(breakdown.deductions.employeeESI)}</span>
+                          )}
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-slate-600">Professional Tax</span>

@@ -62,7 +62,11 @@ export function RunPayrollPage() {
   const loadEmployees = async (companyId: string, branchId?: string) => {
     try {
       setLoadingEmployees(true);
-      const data = await api.getPayrollEmployees({ companyId, branchId: branchId || undefined });
+      const params: Record<string, string> = { companyId };
+      if (branchId && branchId !== 'undefined' && branchId !== 'all') {
+        params.branchId = branchId;
+      }
+      const data = await api.getPayrollEmployees(params);
       const nonDemo = (data || []).filter((p: any) => p.user?.status !== 'Suspended' && !p.user?.isDemoAccount && !p.user?.employeeId?.toUpperCase()?.startsWith('DEMO'));
       setEmployees(nonDemo);
       setSelectedEmployees(nonDemo.map((p: any) => p._id));
@@ -79,7 +83,7 @@ export function RunPayrollPage() {
       setCalculating(true);
       const res = await api.calculatePayroll({
         companyId: selectedCompanyId,
-        branchId: selectedBranchId || undefined,
+        branchId: selectedBranchId && selectedBranchId !== 'undefined' && selectedBranchId !== 'all' ? selectedBranchId : undefined,
         month: selectedMonth,
         year: selectedYear,
         baseDays: baseDays,
