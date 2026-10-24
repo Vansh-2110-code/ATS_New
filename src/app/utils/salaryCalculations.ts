@@ -39,6 +39,12 @@ export interface AttendanceSummary {
 
 const OFFICE_START_TIME = 9.5; // 9:30 AM in decimal hours
 
+export interface StatutoryOptions {
+  isPFExempt?: boolean;
+  isESIExempt?: boolean;
+  isPTExempt?: boolean;
+}
+
 /**
  * Generate complete salary breakdown from Net Take Home
  */
@@ -47,21 +53,36 @@ export function generateSalaryFromNet(
   wfhAllowance: number = 0,
   incentives: number = 0,
   presentDays: number = 22,
-  workingDays: number = 22
+  workingDays: number = 22,
+  statutoryOpts?: StatutoryOptions
 ): SalaryBreakdown {
-  // Formula based on fixed 0.85 ratio for Net Take Home
-  let grossSalary = netTakeHome / 0.85;
-  grossSalary = Math.round(grossSalary);
+  const isPFExempt = statutoryOpts?.isPFExempt === true;
+  const isESIExempt = statutoryOpts?.isESIExempt === true;
+  const isPTExempt = statutoryOpts?.isPTExempt === true;
+
+  const pt = isPTExempt ? 0 : 200;
+  let grossSalary: number;
+
+  if (isPFExempt) {
+    if (isESIExempt || (netTakeHome + pt) > 21000) {
+      grossSalary = Math.round(netTakeHome + pt);
+    } else {
+      grossSalary = Math.round((netTakeHome + pt) / 0.9925);
+    }
+  } else {
+    // Formula based on fixed 0.85 ratio when PF is active
+    grossSalary = Math.round(netTakeHome / 0.85);
+  }
 
   // Earning Components
   const basic = Math.round(grossSalary * 0.5);
   const hra = Math.round(basic * 0.4);
-  const specialAllowance = grossSalary - (basic + hra); // Balance
+  const specialAllowance = Math.max(0, grossSalary - (basic + hra)); // Balance
   
   // Deduction Components
-  const employeePF = Math.round(basic * 0.12);
-  const employeeESI = grossSalary <= 21000 ? Math.round(grossSalary * 0.0075) : 0;
-  const professionalTax = 200;
+  const employeePF = isPFExempt ? 0 : Math.round(basic * 0.12);
+  const employeeESI = (!isESIExempt && grossSalary <= 21000) ? Math.round(grossSalary * 0.0075) : 0;
+  const professionalTax = pt;
 
   let totalDeductionsBase = employeePF + employeeESI + professionalTax;
   
@@ -70,7 +91,7 @@ export function generateSalaryFromNet(
 
   // Absences penalty
   const absentDays = Math.max(0, workingDays - presentDays);
-  const perDayRate = basic / workingDays;
+  const perDayRate = workingDays > 0 ? (basic / workingDays) : 0;
   const absencePenalty = Math.round(absentDays * perDayRate);
 
   const totalDeductions = totalDeductionsBase + absencePenalty;
@@ -80,8 +101,8 @@ export function generateSalaryFromNet(
   const finalNetPay = totalEarnings - totalDeductions;
 
   // Employer Contributions
-  const employerPF = Math.round(basic * 0.12);
-  const employerESI = grossSalary <= 21000 ? Math.round(grossSalary * 0.0325) : 0;
+  const employerPF = isPFExempt ? 0 : Math.round(basic * 0.12);
+  const employerESI = (!isESIExempt && grossSalary <= 21000) ? Math.round(grossSalary * 0.0325) : 0;
 
   return {
     netTakeHome: calculatedNetPayBase,

@@ -30,6 +30,12 @@ interface SalaryEmployee {
   isOverridden?: boolean;
   overriddenBy?: string;
   adminNotes?: string;
+  isPFExempt?: boolean;
+  isESIExempt?: boolean;
+  isPTExempt?: boolean;
+  profileGross?: number;
+  panNumber?: string;
+  uanNumber?: string;
 }
 
 export function SalaryPage() {
@@ -734,7 +740,17 @@ export function SalaryPage() {
                 <label className="text-xs text-slate-500" style={{ fontWeight: 500 }}>Net Take Home (Monthly)</label>
                 <input type="number" value={editForm.baseSalary} onChange={e => setEditForm({...editForm, baseSalary: e.target.value})} className="w-full px-3 py-2.5 mt-1 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400" />
                 {editForm.baseSalary && Number(editForm.baseSalary) > 0 && (() => {
-                  const breakdown = generateSalaryFromNet(Number(editForm.baseSalary));
+                  const isPFExempt = (selectedSalary as any)?.isPFExempt === true;
+                  const isESIExempt = (selectedSalary as any)?.isESIExempt === true;
+                  const isPTExempt = (selectedSalary as any)?.isPTExempt === true;
+                  const breakdown = generateSalaryFromNet(
+                    Number(editForm.baseSalary),
+                    Number(editForm.wfhAllowance) || 0,
+                    0,
+                    Number(editForm.presentDays) || 22,
+                    22,
+                    { isPFExempt, isESIExempt, isPTExempt }
+                  );
                   return (
                     <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs">
                       <div className="grid grid-cols-2 gap-4">
@@ -747,8 +763,24 @@ export function SalaryPage() {
                         </div>
                         <div>
                           <p className="font-semibold text-slate-700 mb-1 border-b pb-1">Deductions</p>
-                          <div className="flex justify-between text-slate-600"><span>PF (12%)</span> <span>{formatCurrency(breakdown.deductions.employeePF)}</span></div>
-                          <div className="flex justify-between text-slate-600"><span>ESI (0.75%)</span> <span>{formatCurrency(breakdown.deductions.employeeESI)}</span></div>
+                          <div className="flex justify-between text-slate-600">
+                            <span>PF (12%)</span> 
+                            {isPFExempt ? (
+                              <span className="text-amber-700 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded text-[10px]">
+                                ✕ Opted Out (₹0)
+                              </span>
+                            ) : (
+                              <span>{formatCurrency(breakdown.deductions.employeePF)}</span>
+                            )}
+                          </div>
+                          <div className="flex justify-between text-slate-600">
+                            <span>ESI (0.75%)</span> 
+                            {isESIExempt ? (
+                              <span className="text-slate-400">Exempt</span>
+                            ) : (
+                              <span>{formatCurrency(breakdown.deductions.employeeESI)}</span>
+                            )}
+                          </div>
                           <div className="flex justify-between text-slate-600"><span>Prof. Tax</span> <span>{formatCurrency(breakdown.deductions.professionalTax)}</span></div>
                           <div className="flex justify-between text-slate-700 font-semibold mt-1 pt-1 border-t"><span>Total Ded.</span> <span>{formatCurrency(breakdown.deductions.totalDeductions)}</span></div>
                         </div>

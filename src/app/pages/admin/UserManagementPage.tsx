@@ -15,7 +15,7 @@ interface SystemUser {
   role: Role;
   roles?: Role[];
   isWFH: boolean;
-  status: 'Active' | 'Suspended';
+  status: 'Active' | 'Suspended' | 'On Leave' | 'Former Employee' | 'Inactive';
   lastLogin: string;
   joinedDate: string;
   pseudoName?: string;
@@ -146,7 +146,7 @@ export function UserManagementPage() {
           role: u.role || 'recruiter',
           roles: u.roles || [u.role || 'recruiter'],
           isWFH: u.isWFH ?? false,
-          status: u.status ? (u.status as 'Active' | 'Suspended') : (u.isActive === false ? 'Suspended' as const : 'Active' as const),
+          status: (u.status || (u.isActive === false ? 'Suspended' : 'Active')) as any,
           lastLogin: u.lastLogin ? new Date(u.lastLogin).toLocaleString() : '—',
           joinedDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
           pseudoName: u.pseudoName || u.aliasName || '',
@@ -181,6 +181,8 @@ export function UserManagementPage() {
     const matchStatus =
       statusFilter === 'all' ? true :
       statusFilter === 'active' ? u.status === 'Active' :
+      statusFilter === 'on_leave' ? u.status === 'On Leave' :
+      statusFilter === 'former' ? ['Former Employee', 'Suspended', 'Inactive', 'Exited'].includes(u.status) :
       statusFilter === 'suspended' ? u.status === 'Suspended' :
       statusFilter === 'wfh' ? u.isWFH : true;
     return matchSearch && matchRole && matchStatus;
@@ -299,27 +301,38 @@ const getHighestRole = (roles: Role[]): Role => {
     setShowModal(true);
   };
 
-  const toggleStatus = async (id: string) => {
+  const updateUserStatus = async (id: string, newStatus: string) => {
     try {
-      const res = await api.toggleUserStatus(id);
-      const serverStatus = res?.status;
-      setUsers(prev => prev.map(u => u.id === id ? { ...u, status: serverStatus || (u.status === 'Active' ? 'Suspended' as const : 'Active' as const) } : u));
-    } catch (err) {
-      console.error('Failed to toggle status:', err);
+      const res = await api.toggleUserStatus(id, { status: newStatus });
+      const serverStatus = res?.status || newStatus;
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, status: serverStatus as any } : u));
+    } catch (err: any) {
+      console.error('Failed to update status:', err);
+      alert(err.message || 'Failed to update user status');
     }
+  };
+
+  const toggleStatus = async (id: string) => {
+    const u = users.find(x => x.id === id);
+    const nextStatus = u?.status === 'Active' ? 'Suspended' : 'Active';
+    await updateUserStatus(id, nextStatus);
   };
 
   const handleDelete = async (id: string) => {
     try {
-      await api.deleteUser(id);
-      setUsers(prev => prev.filter(u => u.id !== id));
+      const res = await api.deleteUser(id);
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, status: 'Former Employee' } : u));
       setDeleteConfirm(null);
-    } catch (err) {
-      console.error('Failed to delete user:', err);
+      alert(res?.message || 'Employee offboarded successfully. System access revoked while preserving historical payroll, recruitment, and attendance records.');
+    } catch (err: any) {
+      console.error('Failed to offboard user:', err);
+      alert(err.message || 'Failed to offboard user');
     }
   };
 
   const activeCount = users.filter(u => u.status === 'Active').length;
+  const onLeaveCount = users.filter(u => u.status === 'On Leave').length;
+  const formerCount = users.filter(u => ['Former Employee', 'Suspended', 'Inactive', 'Exited'].includes(u.status)).length;
   const wfhCount = users.filter(u => u.isWFH).length;
 
   return (
@@ -355,16 +368,16 @@ const getHighestRole = (roles: Role[]): Role => {
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Total Users', value: users.length, color: 'slate', filter: 'all' },
+          { label: 'Total Staff', value: users.length, color: 'slate', filter: 'all' },
           { label: 'Active', value: activeCount, color: 'emerald', filter: 'active' },
-          { label: 'Suspended', value: users.length - activeCount, color: 'red', filter: 'suspended' },
-          { label: 'WFH Users', value: wfhCount, color: 'blue', filter: 'wfh' },
+          { label: 'On Leave', value: onLeaveCount, color: 'purple', filter: 'on_leave' },
+          { label: 'Former / Inactive', value: formerCount, color: 'red', filter: 'former' },
         ].map(({ label, value, color, filter }) => {
           const c: Record<string, string> = {
             slate: 'bg-slate-50 border-slate-100 text-slate-700',
             emerald: 'bg-emerald-50 border-emerald-100 text-emerald-700',
+            purple: 'bg-purple-50 border-purple-100 text-purple-700',
             red: 'bg-red-50 border-red-100 text-red-600',
-            blue: 'bg-green-50 border-green-100 text-green-700',
           };
           const active = statusFilter === filter;
           return (
@@ -464,18 +477,31 @@ const getHighestRole = (roles: Role[]): Role => {
                     }
                   </td>
                   <td className="px-4 py-3.5">
-                    <button
-                      onClick={() => user.id !== 'ADM001' && user.id !== 'WH000001' && user.email !== 'admin@whitehorsemanpower.in' && toggleStatus(user.id)}
-                      disabled={user.id === 'ADM001' || user.id === 'WH000001' || user.email === 'admin@whitehorsemanpower.in'}
-                      className={`text-xs px-2.5 py-1 rounded-full ${
-                        user.status === 'Active'
-                          ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                          : 'bg-red-100 text-red-600 hover:bg-red-200'
-                      } ${user.id === 'WH000001' || user.email === 'admin@whitehorsemanpower.in' ? 'cursor-default opacity-90' : 'cursor-pointer'}`}
-                      style={{ fontWeight: 500 }}
-                    >
-                      {user.status}
-                    </button>
+                    {user.id === 'ADM001' || user.id === 'WH000001' || user.email === 'admin@whitehorsemanpower.in' ? (
+                      <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-semibold">
+                        Active
+                      </span>
+                    ) : (
+                      <select
+                        value={user.status}
+                        onChange={(e) => updateUserStatus(user.id, e.target.value)}
+                        className={`text-xs px-2.5 py-1 rounded-full font-semibold border border-transparent cursor-pointer outline-none transition-all shadow-sm ${
+                          user.status === 'Active'
+                            ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                            : user.status === 'On Leave'
+                            ? 'bg-purple-100 text-purple-800 hover:bg-purple-200'
+                            : user.status === 'Former Employee'
+                            ? 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                            : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                        }`}
+                      >
+                        <option value="Active">Active</option>
+                        <option value="On Leave">On Leave</option>
+                        <option value="Suspended">Suspended</option>
+                        <option value="Former Employee">Former Employee</option>
+                        <option value="Inactive">Inactive</option>
+                      </select>
+                    )}
                   </td>
                   <td className="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">{user.lastLogin}</td>
                   <td className="px-4 py-3.5 text-slate-400 text-xs">{user.joinedDate}</td>
@@ -853,17 +879,16 @@ const getHighestRole = (roles: Role[]): Role => {
             <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Trash2 className="w-6 h-6 text-red-500" />
             </div>
-            <h3 className="text-slate-800 mb-2" style={{ fontWeight: 700 }}>Remove User?</h3>
-            <p className="text-slate-500 text-sm mb-5">
-              This will permanently remove <strong className="text-slate-700">{users.find(u => u.id === deleteConfirm)?.name}</strong> from the system.
+            <h3 className="text-slate-800 mb-2" style={{ fontWeight: 700 }}>Offboard Employee?</h3>
+            <p className="text-slate-500 text-xs mb-5">
+              This will offboard <strong className="text-slate-700">{users.find(u => u.id === deleteConfirm)?.name}</strong> and immediately revoke system access. All historical payroll, recruitment, candidate, and attendance records will be <strong>securely preserved</strong>.
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => handleDelete(deleteConfirm)}
-                className="flex-1 py-2.5 bg-red-500 text-white text-sm rounded-xl hover:bg-red-600"
-                style={{ fontWeight: 600 }}
+                className="flex-1 py-2.5 bg-rose-600 text-white text-sm rounded-xl hover:bg-rose-700 shadow-sm font-semibold"
               >
-                Remove
+                Offboard Employee
               </button>
               <button
                 onClick={() => setDeleteConfirm(null)}

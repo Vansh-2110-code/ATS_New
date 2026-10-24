@@ -506,8 +506,11 @@ class ApiService {
     return this.request<any>(`/users/${id}`, { method: 'DELETE' });
   }
 
-  async toggleUserStatus(id: string) {
-    return this.request<any>(`/users/${id}/status`, { method: 'PATCH' });
+  async toggleUserStatus(id: string, body?: { status?: string; lastWorkingDay?: any }) {
+    return this.request<any>(`/users/${id}/status`, {
+      method: 'PATCH',
+      body: body ? JSON.stringify(body) : undefined,
+    });
   }
 
   async resetUserPassword(id: string, data: { password: string }) {

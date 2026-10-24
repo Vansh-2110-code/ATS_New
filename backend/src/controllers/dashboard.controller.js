@@ -607,8 +607,8 @@ exports.managerDashboard = async (req, res, next) => {
       });
     }
 
-    // Recruiter productivity
-    const recruiters = await User.find({ role: 'recruiter', status: 'Active' }).select('name');
+    // Recruiter productivity (Active staff only)
+    const recruiters = await User.find({ role: 'recruiter', status: 'Active', employmentStatus: { $ne: 'Former Employee' } }).select('name');
     const recruiterProductivity = await Promise.all(recruiters.map(async (r) => {
       const calls = await CallLog.countDocuments({ recruiter: r._id, createdAt: dateFilter });
       const interviews = await Interview.countDocuments({ recruiter: r._id, createdAt: dateFilter });
@@ -804,7 +804,7 @@ exports.managerReports = async (req, res, next) => {
     const { start, end } = getDateRange(selectedRange, customStart, customEnd);
     const dateFilter = { $gte: start, $lt: end };
 
-    const recruiters = await User.find({ role: 'recruiter', status: 'Active' }).select('name employeeId');
+    const recruiters = await User.find({ role: 'recruiter', status: 'Active', employmentStatus: { $ne: 'Former Employee' } }).select('name employeeId');
 
     const reports = await Promise.all(recruiters.map(async (r) => {
       const totalCalls = await CallLog.countDocuments({ recruiter: r._id, createdAt: dateFilter });

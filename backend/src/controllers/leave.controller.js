@@ -106,6 +106,10 @@ exports.apply = async (req, res, next) => {
       });
     }
 
+    const initialStatus = ['tl', 'manager', 'admin', 'superadmin'].includes(req.user.role)
+      ? 'Pending Admin Approval'
+      : 'Pending TL Approval';
+
     const leaveReq = await LeaveRequest.create({
       user: req.user._id,
       name: req.user.name,
@@ -115,7 +119,7 @@ exports.apply = async (req, res, next) => {
       toDate: to,
       daysCount: days,
       reason,
-      status: 'Pending',
+      status: initialStatus,
     });
 
     // Update pending balance

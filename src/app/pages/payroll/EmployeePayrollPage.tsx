@@ -146,7 +146,7 @@ export function EmployeePayrollPage() {
         </div>
       </div>
 
-      {/* Active vs Exited Staff Tabs */}
+      {/* Active vs Inactive/Former Staff Tabs */}
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -165,12 +165,12 @@ export function EmployeePayrollPage() {
           onClick={() => setEmploymentTab('exited')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm ${
             employmentTab === 'exited'
-              ? 'bg-rose-600 text-white shadow-rose-200'
+              ? 'bg-slate-700 text-white shadow-slate-300'
               : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
           }`}
         >
           <XCircle className="w-4 h-4" />
-          Exited Staff
+          Inactive & Former Staff
         </button>
       </div>
 
@@ -270,11 +270,33 @@ export function EmployeePayrollPage() {
                         </div>
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <span className={`text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full ${
-                          p.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {p.status}
-                        </span>
+                        {(() => {
+                          const userStatus = p.user?.status;
+                          const userEmpStatus = p.user?.employmentStatus;
+                          const isFormer = userStatus === 'Former Employee' || userEmpStatus === 'Former Employee' || userStatus === 'Exited' || p.status === 'exited';
+                          const isInactive = userStatus === 'Inactive' || userStatus === 'Suspended' || p.status === 'inactive';
+                          const isOnLeave = userStatus === 'On Leave' || userEmpStatus === 'On Leave' || p.status === 'on_hold';
+
+                          let badgeLabel = 'ACTIVE';
+                          let badgeStyle = 'bg-emerald-100 text-emerald-800';
+
+                          if (isFormer) {
+                            badgeLabel = 'FORMER EMPLOYEE';
+                            badgeStyle = 'bg-slate-100 text-slate-700 border border-slate-300';
+                          } else if (isInactive) {
+                            badgeLabel = userStatus ? userStatus.toUpperCase() : 'INACTIVE';
+                            badgeStyle = 'bg-amber-100 text-amber-800 border border-amber-200';
+                          } else if (isOnLeave) {
+                            badgeLabel = 'ON LEAVE';
+                            badgeStyle = 'bg-purple-100 text-purple-800 border border-purple-200';
+                          }
+
+                          return (
+                            <span className={`text-[10px] uppercase font-extrabold px-2.5 py-0.5 rounded-full ${badgeStyle}`}>
+                              {badgeLabel}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-3 px-4 text-right">
                         <button

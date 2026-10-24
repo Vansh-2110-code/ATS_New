@@ -107,6 +107,10 @@ const candidateSchema = new mongoose.Schema({
   flagReason: { type: String },
   assignedRecruiter: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   assignedRecruiterName: { type: String },
+  originalRecruiter: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  originalRecruiterName: { type: String },
+  reassignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reassignedAt: { type: Date },
   isWalkIn: { type: Boolean, default: false },
   walkinId: { type: mongoose.Schema.Types.ObjectId, ref: 'WalkIn' }, // Link to WalkIn auth record
   walkInToken: { type: String },

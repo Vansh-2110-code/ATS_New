@@ -15,16 +15,25 @@ exports.getSalary = async (req, res, next) => {
     const m = parseInt(month) || new Date().getMonth() + 1;
     const y = parseInt(year) || new Date().getFullYear();
 
+    const EmployeePayrollProfile = require('../models/EmployeePayrollProfile');
+
     let salaries = await Salary.find({ month: m, year: y });
 
     // Auto-generate salary records if none exist for this month (with upsert to avoid races)
     if (salaries.length === 0) {
-      const users = await User.find({ status: 'Active' }).select('name role isWFH');
+      const users = await User.find({
+        status: 'Active',
+        employmentStatus: { $ne: 'Former Employee' }
+      }).select('name role isWFH employeeId');
       const monthStart = new Date(y, m - 1, 1);
       const monthEnd = new Date(y, m, 1);
 
       const baseSalaries = { recruiter: 18000, tl: 25000, manager: 35000, admin: 30000 };
       const wfhAllowances = { recruiter: 2000, tl: 3000, manager: 4000, admin: 3000 };
+
+      const userProfiles = await EmployeePayrollProfile.find({ user: { $in: users.map(u => u._id) } });
+      const userProfileMap = {};
+      userProfiles.forEach(p => { userProfileMap[p.user.toString()] = p; });
 
       await Promise.all(users.map(async (u) => {
         const presentDays = await Attendance.countDocuments({
@@ -35,7 +44,8 @@ exports.getSalary = async (req, res, next) => {
 
         // Working days (approx 22 per month)
         const workingDays = 22;
-        const base = baseSalaries[u.role] || 18000;
+        const profile = userProfileMap[u._id.toString()];
+        const base = (profile && profile.grossSalary > 0) ? profile.grossSalary : (baseSalaries[u.role] || 18000);
         const wfh = u.isWFH ? (wfhAllowances[u.role] || 2000) : 0;
         const perDayRate = base / workingDays;
         const absentDays = Math.max(0, workingDays - presentDays);
@@ -68,7 +78,27 @@ exports.getSalary = async (req, res, next) => {
       salaries = await Salary.find({ month: m, year: y });
     }
 
-    res.json(salaries);
+    // Attach EmployeePayrollProfile statutory and CTC data so Salary Disbursal is fully linked
+    const userIds = salaries.map(s => s.user).filter(Boolean);
+    const profiles = await EmployeePayrollProfile.find({ user: { $in: userIds } }).lean();
+    const profileMap = {};
+    profiles.forEach(p => { profileMap[p.user.toString()] = p; });
+
+    const enrichedSalaries = salaries.map(s => {
+      const sObj = s.toObject ? s.toObject() : { ...s };
+      const prof = sObj.user ? profileMap[sObj.user.toString()] : null;
+      sObj.isPFExempt = prof?.statutory?.isPFExempt ?? false;
+      sObj.isESIExempt = prof?.statutory?.isESIExempt ?? false;
+      sObj.isPTExempt = prof?.statutory?.isPTExempt ?? false;
+      sObj.panNumber = prof?.statutory?.panNumber || 'N/A';
+      sObj.uanNumber = prof?.statutory?.uanNumber || 'N/A';
+      sObj.profileGross = prof?.grossSalary || sObj.baseSalary;
+      sObj.profileAnnualCTC = prof?.annualCTC || (sObj.baseSalary * 12);
+      sObj.bank = prof?.bank || null;
+      return sObj;
+    });
+
+    res.json(enrichedSalaries);
   } catch (err) {
     next(err);
   }

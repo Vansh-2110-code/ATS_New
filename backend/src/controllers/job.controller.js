@@ -1,6 +1,15 @@
 const Job = require('../models/Job');
 const { createLog } = require('../utils/auditLogger');
 
+const normalizeAllocType = (val) => {
+  if (!val) return 'open_to_all';
+  const str = String(val).trim().toLowerCase();
+  if (str === 'specific' || str === 'select names' || str.includes('select') || str.includes('specific')) {
+    return 'specific';
+  }
+  return 'open_to_all';
+};
+
 // GET /api/jobs
 exports.list = async (req, res, next) => {
   try {
@@ -21,16 +30,22 @@ exports.list = async (req, res, next) => {
     if (req.user && req.user.role === 'recruiter') {
       const userAllocFilter = {
         $or: [
+          // Open to all: any job that is NOT explicitly restricted to 'specific' / 'Select names'
+          { allocationType: { $nin: ['specific', 'Select names'] } },
           { allocationType: 'open_to_all' },
+          { allocationType: 'Open to all' },
+          { allocationType: { $regex: /^open/i } },
           { allocationType: { $exists: false } },
           { allocationType: null },
           { allocationType: '' },
+          // Or if specifically allocated to this recruiter
           { 'allocatedUsers.userId': req.user._id },
           { 'allocatedUsers.email': req.user.email?.toLowerCase() },
           { 'allocatedUsers.name': { $regex: new RegExp(`^${(req.user.name || '').trim()}$`, 'i') } },
           { assignedRecruiters: req.user._id },
           { recruiterEmail: req.user.email?.toLowerCase() },
-          { recruiterName: { $regex: new RegExp(`^${(req.user.name || '').trim()}$`, 'i') } }
+          { recruiterName: { $regex: new RegExp(`^${(req.user.name || '').trim()}$`, 'i') } },
+          { createdBy: req.user._id }
         ]
       };
       if (query.$and) {
@@ -144,6 +159,14 @@ exports.create = async (req, res, next) => {
     if (Array.isArray(data.allocatedUsers)) {
       data.allocatedUsers = data.allocatedUsers.filter(u => u.status !== 'Suspended');
     }
+    if (data.allocationType !== undefined) {
+      data.allocationType = normalizeAllocType(data.allocationType);
+      if (data.allocationType !== 'specific') {
+        data.allocatedUsers = [];
+      }
+    } else {
+      data.allocationType = 'open_to_all';
+    }
     data.postedByName = req.user.name;
     data.postedByEmail = req.user.email;
     if (req.file) {
@@ -246,6 +269,12 @@ exports.update = async (req, res, next) => {
     if (Array.isArray(data.allocatedUsers)) {
       data.allocatedUsers = data.allocatedUsers.filter(u => u.status !== 'Suspended');
     }
+    if (data.allocationType !== undefined) {
+      data.allocationType = normalizeAllocType(data.allocationType);
+      if (data.allocationType !== 'specific') {
+        data.allocatedUsers = [];
+      }
+    }
     if (req.file) {
       data.jdFilePath = `/uploads/jd/${req.file.filename}`;
       data.jdOriginalName = req.file.originalname;
@@ -267,6 +296,7 @@ exports.update = async (req, res, next) => {
 exports.allocate = async (req, res, next) => {
   try {
     const { allocationType = 'open_to_all', allocatedUsers = [] } = req.body;
+    const normType = normalizeAllocType(allocationType);
     let parsedUsers = allocatedUsers;
     if (typeof parsedUsers === 'string') {
       try { parsedUsers = JSON.parse(parsedUsers); } catch { parsedUsers = []; }
@@ -278,8 +308,8 @@ exports.allocate = async (req, res, next) => {
     const job = await Job.findByIdAndUpdate(
       req.params.id,
       {
-        allocationType,
-        allocatedUsers: allocationType === 'specific' ? parsedUsers : []
+        allocationType: normType,
+        allocatedUsers: normType === 'specific' ? parsedUsers : []
       },
       { new: true, runValidators: true }
     ).populate('createdBy', 'name email employeeId role');
@@ -291,7 +321,7 @@ exports.allocate = async (req, res, next) => {
       user: req.user._id,
       userName: req.user.name,
       role: req.user.role,
-      action: `Allocated JR: ${job.jobTitle} (${job.jrNumber}) to ${allocationType === 'specific' ? parsedUsers.map(u => u.name).join(', ') : 'Open to All'}`,
+      action: `Allocated JR: ${job.jobTitle} (${job.jrNumber}) to ${normType === 'specific' ? parsedUsers.map(u => u.name).join(', ') : 'Open to All'}`,
       target: job._id.toString(),
       ip: req.ip,
     });

@@ -163,28 +163,28 @@ exports.getEmployeeProfiles = async (req, res) => {
     // Default tenant company (White Horse)
     const defaultCompany = companyId ? await Company.findById(companyId) : (await Company.findOne({ isPayrollTenant: true }) || await Company.findOne());
 
-    // Exclude suspended users and demo accounts from payroll
+    // Exclude demo accounts only (preserve all real users, active and inactive)
     const excludedUsers = await User.find({
       $or: [
-        { status: 'Suspended' },
         { isDemoAccount: true },
         { employeeId: /^DEMO/i }
       ]
     }).select('_id');
     const excludedIds = excludedUsers.map(u => u._id);
 
-    const isExitedTab = req.query.employmentStatus === 'exited' || req.query.status === 'exited' || req.query.status === 'Former Staff';
+    const isExitedTab = req.query.employmentStatus === 'exited' || req.query.status === 'exited' ||
+      req.query.status === 'Former Staff' || req.query.status === 'Former Employee' ||
+      req.query.employmentStatus === 'inactive' || req.query.status === 'inactive';
 
     let userFilter = { _id: { $nin: excludedIds } };
     if (isExitedTab) {
       userFilter.$or = [
-        { status: 'Exited' },
-        { status: 'Inactive' },
-        { employmentStatus: 'Former Staff' }
+        { status: { $in: ['Exited', 'Inactive', 'Suspended', 'Former Employee'] } },
+        { employmentStatus: { $in: ['Former Staff', 'Former Employee', 'Exited'] } }
       ];
     } else {
-      userFilter.status = { $nin: ['Suspended', 'Exited', 'Inactive'] };
-      userFilter.employmentStatus = { $ne: 'Former Staff' };
+      userFilter.status = { $nin: ['Suspended', 'Exited', 'Inactive', 'Former Employee'] };
+      userFilter.employmentStatus = { $nin: ['Former Staff', 'Former Employee', 'Exited'] };
     }
 
     const targetUsers = await User.find(userFilter)
@@ -317,6 +317,19 @@ exports.getEmployeeProfiles = async (req, res) => {
           ).catch(() => {});
         }
       }
+
+      // Keep profile status synchronized with user account status
+      const uStatus = pObj.user?.status;
+      const uEmpStatus = pObj.user?.employmentStatus;
+      if (['Suspended', 'Inactive', 'Former Employee', 'Exited'].includes(uStatus) ||
+          ['Former Employee', 'Former Staff', 'Exited'].includes(uEmpStatus)) {
+        pObj.status = (uStatus === 'Former Employee' || uEmpStatus === 'Former Employee' || uStatus === 'Exited') ? 'exited' : 'inactive';
+      } else if (uStatus === 'On Leave' || uEmpStatus === 'On Leave') {
+        pObj.status = 'on_hold';
+      } else {
+        pObj.status = 'active';
+      }
+
       return pObj;
     });
 

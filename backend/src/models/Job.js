@@ -32,7 +32,11 @@ const jobSchema = new mongoose.Schema({
   spocName: { type: String, trim: true },
 
   // Allocation & Priority
-  allocationType: { type: String, enum: ['Open to all', 'Select names'], default: 'Open to all' },
+  allocationType: {
+    type: String,
+    enum: ['open_to_all', 'specific', 'Open to all', 'Select names', 'open', 'restricted'],
+    default: 'open_to_all'
+  },
   allocatedUsers: [{
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     name: { type: String, trim: true },

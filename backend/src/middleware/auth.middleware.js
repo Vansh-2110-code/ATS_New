@@ -31,8 +31,10 @@ const auth = async (req, res, next) => {
     if (!user) {
       return res.status(401).json({ message: 'User not found' });
     }
-    if (user.status === 'Suspended') {
-      return res.status(403).json({ message: 'Account suspended' });
+    const isOffboarded = ['Suspended', 'Inactive', 'Exited', 'Former Employee'].includes(user.status) ||
+      ['Former Employee', 'Former Staff', 'Exited'].includes(user.employmentStatus);
+    if (isOffboarded) {
+      return res.status(403).json({ message: 'Account is offboarded or inactive. Access has been revoked.' });
     }
 
     req.user = user;

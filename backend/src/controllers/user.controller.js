@@ -131,6 +131,28 @@ exports.update = async (req, res, next) => {
 
     if (!user) return res.status(404).json({ message: 'User not found' });
 
+    // Auto-sync status change to EmployeePayrollProfile and Candidate pool
+    if (updates.status || updates.employmentStatus) {
+      const isExitedOrInactive = ['Suspended', 'Inactive', 'Exited', 'Former Employee'].includes(user.status) ||
+        ['Former Employee', 'Former Staff', 'Exited'].includes(user.employmentStatus);
+      const isLeave = user.status === 'On Leave' || user.employmentStatus === 'On Leave';
+      const profStatus = isExitedOrInactive ? 'inactive' : (isLeave ? 'on_hold' : 'active');
+      const EmployeePayrollProfile = require('../models/EmployeePayrollProfile');
+      await EmployeePayrollProfile.updateMany({ user: user._id }, { status: profStatus });
+
+      if (isExitedOrInactive) {
+        const Candidate = require('../models/Candidate');
+        await Candidate.updateMany(
+          { assignedRecruiter: user._id, originalRecruiter: { $exists: false } },
+          { $set: { originalRecruiter: user._id, originalRecruiterName: user.name } }
+        );
+        await Candidate.updateMany(
+          { assignedRecruiter: user._id, status: { $nin: ['Joined', 'Exited', 'Joined and Abort', 'Black List'] } },
+          { $set: { ownershipStatus: 'Unassigned', assignedRecruiter: null, assignedRecruiterName: null, reassignedAt: new Date(), reassignedBy: req.user._id } }
+        );
+      }
+    }
+
     await createLog({
       type: 'edit', user: req.user._id, userName: req.user.name,
       role: req.user.role, action: `Updated user: ${user.name}`,
@@ -152,30 +174,57 @@ exports.remove = async (req, res, next) => {
       req.user.email === 'admin@whitehorsemanpower.in'
     );
     if (!isSuperAdmin) {
-      return res.status(403).json({ message: 'Only System Administrator has permission to delete users.' });
+      return res.status(403).json({ message: 'Only System Administrator has permission to offboard/remove users.' });
     }
     if (req.params.id === 'WH000001' || req.params.id === 'admin@whitehorsemanpower.in') {
-      return res.status(403).json({ message: 'Root System Administrator account cannot be deleted.' });
+      return res.status(403).json({ message: 'Root System Administrator account cannot be removed.' });
     }
 
     const mongoose = require('mongoose');
     let user;
     if (mongoose.Types.ObjectId.isValid(req.params.id)) {
-      user = await User.findByIdAndDelete(req.params.id);
+      user = await User.findById(req.params.id);
     }
     if (!user) {
-      user = await User.findOneAndDelete({ employeeId: req.params.id });
+      user = await User.findOne({ employeeId: req.params.id });
     }
 
     if (!user) return res.status(404).json({ message: 'User not found' });
 
+    // Core Business Rule: Former employees must not be permanently deleted.
+    // Revoke system access while preserving authorized access to historical records.
+    user.status = 'Former Employee';
+    user.employmentStatus = 'Former Employee';
+    user.lastWorkingDay = new Date();
+    user.offboardedBy = req.user._id;
+    user.offboardedAt = new Date();
+    await user.save();
+
+    const EmployeePayrollProfile = require('../models/EmployeePayrollProfile');
+    const Candidate = require('../models/Candidate');
+    await EmployeePayrollProfile.updateMany({ user: user._id }, { status: 'exited' });
+
+    // Preserve original recruiter ownership and release active pipeline to unassigned pool
+    await Candidate.updateMany(
+      { assignedRecruiter: user._id, originalRecruiter: { $exists: false } },
+      { $set: { originalRecruiter: user._id, originalRecruiterName: user.name } }
+    );
+    await Candidate.updateMany(
+      { assignedRecruiter: user._id, status: { $nin: ['Joined', 'Exited', 'Joined and Abort', 'Black List'] } },
+      { $set: { ownershipStatus: 'Unassigned', assignedRecruiter: null, assignedRecruiterName: null, reassignedAt: new Date(), reassignedBy: req.user._id } }
+    );
+
     await createLog({
-      type: 'delete', user: req.user._id, userName: req.user.name,
-      role: req.user.role, action: `Deleted user: ${user.name} (${user.employeeId})`,
+      type: 'offboard', user: req.user._id, userName: req.user.name,
+      role: req.user.role, action: `Offboarded employee: ${user.name} (${user.employeeId}). Access revoked, historical records preserved.`,
       target: user._id.toString(), ip: req.ip,
     });
 
-    res.json({ message: 'User deleted' });
+    res.json({
+      message: 'Employee offboarded successfully. System access revoked while preserving historical payroll, recruitment, and attendance records.',
+      offboarded: true,
+      user
+    });
   } catch (err) {
     next(err);
   }
@@ -195,13 +244,46 @@ exports.toggleStatus = async (req, res, next) => {
 
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const isCurrentlyActive = user.status !== 'Suspended';
-    user.status = isCurrentlyActive ? 'Suspended' : 'Active';
+    const newStatus = req.body?.status || (user.status === 'Active' ? 'Suspended' : 'Active');
+    user.status = newStatus;
+    if (['Former Employee', 'Exited'].includes(newStatus)) {
+      user.employmentStatus = 'Former Employee';
+      user.lastWorkingDay = req.body?.lastWorkingDay || new Date();
+      user.offboardedBy = req.user._id;
+      user.offboardedAt = new Date();
+    } else if (newStatus === 'On Leave') {
+      user.employmentStatus = 'On Leave';
+    } else if (newStatus === 'Active') {
+      user.employmentStatus = 'Active';
+    }
+
     await user.save();
+
+    // Auto-sync with EmployeePayrollProfile
+    const EmployeePayrollProfile = require('../models/EmployeePayrollProfile');
+    const Candidate = require('../models/Candidate');
+    
+    const profStatus = ['Suspended', 'Inactive'].includes(newStatus) ? 'inactive' : 
+      (['Former Employee', 'Exited'].includes(newStatus) ? 'exited' : 
+      (newStatus === 'On Leave' ? 'on_hold' : 'active'));
+    
+    await EmployeePayrollProfile.updateMany({ user: user._id }, { status: profStatus });
+
+    // If suspended or offboarded, preserve original recruiter and release active candidates
+    if (['Suspended', 'Inactive', 'Former Employee', 'Exited'].includes(newStatus)) {
+      await Candidate.updateMany(
+        { assignedRecruiter: user._id, originalRecruiter: { $exists: false } },
+        { $set: { originalRecruiter: user._id, originalRecruiterName: user.name } }
+      );
+      await Candidate.updateMany(
+        { assignedRecruiter: user._id, status: { $nin: ['Joined', 'Exited', 'Joined and Abort', 'Black List'] } },
+        { $set: { ownershipStatus: 'Unassigned', assignedRecruiter: null, assignedRecruiterName: null, reassignedAt: new Date(), reassignedBy: req.user._id } }
+      );
+    }
 
     await createLog({
       type: 'edit', user: req.user._id, userName: req.user.name,
-      role: req.user.role, action: `${user.status === 'Active' ? 'Activated' : 'Suspended'} user: ${user.name}`,
+      role: req.user.role, action: `Status changed to ${user.status} for user: ${user.name}`,
       target: user._id.toString(), ip: req.ip,
     });
 
