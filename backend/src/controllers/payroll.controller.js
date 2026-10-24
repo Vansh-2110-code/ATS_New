@@ -566,6 +566,9 @@ exports.calculatePayroll = async (req, res) => {
     let runTotalNet = 0;
     let runTotalEmployerCost = 0;
 
+    const startDate = new Date(calcYear, calcMonth - 1, 1, 0, 0, 0, 0);
+    const endDate = new Date(calcYear, calcMonth, 0, 23, 59, 59, 999);
+
     const records = [];
 
     for (const p of profiles) {
@@ -585,10 +588,17 @@ exports.calculatePayroll = async (req, res) => {
       const monthlyGross = effectiveGross;
       const perDaySalary = monthlyGross / baseDays;
 
-      // Sync Attendance for Month
-      const startDate = new Date(calcYear, calcMonth - 1, 1);
-      const endDate = new Date(calcYear, calcMonth, 0);
+      // Check if employee joined during this month (prorate base days)
+      let employeeBaseDays = baseDays;
+      if (p.user.joinedDate) {
+        const jd = new Date(p.user.joinedDate);
+        if (jd > startDate && jd <= endDate) {
+          const joinedDay = jd.getDate();
+          employeeBaseDays = Math.max(1, baseDays - joinedDay + 1);
+        }
+      }
 
+      // Sync Attendance for Month from Attendance module
       const attendances = await Attendance.find({
         user: p.user._id,
         date: { $gte: startDate, $lte: endDate }
@@ -623,10 +633,10 @@ exports.calculatePayroll = async (req, res) => {
         });
       } catch (_) {}
 
-      // Default to full payable days if attendance records are not explicitly marked absent
-      const payableDays = Math.max(0, baseDays - lopDays);
-      const lopDeduction = Math.round(perDaySalary * lopDays);
-      const earnedGross = Math.max(0, monthlyGross - lopDeduction);
+      // Default to employeeBaseDays if attendance records are not explicitly marked absent
+      const payableDays = Math.max(0, employeeBaseDays - lopDays);
+      const lopDeduction = Math.round(perDaySalary * (baseDays - payableDays));
+      const earnedGross = Math.max(0, Math.round(perDaySalary * payableDays));
 
       // Components breakdown
       const basicEarned = Math.round(earnedGross * 0.50);

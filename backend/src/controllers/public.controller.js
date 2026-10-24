@@ -167,6 +167,56 @@ exports.joining = async (req, res, next) => {
     data.createdBy = req.user._id;
 
     const employee = await Employee.create(data);
+
+    // Auto-sync to User and EmployeePayrollProfile if user exists
+    try {
+      const User = require('../models/User');
+      const EmployeePayrollProfile = require('../models/EmployeePayrollProfile');
+      const Company = require('../models/Company');
+
+      const userMatch = await User.findOne({
+        $or: [
+          { employeeId: employee.employeeId },
+          { email: employee.email }
+        ]
+      });
+
+      if (userMatch) {
+        if (employee.joiningDate && (!userMatch.joinedDate || userMatch.joinedDate.toString() !== new Date(employee.joiningDate).toString())) {
+          userMatch.joinedDate = employee.joiningDate;
+          if (!userMatch.employeeId && employee.employeeId) {
+            userMatch.employeeId = employee.employeeId;
+          }
+          await userMatch.save();
+        }
+
+        let defaultComp = await Company.findOne({ isPayrollTenant: true });
+        if (!defaultComp) defaultComp = await Company.findOne();
+
+        if (defaultComp) {
+          let profile = await EmployeePayrollProfile.findOne({ user: userMatch._id });
+          if (!profile) {
+            await EmployeePayrollProfile.create({
+              user: userMatch._id,
+              company: defaultComp._id,
+              bank: {
+                bankName: employee.bankName || 'HDFC Bank',
+                accountNumber: employee.accountNumber || 'N/A',
+                ifscCode: employee.ifscCode || 'N/A',
+                accountHolderName: employee.accountHolderName || employee.fullName || userMatch.name,
+                paymentMode: 'bank_transfer'
+              },
+              statutory: {
+                panNumber: employee.panNumber || employee.panCardNumber || 'N/A',
+                taxRegime: 'new'
+              },
+              status: 'active'
+            });
+          }
+        }
+      }
+    } catch (_) {}
+
     res.status(201).json(employee);
   } catch (err) {
     next(err);

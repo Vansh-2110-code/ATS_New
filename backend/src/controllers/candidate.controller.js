@@ -3099,6 +3099,78 @@ exports.createOrUpdateJoiningForm = async (req, res, next) => {
       }
     }
 
+    // Auto-sync to EmployeePayrollProfile & User for seamless Payroll & Attendance integration
+    try {
+      const User = require('../models/User');
+      const EmployeePayrollProfile = require('../models/EmployeePayrollProfile');
+      const Company = require('../models/Company');
+
+      const userMatch = await User.findOne({
+        $or: [
+          { employeeId: employee.employeeId },
+          { email: employee.email }
+        ]
+      });
+
+      if (userMatch) {
+        if (employee.joiningDate && (!userMatch.joinedDate || userMatch.joinedDate.toString() !== new Date(employee.joiningDate).toString())) {
+          userMatch.joinedDate = employee.joiningDate;
+          if (!userMatch.employeeId && employee.employeeId) {
+            userMatch.employeeId = employee.employeeId;
+          }
+          await userMatch.save();
+        }
+
+        // Parse salary
+        let monthlyGross = 0;
+        const rawSal = employee.salaryOffered || employee.offeredCTC || employee.currentCTC || '';
+        const num = parseFloat(String(rawSal).replace(/[^0-9.]/g, ''));
+        if (!isNaN(num) && num > 0) {
+          monthlyGross = num > 100000 ? Math.round(num / 12) : Math.round(num);
+        }
+
+        let defaultComp = await Company.findOne({ isPayrollTenant: true });
+        if (!defaultComp) defaultComp = await Company.findOne();
+
+        if (defaultComp) {
+          let profile = await EmployeePayrollProfile.findOne({ user: userMatch._id });
+          const bankData = {
+            bankName: employee.bankName || (profile?.bank?.bankName) || 'HDFC Bank',
+            accountNumber: employee.accountNumber || (profile?.bank?.accountNumber) || 'N/A',
+            ifscCode: employee.ifscCode || (profile?.bank?.ifscCode) || 'N/A',
+            accountHolderName: employee.accountHolderName || employee.fullName || userMatch.name,
+            paymentMode: 'bank_transfer'
+          };
+          const statData = {
+            panNumber: employee.panNumber || employee.panCardNumber || (profile?.statutory?.panNumber) || 'N/A',
+            taxRegime: 'new'
+          };
+
+          if (!profile) {
+            await EmployeePayrollProfile.create({
+              user: userMatch._id,
+              company: defaultComp._id,
+              grossSalary: monthlyGross,
+              annualCTC: monthlyGross * 12,
+              bank: bankData,
+              statutory: statData,
+              status: 'active'
+            });
+          } else {
+            profile.bank = { ...profile.bank, ...bankData };
+            profile.statutory = { ...profile.statutory, ...statData };
+            if (monthlyGross > 0 && (!profile.grossSalary || profile.grossSalary === 0)) {
+              profile.grossSalary = monthlyGross;
+              profile.annualCTC = monthlyGross * 12;
+            }
+            await profile.save();
+          }
+        }
+      }
+    } catch (payrollSyncErr) {
+      console.warn('[JoiningForm] Payroll profile sync warning:', payrollSyncErr.message);
+    }
+
     res.json(employee);
   } catch (err) {
     next(err);
