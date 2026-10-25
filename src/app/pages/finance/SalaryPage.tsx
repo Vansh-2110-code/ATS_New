@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { DollarSign, Download, Calendar, Wifi, Monitor, Loader2, Plus, Edit2, Trash2, AlertCircle, X, CheckCircle, Gift, Eye, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
-import { generateSalaryFromNet, formatCurrency } from '../../utils/salaryCalculations';
+import { generateSalaryFromGross, generateSalaryFromNet, formatCurrency } from '../../utils/salaryCalculations';
 
 const ROLE_COLORS: Record<string, string> = {
   Recruiter: 'bg-emerald-100 text-emerald-700',
@@ -575,9 +575,18 @@ export function SalaryPage() {
                               const isPF = (e as any)?.isPFExempt === true;
                               const isESI = (e as any)?.isESIExempt === true;
                               const isPT = (e as any)?.isPTExempt === true;
+                              const grossVal = Number(e.profileGross || e.baseSalary || e.base || 0);
+                              const initialBreakdown = generateSalaryFromGross(
+                                grossVal,
+                                Number(e.wfhAllowance !== undefined ? e.wfhAllowance : (e.base - e.baseSalary) || 0),
+                                0,
+                                Number(e.presentDays || 22),
+                                Number(e.workingDays || 22),
+                                { isPFExempt: isPF, isESIExempt: isESI, isPTExempt: isPT }
+                              );
                               setEditForm({
-                                baseSalary: e.baseSalary.toString(),
-                                deductions: e.deductions.toString(),
+                                baseSalary: grossVal.toString(),
+                                deductions: (e.deductions !== undefined && e.deductions > 0 ? e.deductions : initialBreakdown.deductions.totalDeductions).toString(),
                                 bonus: (e.bonus || 0).toString(),
                                 wfhAllowance: ((e.wfhAllowance !== undefined ? e.wfhAllowance : (e.base - e.baseSalary)) || 0).toString(),
                                 presentDays: (e.presentDays || 22).toString(),
@@ -739,7 +748,7 @@ export function SalaryPage() {
                   type="button"
                   onClick={() => {
                     const nextExempt = !addForm.isPFExempt;
-                    const nextBreakdown = generateSalaryFromNet(
+                    const nextBreakdown = generateSalaryFromGross(
                       Number(addForm.baseSalary) || 0,
                       Number(addForm.wfhAllowance) || 0,
                       0,
@@ -764,10 +773,31 @@ export function SalaryPage() {
               </div>
 
               <div>
-                <label className="text-xs text-slate-500" style={{ fontWeight: 500 }}>Net Take Home (Monthly) *</label>
-                <input type="number" value={addForm.baseSalary} onChange={e => setAddForm({...addForm, baseSalary: e.target.value})} placeholder="e.g. 30000" className="w-full px-3 py-2.5 mt-1 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400" />
+                <label className="text-xs text-slate-700 font-semibold" style={{ fontWeight: 600 }}>Monthly Gross Salary (₹) *</label>
+                <input
+                  type="number"
+                  value={addForm.baseSalary}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const nextBreakdown = generateSalaryFromGross(
+                      Number(val) || 0,
+                      Number(addForm.wfhAllowance) || 0,
+                      0,
+                      22,
+                      22,
+                      { isPFExempt: addForm.isPFExempt, isESIExempt: addForm.isESIExempt, isPTExempt: addForm.isPTExempt }
+                    );
+                    setAddForm(prev => ({
+                      ...prev,
+                      baseSalary: val,
+                      deductions: String(nextBreakdown.deductions.totalDeductions)
+                    }));
+                  }}
+                  placeholder="e.g. 25000"
+                  className="w-full px-3 py-2.5 mt-1 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400 font-semibold"
+                />
                 {addForm.baseSalary && Number(addForm.baseSalary) > 0 && (() => {
-                  const breakdown = generateSalaryFromNet(
+                  const breakdown = generateSalaryFromGross(
                     Number(addForm.baseSalary),
                     Number(addForm.wfhAllowance) || 0,
                     0,
@@ -889,7 +919,7 @@ export function SalaryPage() {
                   type="button"
                   onClick={() => {
                     const nextExempt = !editForm.isPFExempt;
-                    const nextBreakdown = generateSalaryFromNet(
+                    const nextBreakdown = generateSalaryFromGross(
                       Number(editForm.baseSalary) || 0,
                       Number(editForm.wfhAllowance) || 0,
                       0,
@@ -914,13 +944,33 @@ export function SalaryPage() {
               </div>
 
               <div>
-                <label className="text-xs text-slate-500" style={{ fontWeight: 500 }}>Net Take Home (Monthly)</label>
-                <input type="number" value={editForm.baseSalary} onChange={e => setEditForm({...editForm, baseSalary: e.target.value})} className="w-full px-3 py-2.5 mt-1 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400" />
+                <label className="text-xs text-slate-700 font-semibold" style={{ fontWeight: 600 }}>Monthly Gross Salary (₹) *</label>
+                <input
+                  type="number"
+                  value={editForm.baseSalary}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const nextBreakdown = generateSalaryFromGross(
+                      Number(val) || 0,
+                      Number(editForm.wfhAllowance) || 0,
+                      0,
+                      Number(editForm.presentDays) || 22,
+                      22,
+                      { isPFExempt: editForm.isPFExempt, isESIExempt: editForm.isESIExempt, isPTExempt: editForm.isPTExempt }
+                    );
+                    setEditForm(prev => ({
+                      ...prev,
+                      baseSalary: val,
+                      deductions: String(nextBreakdown.deductions.totalDeductions)
+                    }));
+                  }}
+                  className="w-full px-3 py-2.5 mt-1 rounded-lg border border-slate-200 text-sm outline-none focus:border-green-400 font-semibold"
+                />
                 {editForm.baseSalary && Number(editForm.baseSalary) > 0 && (() => {
                   const isPFExempt = editForm.isPFExempt;
                   const isESIExempt = editForm.isESIExempt;
                   const isPTExempt = editForm.isPTExempt;
-                  const breakdown = generateSalaryFromNet(
+                  const breakdown = generateSalaryFromGross(
                     Number(editForm.baseSalary),
                     Number(editForm.wfhAllowance) || 0,
                     0,
@@ -1271,12 +1321,13 @@ export function SalaryPage() {
                 const isPF = (selectedSalary as any)?.isPFExempt === true;
                 const isESI = (selectedSalary as any)?.isESIExempt === true;
                 const isPT = (selectedSalary as any)?.isPTExempt === true;
-                const breakdown = generateSalaryFromNet(
-                  selectedSalary.netSalary || selectedSalary.baseSalary || 0,
-                  selectedSalary.base - selectedSalary.baseSalary,
-                  selectedSalary.bonus,
-                  selectedSalary.presentDays,
-                  selectedSalary.workingDays,
+                const grossVal = Number(selectedSalary.profileGross || selectedSalary.baseSalary || selectedSalary.base || 0);
+                const breakdown = generateSalaryFromGross(
+                  grossVal,
+                  Number(selectedSalary.wfhAllowance !== undefined ? selectedSalary.wfhAllowance : (selectedSalary.base - selectedSalary.baseSalary) || 0),
+                  selectedSalary.bonus || 0,
+                  selectedSalary.presentDays || 22,
+                  selectedSalary.workingDays || 22,
                   { isPFExempt: isPF, isESIExempt: isESI, isPTExempt: isPT }
                 );
 

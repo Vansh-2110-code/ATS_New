@@ -117,6 +117,13 @@ exports.getSalary = async (req, res, next) => {
       sObj.panNumber = prof?.statutory?.panNumber || ps?.statutoryDetails?.pan || 'N/A';
       sObj.uanNumber = prof?.statutory?.uanNumber || ps?.statutoryDetails?.uan || 'N/A';
       sObj.profileGross = prof?.grossSalary || ps?.grossStandard || sObj.baseSalary;
+      if (prof?.grossSalary && prof.grossSalary > 0) {
+        sObj.baseSalary = prof.grossSalary;
+        sObj.base = prof.grossSalary;
+      } else {
+        sObj.baseSalary = sObj.baseSalary || sObj.profileGross;
+        sObj.base = sObj.baseSalary;
+      }
       sObj.profileAnnualCTC = prof?.annualCTC || (sObj.profileGross * 12);
       sObj.bank = prof?.bank || ps?.bankDetails || null;
       return sObj;
@@ -475,19 +482,25 @@ exports.updateSalary = async (req, res, next) => {
 
     await salary.save();
 
-    // Sync statutory exemptions to EmployeePayrollProfile and Salary Slips Hub (PayrollEmployeeRecord)
-    if (salary.user && (isPFExempt !== undefined || isESIExempt !== undefined || isPTExempt !== undefined)) {
+    // Sync salary changes and statutory exemptions to EmployeePayrollProfile and Salary Slips Hub (PayrollEmployeeRecord)
+    if (salary.user) {
       try {
         const EmployeePayrollProfile = require('../models/EmployeePayrollProfile');
         const updateFields = {};
+        if (baseSalary !== undefined) {
+          updateFields['grossSalary'] = salary.baseSalary;
+          updateFields['annualCTC'] = salary.baseSalary * 12;
+        }
         if (isPFExempt !== undefined) updateFields['statutory.isPFExempt'] = Boolean(isPFExempt);
         if (isESIExempt !== undefined) updateFields['statutory.isESIExempt'] = Boolean(isESIExempt);
         if (isPTExempt !== undefined) updateFields['statutory.isPTExempt'] = Boolean(isPTExempt);
 
-        await EmployeePayrollProfile.findOneAndUpdate(
-          { user: salary.user },
-          { $set: updateFields }
-        );
+        if (Object.keys(updateFields).length > 0) {
+          await EmployeePayrollProfile.findOneAndUpdate(
+            { user: salary.user },
+            { $set: updateFields }
+          );
+        }
 
         // Also sync directly to Salary Slips Hub (PayrollEmployeeRecord) for this employee & month
         const PayrollEmployeeRecord = require('../models/PayrollEmployeeRecord');
@@ -497,30 +510,64 @@ exports.updateSalary = async (req, res, next) => {
           year: salary.year
         });
 
+        const newGross = salary.baseSalary;
+        const isExempt = salary.isPFExempt === true;
+        const newBasic = Math.round(newGross * 0.5);
+        const newHra = Math.round(newBasic * 0.4);
+        const newSpecial = Math.max(0, newGross - (newBasic + newHra));
+        const newPf = isExempt ? 0 : Math.round(newBasic * 0.12);
+        const newPt = salary.isPTExempt ? 0 : (newGross >= 15000 ? 200 : 0);
+
         for (const ps of payslips) {
+          if (baseSalary !== undefined) {
+            ps.grossStandard = newGross;
+            ps.grossEarned = newGross;
+
+            if (Array.isArray(ps.earnings)) {
+              let basicItem = ps.earnings.find(e => e.code === 'BASIC' || (e.name && e.name.toLowerCase().includes('basic')));
+              if (basicItem) {
+                basicItem.standardAmount = newBasic;
+                basicItem.earnedAmount = newBasic;
+              }
+              let hraItem = ps.earnings.find(e => e.code === 'HRA' || (e.name && e.name.toLowerCase().includes('house rent')));
+              if (hraItem) {
+                hraItem.standardAmount = newHra;
+                hraItem.earnedAmount = newHra;
+              }
+              let specialItem = ps.earnings.find(e => e.code === 'SPECIAL' || (e.name && e.name.toLowerCase().includes('special')));
+              if (specialItem) {
+                specialItem.standardAmount = newSpecial;
+                specialItem.earnedAmount = newSpecial;
+              }
+            }
+          }
+
           if (!ps.statutoryDetails) ps.statutoryDetails = {};
-          if (isPFExempt !== undefined) ps.statutoryDetails.isPFExempt = Boolean(isPFExempt);
+          if (isPFExempt !== undefined) ps.statutoryDetails.isPFExempt = isExempt;
           if (isESIExempt !== undefined) ps.statutoryDetails.isESIExempt = Boolean(isESIExempt);
 
-          if (isPFExempt !== undefined) {
-            const isExempt = Boolean(isPFExempt);
-            if (Array.isArray(ps.deductions)) {
-              let pfDed = ps.deductions.find(d => d.code === 'PF_EE');
-              if (pfDed) {
-                pfDed.name = isExempt ? 'Provident Fund (Opted Out)' : 'Provident Fund (EPF)';
-                pfDed.amount = isExempt ? 0 : Math.round(((ps.grossEarned || salary.baseSalary || 0) * 0.5 * 0.12));
-              }
+          if (Array.isArray(ps.deductions)) {
+            let pfDed = ps.deductions.find(d => d.code === 'PF_EE' || (d.name && d.name.toLowerCase().includes('provident fund')));
+            if (pfDed) {
+              pfDed.name = isExempt ? 'Provident Fund (Opted Out)' : 'Provident Fund (EPF)';
+              pfDed.amount = newPf;
             }
-            if (Array.isArray(ps.employerContributions)) {
-              let pfEr = ps.employerContributions.find(d => d.code === 'PF_ER');
-              if (pfEr) {
-                pfEr.name = isExempt ? 'Employer EPF (Opted Out)' : 'Employer EPF';
-                pfEr.amount = isExempt ? 0 : Math.round(((ps.grossEarned || salary.baseSalary || 0) * 0.5 * 0.12));
-              }
+            let ptDed = ps.deductions.find(d => d.code === 'PT' || (d.name && d.name.toLowerCase().includes('professional tax')));
+            if (ptDed) {
+              ptDed.amount = newPt;
             }
-            ps.totalDeductions = (ps.deductions || []).reduce((sum, d) => sum + (d.amount || 0), 0);
-            ps.netSalary = Math.max(0, (ps.grossEarned || 0) - ps.totalDeductions);
           }
+
+          if (Array.isArray(ps.employerContributions)) {
+            let pfEr = ps.employerContributions.find(d => d.code === 'PF_ER' || (d.name && d.name.toLowerCase().includes('employer epf')));
+            if (pfEr) {
+              pfEr.name = isExempt ? 'Employer EPF (Opted Out)' : 'Employer EPF';
+              pfEr.amount = newPf;
+            }
+          }
+
+          ps.totalDeductions = (ps.deductions || []).reduce((sum, d) => sum + (d.amount || 0), 0);
+          ps.netSalary = Math.max(0, (ps.grossEarned || 0) - ps.totalDeductions);
           await ps.save();
         }
       } catch (_) {}

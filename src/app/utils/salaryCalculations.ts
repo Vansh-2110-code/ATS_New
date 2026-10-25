@@ -46,10 +46,10 @@ export interface StatutoryOptions {
 }
 
 /**
- * Generate complete salary breakdown from Net Take Home
+ * Generate standard salary breakdown from Monthly Gross Salary (Standard Indian Payroll)
  */
-export function generateSalaryFromNet(
-  netTakeHome: number,
+export function generateSalaryFromGross(
+  grossSalary: number,
   wfhAllowance: number = 0,
   incentives: number = 0,
   presentDays: number = 22,
@@ -60,34 +60,17 @@ export function generateSalaryFromNet(
   const isESIExempt = statutoryOpts?.isESIExempt === true;
   const isPTExempt = statutoryOpts?.isPTExempt === true;
 
-  const pt = isPTExempt ? 0 : 200;
-  let grossSalary: number;
+  const gross = Number(grossSalary) || 0;
+  const basic = Math.round(gross * 0.5);
+  const hra = Math.round(basic * 0.4); // 20% of gross
+  const specialAllowance = Math.max(0, gross - (basic + hra));
 
-  if (isPFExempt) {
-    if (isESIExempt || (netTakeHome + pt) > 21000) {
-      grossSalary = Math.round(netTakeHome + pt);
-    } else {
-      grossSalary = Math.round((netTakeHome + pt) / 0.9925);
-    }
-  } else {
-    // Formula based on fixed 0.85 ratio when PF is active
-    grossSalary = Math.round(netTakeHome / 0.85);
-  }
-
-  // Earning Components
-  const basic = Math.round(grossSalary * 0.5);
-  const hra = Math.round(basic * 0.4);
-  const specialAllowance = Math.max(0, grossSalary - (basic + hra)); // Balance
-  
-  // Deduction Components
+  const pt = isPTExempt ? 0 : (gross >= 15000 ? 200 : 0);
   const employeePF = isPFExempt ? 0 : Math.round(basic * 0.12);
-  const employeeESI = (!isESIExempt && grossSalary <= 21000) ? Math.round(grossSalary * 0.0075) : 0;
+  const employeeESI = (!isESIExempt && gross > 0 && gross <= 21000) ? Math.round(gross * 0.0075) : 0;
   const professionalTax = pt;
 
-  let totalDeductionsBase = employeePF + employeeESI + professionalTax;
-  
-  // Base net pay verified
-  const calculatedNetPayBase = grossSalary - totalDeductionsBase;
+  const totalDeductionsBase = employeePF + employeeESI + professionalTax;
 
   // Absences penalty
   const absentDays = Math.max(0, workingDays - presentDays);
@@ -95,24 +78,21 @@ export function generateSalaryFromNet(
   const absencePenalty = Math.round(absentDays * perDayRate);
 
   const totalDeductions = totalDeductionsBase + absencePenalty;
-
-  // Final Computations
-  const totalEarnings = grossSalary + wfhAllowance + incentives;
+  const totalEarnings = gross + (Number(wfhAllowance) || 0) + (Number(incentives) || 0);
   const finalNetPay = totalEarnings - totalDeductions;
 
-  // Employer Contributions
   const employerPF = isPFExempt ? 0 : Math.round(basic * 0.12);
-  const employerESI = (!isESIExempt && grossSalary <= 21000) ? Math.round(grossSalary * 0.0325) : 0;
+  const employerESI = (!isESIExempt && gross > 0 && gross <= 21000) ? Math.round(gross * 0.0325) : 0;
 
   return {
-    netTakeHome: calculatedNetPayBase,
-    grossSalary,
+    netTakeHome: gross - totalDeductionsBase,
+    grossSalary: gross,
     earnings: {
       basic,
       hra,
       specialAllowance,
-      wfhAllowance,
-      incentives,
+      wfhAllowance: Number(wfhAllowance) || 0,
+      incentives: Number(incentives) || 0,
       totalEarnings,
     },
     deductions: {
@@ -128,6 +108,40 @@ export function generateSalaryFromNet(
     },
     netPay: finalNetPay,
   };
+}
+
+export function generateSalaryFromNet(
+  netTakeHome: number,
+  wfhAllowance: number = 0,
+  incentives: number = 0,
+  presentDays: number = 22,
+  workingDays: number = 22,
+  statutoryOpts?: StatutoryOptions
+): SalaryBreakdown {
+  const isPFExempt = statutoryOpts?.isPFExempt === true;
+  const isESIExempt = statutoryOpts?.isESIExempt === true;
+  const isPTExempt = statutoryOpts?.isPTExempt === true;
+  const pt = isPTExempt ? 0 : 200;
+
+  let grossSalary: number;
+  if (isPFExempt) {
+    if (isESIExempt || (netTakeHome + pt) > 21000) {
+      grossSalary = Math.round(netTakeHome + pt);
+    } else {
+      grossSalary = Math.round((netTakeHome + pt) / 0.9925);
+    }
+  } else {
+    grossSalary = Math.round(netTakeHome / 0.85);
+  }
+
+  return generateSalaryFromGross(
+    grossSalary,
+    wfhAllowance,
+    incentives,
+    presentDays,
+    workingDays,
+    statutoryOpts
+  );
 }
 
 /**

@@ -3,7 +3,7 @@ import { Calendar, Loader2, AlertCircle, FileText, Eye, Lock } from 'lucide-reac
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { SalarySlip } from '../../components/SalarySlip';
-import { AttendanceSummary, generateSalaryFromNet } from '../../utils/salaryCalculations';
+import { AttendanceSummary, generateSalaryFromGross, generateSalaryFromNet } from '../../utils/salaryCalculations';
 import { SalarySlipAccessRequestModal } from '../../components/SalarySlipAccessRequestModal';
 
 export function SalarySlipPage() {
@@ -183,8 +183,8 @@ export function SalarySlipPage() {
     );
   }
 
-  const breakdown = salaryData ? generateSalaryFromNet(
-    salaryData.netSalary || salaryData.baseSalary || 0,
+  const breakdown = salaryData ? generateSalaryFromGross(
+    Number(salaryData.baseSalary || (salaryData as any)?.profileGross || salaryData.netSalary || 0),
     salaryData.wfhAllowance || 0,
     salaryData.bonus || 0,
     attendance?.presentDays || 22,
