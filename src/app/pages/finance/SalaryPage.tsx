@@ -754,11 +754,12 @@ export function SalaryPage() {
                       0,
                       22,
                       22,
-                      { isPFExempt: nextExempt, isESIExempt: addForm.isESIExempt, isPTExempt: addForm.isPTExempt }
+                      { isPFExempt: nextExempt, isESIExempt: nextExempt || addForm.isESIExempt, isPTExempt: addForm.isPTExempt }
                     );
                     setAddForm(prev => ({
                       ...prev,
                       isPFExempt: nextExempt,
+                      isESIExempt: nextExempt ? true : prev.isESIExempt,
                       deductions: String(nextBreakdown.deductions.totalDeductions)
                     }));
                   }}
@@ -925,11 +926,12 @@ export function SalaryPage() {
                       0,
                       Number(editForm.presentDays) || 22,
                       22,
-                      { isPFExempt: nextExempt, isESIExempt: editForm.isESIExempt, isPTExempt: editForm.isPTExempt }
+                      { isPFExempt: nextExempt, isESIExempt: nextExempt || editForm.isESIExempt, isPTExempt: editForm.isPTExempt }
                     );
                     setEditForm(prev => ({
                       ...prev,
                       isPFExempt: nextExempt,
+                      isESIExempt: nextExempt ? true : prev.isESIExempt,
                       deductions: String(nextBreakdown.deductions.totalDeductions)
                     }));
                   }}
@@ -1002,8 +1004,10 @@ export function SalaryPage() {
                           </div>
                           <div className="flex justify-between text-slate-600">
                             <span>ESI (0.75%)</span> 
-                            {isESIExempt ? (
-                              <span className="text-slate-400">Exempt</span>
+                            {isESIExempt || isPFExempt ? (
+                              <span className="text-amber-700 font-semibold bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px]">
+                                ✕ Opted Out (₹0)
+                              </span>
                             ) : (
                               <span>{formatCurrency(breakdown.deductions.employeeESI)}</span>
                             )}

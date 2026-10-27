@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Users, Search, Edit3, ArrowLeft, Building2, CheckCircle2,
-  XCircle, Filter, Loader2, Save, CreditCard, ShieldCheck
+  XCircle, Filter, Loader2, Save, CreditCard, ShieldCheck,
+  TrendingUp, History, PlusCircle, Calendar, DollarSign, X, Check,
+  Clock, ArrowUpRight, Award, Receipt
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -20,6 +22,33 @@ export function EmployeePayrollPage() {
   const [saving, setSaving] = useState(false);
   const [employmentTab, setEmploymentTab] = useState<'active' | 'exited'>('active');
   const [incrementNote, setIncrementNote] = useState('');
+
+  // Salary Revision Modal
+  const [revisionModalOpen, setRevisionModalOpen] = useState(false);
+  const [revisionProfile, setRevisionProfile] = useState<any>(null);
+  const [revisionForm, setRevisionForm] = useState({
+    newGrossSalary: 0,
+    effectiveDate: new Date().toISOString().split('T')[0],
+    reason: 'Annual Increment / Performance Review',
+  });
+  const [revising, setRevising] = useState(false);
+
+  // Financial History Ledger Drawer
+  const [ledgerDrawerOpen, setLedgerDrawerOpen] = useState(false);
+  const [ledgerData, setLedgerData] = useState<any>(null);
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+
+  // Advance & Reimbursement Modal
+  const [advanceModalOpen, setAdvanceModalOpen] = useState(false);
+  const [advanceProfile, setAdvanceProfile] = useState<any>(null);
+  const [advanceForm, setAdvanceForm] = useState({
+    title: 'Salary Advance',
+    totalAmount: 10000,
+    monthlyDeduction: 2500,
+    disbursedDate: new Date().toISOString().split('T')[0],
+    notes: 'Advance for personal emergency'
+  });
+  const [submittingAdvance, setSubmittingAdvance] = useState(false);
 
   useEffect(() => {
     loadCompanies();
@@ -92,6 +121,57 @@ export function EmployeePayrollPage() {
     }
   };
 
+  const handleSalaryRevisionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!revisionProfile || !revisionForm.newGrossSalary) return;
+    try {
+      setRevising(true);
+      await api.addSalaryRevision(revisionProfile._id, {
+        grossSalary: Number(revisionForm.newGrossSalary),
+        annualCTC: Number(revisionForm.newGrossSalary) * 12,
+        effectiveDate: revisionForm.effectiveDate,
+        reason: revisionForm.reason
+      });
+      alert(`Salary revision of ₹${revisionForm.newGrossSalary.toLocaleString('en-IN')}/mo recorded successfully.`);
+      setRevisionModalOpen(false);
+      loadProfiles();
+    } catch (err: any) {
+      alert(err.message || 'Failed to revise salary');
+    } finally {
+      setRevising(false);
+    }
+  };
+
+  const openFinancialHistory = async (empIdOrUserId: string) => {
+    setLedgerLoading(true);
+    setLedgerDrawerOpen(true);
+    try {
+      const history = await api.getEmployeeFinancialHistory(empIdOrUserId);
+      setLedgerData(history);
+    } catch (err: any) {
+      console.error('Failed to load financial ledger:', err);
+      alert('Could not fetch financial ledger: ' + err.message);
+    } finally {
+      setLedgerLoading(false);
+    }
+  };
+
+  const handleAdvanceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!advanceProfile) return;
+    try {
+      setSubmittingAdvance(true);
+      await api.addAdvanceOrRecovery(advanceProfile._id, advanceForm);
+      alert('Salary advance recorded successfully. Monthly recovery scheduled.');
+      setAdvanceModalOpen(false);
+      loadProfiles();
+    } catch (err: any) {
+      alert(err.message || 'Failed to record advance');
+    } finally {
+      setSubmittingAdvance(false);
+    }
+  };
+
   const filtered = profiles.filter((p) => {
     const text = `${p.user?.name || ''} ${p.user?.employeeId || ''} ${p.user?.email || ''} ${p.user?.role || ''}`.toLowerCase();
     return text.includes(searchTerm.toLowerCase());
@@ -112,7 +192,7 @@ export function EmployeePayrollPage() {
             Employee Payroll Master Directory
           </h1>
           <p className="text-sm text-slate-500">
-            Maintain employee salary CTC structures, statutory details (PF, ESI, PAN, UAN), and disbursement bank accounts
+            Maintain employee salary CTC structures, statutory details (PF, ESI, PAN, UAN), salary revisions, and permanent financial histories
           </p>
         </div>
 
@@ -158,19 +238,19 @@ export function EmployeePayrollPage() {
           }`}
         >
           <CheckCircle2 className="w-4 h-4" />
-          Active Staff
+          Active Staff ({employmentTab === 'active' ? filtered.length : 'Active'})
         </button>
         <button
           type="button"
           onClick={() => setEmploymentTab('exited')}
           className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm ${
             employmentTab === 'exited'
-              ? 'bg-slate-700 text-white shadow-slate-300'
+              ? 'bg-slate-800 text-white shadow-slate-300'
               : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
           }`}
         >
           <XCircle className="w-4 h-4" />
-          Inactive & Former Staff
+          Former Staff & Exited ({employmentTab === 'exited' ? filtered.length : 'Archived'})
         </button>
       </div>
 
@@ -204,7 +284,6 @@ export function EmployeePayrollPage() {
                 <tr className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
                   <th className="py-3.5 px-4">Employee</th>
                   <th className="py-3.5 px-4">Role / Designation</th>
-                  <th className="py-3.5 px-4">Branch</th>
                   <th className="py-3.5 px-4">Monthly Gross</th>
                   <th className="py-3.5 px-4">Annual CTC</th>
                   <th className="py-3.5 px-4">Statutory Status</th>
@@ -216,7 +295,7 @@ export function EmployeePayrollPage() {
               <tbody className="divide-y divide-slate-100 text-sm">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-400">
+                    <td colSpan={8} className="py-12 text-center text-slate-400">
                       No matching employee payroll profiles found.
                     </td>
                   </tr>
@@ -229,16 +308,18 @@ export function EmployeePayrollPage() {
                             {(p.user?.name || 'U').slice(0, 2).toUpperCase()}
                           </div>
                           <div>
-                            <p className="font-bold text-slate-900">{p.user?.name || 'Unknown User'}</p>
+                            <button
+                              onClick={() => openFinancialHistory(p.user?.employeeId || p.user?._id || p._id)}
+                              className="font-bold text-slate-900 hover:text-emerald-600 text-left transition-colors"
+                            >
+                              {p.user?.name || 'Unknown User'}
+                            </button>
                             <p className="text-xs text-slate-400 font-mono">{p.user?.employeeId || 'WH-STAFF'}</p>
                           </div>
                         </div>
                       </td>
                       <td className="py-3 px-4 text-xs font-semibold capitalize text-slate-700">
                         {p.user?.role || 'Staff'}
-                      </td>
-                      <td className="py-3 px-4 text-xs text-slate-600">
-                        {p.branch?.name || 'Bangalore HQ'}
                       </td>
                       <td className="py-3 px-4 font-mono font-bold text-slate-900">
                         ₹{(p.grossSalary || 0).toLocaleString('en-IN')}
@@ -249,7 +330,6 @@ export function EmployeePayrollPage() {
                       <td className="py-3 px-4">
                         <div className="flex flex-col gap-1 text-[11px]">
                           <span className="font-mono text-slate-700">PAN: {p.statutory?.panNumber || 'N/A'}</span>
-                          <span className="text-slate-400 font-mono">UAN: {p.statutory?.uanNumber || 'N/A'}</span>
                           <div>
                             {p.statutory?.isPFExempt ? (
                               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
@@ -281,7 +361,7 @@ export function EmployeePayrollPage() {
                           let badgeStyle = 'bg-emerald-100 text-emerald-800';
 
                           if (isFormer) {
-                            badgeLabel = 'FORMER EMPLOYEE';
+                            badgeLabel = 'FORMER STAFF';
                             badgeStyle = 'bg-slate-100 text-slate-700 border border-slate-300';
                           } else if (isInactive) {
                             badgeLabel = userStatus ? userStatus.toUpperCase() : 'INACTIVE';
@@ -299,15 +379,68 @@ export function EmployeePayrollPage() {
                         })()}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => {
-                            setCurrentProfile(JSON.parse(JSON.stringify(p)));
-                            setEditModalOpen(true);
-                          }}
-                          className="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-600 hover:text-emerald-700 transition-colors"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Financial Ledger */}
+                          <button
+                            onClick={() => openFinancialHistory(p.user?.employeeId || p.user?._id || p._id)}
+                            className="p-1.5 hover:bg-indigo-50 rounded-lg text-slate-600 hover:text-indigo-700 transition-colors"
+                            title="Permanent Financial Ledger"
+                          >
+                            <History className="w-4 h-4" />
+                          </button>
+
+                          {/* Revise Salary */}
+                          {employmentTab === 'active' && (
+                            <button
+                              onClick={() => {
+                                setRevisionProfile(p);
+                                setRevisionForm({
+                                  newGrossSalary: p.grossSalary || 0,
+                                  effectiveDate: new Date().toISOString().split('T')[0],
+                                  reason: 'Annual Increment / Performance Review',
+                                });
+                                setRevisionModalOpen(true);
+                              }}
+                              className="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-600 hover:text-emerald-700 transition-colors"
+                              title="Revise Salary (Effective Dating)"
+                            >
+                              <TrendingUp className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Add Advance */}
+                          {employmentTab === 'active' && (
+                            <button
+                              onClick={() => {
+                                setAdvanceProfile(p);
+                                setAdvanceForm({
+                                  title: 'Salary Advance',
+                                  totalAmount: 10000,
+                                  monthlyDeduction: 2500,
+                                  disbursedDate: new Date().toISOString().split('T')[0],
+                                  notes: 'Advance for personal emergency'
+                                });
+                                setAdvanceModalOpen(true);
+                              }}
+                              className="p-1.5 hover:bg-amber-50 rounded-lg text-slate-600 hover:text-amber-700 transition-colors"
+                              title="Salary Advance / Recovery"
+                            >
+                              <PlusCircle className="w-4 h-4" />
+                            </button>
+                          )}
+
+                          {/* Edit Statutory & Bank Profile */}
+                          <button
+                            onClick={() => {
+                              setCurrentProfile(JSON.parse(JSON.stringify(p)));
+                              setEditModalOpen(true);
+                            }}
+                            className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-slate-900 transition-colors"
+                            title="Edit Bank & Statutory Profile"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -318,7 +451,367 @@ export function EmployeePayrollPage() {
         )}
       </div>
 
-      {/* Edit Profile Modal */}
+      {/* MODAL 1: SALARY REVISION & EFFECTIVE DATING */}
+      {revisionModalOpen && revisionProfile && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Revise Salary Structure</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{revisionProfile.user?.name} ({revisionProfile.user?.employeeId})</p>
+              </div>
+              <button onClick={() => setRevisionModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSalaryRevisionSubmit} className="space-y-4 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 block">Current Gross Salary</span>
+                  <span className="text-base font-bold font-mono text-slate-900">
+                    ₹{(revisionProfile.grossSalary || 0).toLocaleString('en-IN')}/mo
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-slate-400 block">Current Annual CTC</span>
+                  <span className="text-sm font-semibold font-mono text-slate-600">
+                    ₹{((revisionProfile.grossSalary || 0) * 12).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  New Monthly Gross Salary (₹) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="1000"
+                  value={revisionForm.newGrossSalary}
+                  onChange={(e) => setRevisionForm({ ...revisionForm, newGrossSalary: Number(e.target.value) })}
+                  className="w-full px-3.5 py-2.5 text-sm font-mono font-bold border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+                <div className="flex justify-between items-center text-[11px] text-slate-500 mt-1">
+                  <span>New Annual CTC: ₹{(Number(revisionForm.newGrossSalary) * 12).toLocaleString('en-IN')}</span>
+                  {revisionForm.newGrossSalary > (revisionProfile.grossSalary || 0) && (
+                    <span className="text-emerald-600 font-semibold">
+                      +{Math.round(((revisionForm.newGrossSalary - (revisionProfile.grossSalary || 0)) / (revisionProfile.grossSalary || 1)) * 100)}% hike
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Effective From Date <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={revisionForm.effectiveDate}
+                  onChange={(e) => setRevisionForm({ ...revisionForm, effectiveDate: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Revision Reason / Increment Memo
+                </label>
+                <input
+                  type="text"
+                  value={revisionForm.reason}
+                  onChange={(e) => setRevisionForm({ ...revisionForm, reason: e.target.value })}
+                  placeholder="e.g. Annual Appraisal, Promotion, Market Correction"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setRevisionModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={revising}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/30"
+                >
+                  {revising && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Save Revision
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: SALARY ADVANCE / RECOVERY */}
+      {advanceModalOpen && advanceProfile && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Record Salary Advance</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{advanceProfile.user?.name} ({advanceProfile.user?.employeeId})</p>
+              </div>
+              <button onClick={() => setAdvanceModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdvanceSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Advance Title</label>
+                <input
+                  type="text"
+                  required
+                  value={advanceForm.title}
+                  onChange={(e) => setAdvanceForm({ ...advanceForm, title: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Total Amount (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    min="500"
+                    value={advanceForm.totalAmount}
+                    onChange={(e) => setAdvanceForm({ ...advanceForm, totalAmount: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-sm font-mono font-bold border border-slate-200 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Monthly Deduction (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    min="100"
+                    value={advanceForm.monthlyDeduction}
+                    onChange={(e) => setAdvanceForm({ ...advanceForm, monthlyDeduction: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-sm font-mono font-bold border border-slate-200 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Disbursed Date</label>
+                <input
+                  type="date"
+                  required
+                  value={advanceForm.disbursedDate}
+                  onChange={(e) => setAdvanceForm({ ...advanceForm, disbursedDate: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Notes / Justification</label>
+                <input
+                  type="text"
+                  value={advanceForm.notes}
+                  onChange={(e) => setAdvanceForm({ ...advanceForm, notes: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setAdvanceModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingAdvance}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-lg shadow-amber-600/30"
+                >
+                  {submittingAdvance && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Schedule Recovery
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DRAWER: PERMANENT EMPLOYEE FINANCIAL LEDGER */}
+      {ledgerDrawerOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-2xl h-full shadow-2xl border-l border-slate-200 dark:border-slate-800 p-6 overflow-y-auto space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl">
+                  <History className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100">Permanent Financial Ledger</h3>
+                  <p className="text-xs text-slate-500">Employee Lifetime Compensation, Payslips & Revisions</p>
+                </div>
+              </div>
+              <button onClick={() => setLedgerDrawerOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {ledgerLoading ? (
+              <div className="py-24 text-center text-slate-400">Loading permanent financial history...</div>
+            ) : ledgerData ? (
+              <div className="space-y-6 text-xs">
+                {/* Employee Card */}
+                <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-4 rounded-2xl text-white flex items-center justify-between">
+                  <div>
+                    <div className="text-base font-bold">{ledgerData.employee?.name}</div>
+                    <div className="text-xs text-indigo-300 font-mono mt-0.5">
+                      {ledgerData.employee?.employeeId} • {ledgerData.employee?.role} • {ledgerData.employee?.email}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-indigo-300 uppercase tracking-wider block">Joined Date</span>
+                    <span className="font-semibold text-xs">
+                      {ledgerData.employee?.joinedDate ? new Date(ledgerData.employee.joinedDate).toLocaleDateString() : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Lifetime KPI Summary */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Lifetime Gross</span>
+                    <div className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                      ₹{(ledgerData.summary?.lifetimeGross || 0).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Lifetime Net Disbursed</span>
+                    <div className="text-base font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      ₹{(ledgerData.summary?.lifetimeNet || 0).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Total Payslips</span>
+                    <div className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                      {ledgerData.summary?.payslipCount || 0} Runs
+                    </div>
+                  </div>
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span className="text-[10px] text-slate-400 uppercase font-semibold">Lifetime Incentives</span>
+                    <div className="text-base font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                      ₹{(ledgerData.summary?.lifetimeIncentives || 0).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Salary Revisions Timeline */}
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-1.5">
+                    <TrendingUp className="w-4 h-4 text-emerald-600" />
+                    Salary Increments & Revisions Timeline ({ledgerData.revisions?.length || 0})
+                  </h4>
+                  {ledgerData.revisions?.length === 0 ? (
+                    <div className="p-3 text-slate-400 bg-slate-50 dark:bg-slate-800/30 rounded-xl text-center">
+                      No historical revisions recorded yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {ledgerData.revisions.map((rev: any, idx: number) => (
+                        <div key={idx} className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                          <div>
+                            <span className="font-bold text-slate-900 dark:text-slate-100">₹{(rev.grossSalary || 0).toLocaleString('en-IN')}/mo</span>
+                            <span className="text-slate-400 text-[11px] ml-2">CTC: ₹{(rev.annualCTC || 0).toLocaleString('en-IN')}</span>
+                            <div className="text-[11px] text-slate-500 mt-0.5">{rev.reason || 'Salary revision'}</div>
+                          </div>
+                          <div className="text-right text-slate-400 text-[11px]">
+                            Effective: <span className="font-semibold text-slate-700 dark:text-slate-300">{new Date(rev.effectiveDate).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Past Payslips & Disbursal UTR Table */}
+                <div>
+                  <h4 className="font-bold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-1.5">
+                    <Receipt className="w-4 h-4 text-indigo-600" />
+                    Past Monthly Payslips & Payment Disbursals ({ledgerData.payslips?.length || 0})
+                  </h4>
+                  <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10px] uppercase font-semibold text-slate-500">
+                        <tr>
+                          <th className="py-2.5 px-3">Month / Year</th>
+                          <th className="py-2.5 px-3">Gross Earned</th>
+                          <th className="py-2.5 px-3">Net Disbursed</th>
+                          <th className="py-2.5 px-3">Payment Status & UTR</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {ledgerData.payslips?.map((ps: any) => (
+                          <tr key={ps._id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                            <td className="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-200">
+                              {ps.month}/{ps.year}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono">₹{(ps.grossEarned || 0).toLocaleString('en-IN')}</td>
+                            <td className="py-2.5 px-3 font-mono font-bold text-emerald-600">₹{(ps.netSalary || 0).toLocaleString('en-IN')}</td>
+                            <td className="py-2.5 px-3">
+                              {ps.paymentStatus === 'PAID' ? (
+                                <div>
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                                    <Check className="w-3 h-3" /> PAID
+                                  </span>
+                                  {ps.paymentDetails?.utrNumber && (
+                                    <div className="text-[10px] font-mono text-slate-400">UTR: {ps.paymentDetails.utrNumber}</div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] font-semibold text-amber-600">UNPAID</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Exit Settlement Record (if available) */}
+                {ledgerData.settlement && (
+                  <div className="bg-rose-50/60 dark:bg-rose-950/20 p-4 rounded-xl border border-rose-200 dark:border-rose-900/40 space-y-1.5">
+                    <div className="font-bold text-rose-900 dark:text-rose-300 flex items-center justify-between">
+                      <span>Full-and-Final Exit Settlement</span>
+                      <span className="text-xs uppercase font-extrabold">{ledgerData.settlement.status}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                      <span>Last Working Day: {new Date(ledgerData.settlement.lastWorkingDay).toLocaleDateString()}</span>
+                      <span className="font-bold text-slate-900 dark:text-slate-100">
+                        Net: ₹{ledgerData.settlement.netSettlementAmount?.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    {ledgerData.settlement.paymentDetails?.utrNumber && (
+                      <div className="text-[10px] font-mono text-slate-500">
+                        Settlement Disbursed UTR: {ledgerData.settlement.paymentDetails.utrNumber}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* Edit Profile Modal (Bank & Statutory) */}
       {editModalOpen && currentProfile && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">

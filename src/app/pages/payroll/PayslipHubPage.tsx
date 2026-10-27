@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import {
   FileText, Download, Printer, Search, Filter, Building2, MapPin,
   Calendar, CheckCircle2, ShieldCheck, Eye, ArrowLeft, RefreshCw,
-  DollarSign, User, AlertCircle, Sparkles, Send, Lock, X
+  DollarSign, User, AlertCircle, Sparkles, Send, Lock, X, CreditCard
 } from 'lucide-react';
 import api from '../../services/api';
 import logoImg from '../../../assets/Logo.png';
@@ -28,6 +28,43 @@ export function PayslipHubPage() {
   const [activeSlip, setActiveSlip] = useState<any | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const printableRef = useRef<HTMLDivElement>(null);
+
+  // Disbursal & UTR Recording state
+  const [disbursalModalOpen, setDisbursalModalOpen] = useState(false);
+  const [disbursalTargetSlip, setDisbursalTargetSlip] = useState<any | null>(null);
+  const [disbursalForm, setDisbursalForm] = useState({
+    utrNumber: '',
+    paymentMode: 'bank_transfer',
+    paymentDate: new Date().toISOString().split('T')[0],
+    reference: '',
+  });
+  const [recordingDisbursal, setRecordingDisbursal] = useState(false);
+
+  const handleRecordDisbursalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!disbursalForm.utrNumber.trim()) {
+      alert('Please enter a valid UTR number');
+      return;
+    }
+    try {
+      setRecordingDisbursal(true);
+      const recordIds = disbursalTargetSlip ? [disbursalTargetSlip._id] : filteredPayslips.map(p => p._id);
+      await api.recordPayrollPayment({
+        recordIds,
+        paymentMode: disbursalForm.paymentMode,
+        utrNumber: disbursalForm.utrNumber.trim(),
+        paymentDate: disbursalForm.paymentDate,
+        reference: disbursalForm.reference || disbursalForm.utrNumber.trim()
+      });
+      alert(`Payment recorded successfully with UTR: ${disbursalForm.utrNumber}`);
+      setDisbursalModalOpen(false);
+      loadPayslips();
+    } catch (err: any) {
+      alert(err.message || 'Failed to record disbursal');
+    } finally {
+      setRecordingDisbursal(false);
+    }
+  };
 
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -345,13 +382,34 @@ export function PayslipHubPage() {
 
       {/* Payslips Table */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden no-print">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 text-base">
-            Payslip Directory ({filteredPayslips.length})
-          </h3>
-          <span className="text-xs text-slate-400">
-            Click 'View Slip' to preview, inspect statutory deductions, or print PDF.
-          </span>
+        <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="font-bold text-slate-900 text-base">
+              Payslip Directory ({filteredPayslips.length})
+            </h3>
+            <span className="text-xs text-slate-400">
+              Click 'View Slip' to preview, inspect statutory deductions, record UTR disbursal, or print PDF.
+            </span>
+          </div>
+
+          {filteredPayslips.length > 0 && (
+            <button
+              onClick={() => {
+                setDisbursalTargetSlip(null);
+                setDisbursalForm({
+                  utrNumber: '',
+                  paymentMode: 'bank_transfer',
+                  paymentDate: new Date().toISOString().split('T')[0],
+                  reference: `BATCH/SAL/${selectedYear}${String(selectedMonth).padStart(2, '0')}`
+                });
+                setDisbursalModalOpen(true);
+              }}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition-all self-start sm:self-auto cursor-pointer"
+            >
+              <CreditCard className="w-4 h-4" />
+              <span>Record Batch Disbursal (UTR)</span>
+            </button>
+          )}
         </div>
 
         {loading ? (
@@ -378,7 +436,8 @@ export function PayslipHubPage() {
                   <th className="px-4 py-3.5 text-right">Earned Gross</th>
                   <th className="px-4 py-3.5 text-right">Deductions</th>
                   <th className="px-4 py-3.5 text-right">Net Payable</th>
-                  <th className="px-4 py-3.5 text-center">Status</th>
+                  <th className="px-4 py-3.5 text-center">Disbursal & UTR</th>
+                  <th className="px-4 py-3.5 text-center">Slip Status</th>
                   <th className="px-4 py-3.5 text-center">Actions</th>
                 </tr>
               </thead>
@@ -409,6 +468,36 @@ export function PayslipHubPage() {
                       <span className="font-bold text-emerald-700 text-base">
                         ₹{(slip.netSalary || 0).toLocaleString('en-IN')}
                       </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-center">
+                      {slip.paymentStatus === 'PAID' ? (
+                        <div>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                            <CheckCircle2 className="w-3 h-3" /> PAID
+                          </span>
+                          {slip.paymentDetails?.utrNumber && (
+                            <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                              UTR: {slip.paymentDetails.utrNumber}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setDisbursalTargetSlip(slip);
+                            setDisbursalForm({
+                              utrNumber: '',
+                              paymentMode: slip.bankDetails?.paymentMode || 'bank_transfer',
+                              paymentDate: new Date().toISOString().split('T')[0],
+                              reference: `SAL/${slip.year}${String(slip.month).padStart(2, '0')}/${slip.employeeId || 'EMP'}`
+                            });
+                            setDisbursalModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition cursor-pointer"
+                        >
+                          Record UTR
+                        </button>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-center">
                       {slip.isFrozen ? (
@@ -748,6 +837,97 @@ export function PayslipHubPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: RECORD DISBURSAL & UTR NUMBER */}
+      {disbursalModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Record Salary Disbursal</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {disbursalTargetSlip
+                    ? `For ${disbursalTargetSlip.name} (${disbursalTargetSlip.employeeId || 'STAFF'})`
+                    : `Batch Disbursal for all ${filteredPayslips.length} active slips`}
+                </p>
+              </div>
+              <button onClick={() => setDisbursalModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRecordDisbursalSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Bank UTR / Transaction Reference Number <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={disbursalForm.utrNumber}
+                  onChange={(e) => setDisbursalForm({ ...disbursalForm, utrNumber: e.target.value })}
+                  placeholder="e.g. HDFC20261027008899"
+                  className="w-full px-3.5 py-2.5 text-sm font-mono font-bold border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Payment Mode</label>
+                  <select
+                    value={disbursalForm.paymentMode}
+                    onChange={(e) => setDisbursalForm({ ...disbursalForm, paymentMode: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                  >
+                    <option value="bank_transfer">NEFT / RTGS Transfer</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Payment Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={disbursalForm.paymentDate}
+                    onChange={(e) => setDisbursalForm({ ...disbursalForm, paymentDate: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Transaction Memo / Note</label>
+                <input
+                  type="text"
+                  value={disbursalForm.reference}
+                  onChange={(e) => setDisbursalForm({ ...disbursalForm, reference: e.target.value })}
+                  placeholder="e.g. Salary credited via HDFC Corporate Netbanking"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setDisbursalModalOpen(false)}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-slate-600 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={recordingDisbursal}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/30"
+                >
+                  {recordingDisbursal && <RefreshCw className="w-4 h-4 animate-spin" />}
+                  Confirm Disbursal & Mark Paid
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

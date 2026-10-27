@@ -106,6 +106,12 @@ export function SlicerFilteredDataView({
           params.statusIn = 'Joined';
         } else if (slicerName === 'Eligible Candidates' || slicerName === 'Eligible') {
           params.statusIn = 'Eligible,Eligible Candidates';
+        } else if (slicerName === 'Hotlist' || slicerName === 'Hot List') {
+          params.statusIn = 'Hotlist,Hot List';
+        } else if (slicerName === 'Submitted to Client' || slicerName === 'Submitted To Client' || slicerName === 'Sublitted To Client') {
+          params.statusIn = 'Submitted to Client,Submitted To Client,Sublitted To Client';
+        } else if (slicerName === 'Document Initialized' || slicerName === 'Documennt Initialted') {
+          params.statusIn = 'Document Initialized,Documennt Initialted';
         } else if (slicerName === 'Documentation' || slicerName === 'Document Pending') {
           params.statusIn = 'Documentation,Document Pending,Documentation Completed,Documentation Incomplete,Documennt Initialted,Document Initialized';
         } else if (slicerName === '__final_select_group') {

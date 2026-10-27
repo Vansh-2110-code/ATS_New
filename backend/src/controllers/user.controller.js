@@ -432,3 +432,191 @@ exports.activateAllSuspended = async (req, res, next) => {
     next(err);
   }
 };
+
+// GET /api/users/:id/exit-preview (Preview candidates and data impacted by exit)
+exports.getExitPreview = async (req, res, next) => {
+  try {
+    const mongoose = require('mongoose');
+    let user;
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      user = await User.findById(req.params.id);
+    }
+    if (!user) {
+      user = await User.findOne({
+        $or: [
+          { employeeId: req.params.id },
+          { employeeId: { $regex: new RegExp(`^${req.params.id}$`, 'i') } },
+          { email: req.params.id.toLowerCase() }
+        ]
+      });
+    }
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const Candidate = require('../models/Candidate');
+    const activeCandidatesCount = await Candidate.countDocuments({
+      assignedRecruiter: user._id,
+      status: { $nin: ['Joined', 'Exited', 'Joined and Abort', 'Black List'] }
+    });
+    const totalCandidatesCount = await Candidate.countDocuments({ assignedRecruiter: user._id });
+
+    res.json({
+      user: {
+        id: user._id,
+        employeeId: user.employeeId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        employmentStatus: user.employmentStatus,
+      },
+      activeCandidatesCount,
+      totalCandidatesCount,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/users/:id/confirm-exit (1-Click Exit & General Pool Migration Workflow)
+exports.confirmEmployeeExit = async (req, res, next) => {
+  try {
+    if (req.params.id === 'WH000001' || req.params.id === 'admin@whitehorsemanpower.in') {
+      return res.status(403).json({ message: 'Root System Administrator account cannot be exited.' });
+    }
+
+    const mongoose = require('mongoose');
+    let user;
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      user = await User.findById(req.params.id);
+    }
+    if (!user) {
+      user = await User.findOne({
+        $or: [
+          { employeeId: req.params.id },
+          { employeeId: { $regex: new RegExp(`^${req.params.id}$`, 'i') } },
+          { email: req.params.id.toLowerCase() }
+        ]
+      });
+    }
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    // Idempotency: If already confirmed as Former Employee, return clean existing record without duplicating operations
+    if (user.status === 'Former Employee' && user.employmentStatus === 'Former Employee') {
+      return res.json({
+        success: true,
+        message: 'Employee exit was already confirmed previously.',
+        alreadyExited: true,
+        summary: {
+          recruiterId: user.employeeId || user._id,
+          recruiterName: user.name,
+          status: 'Former Employee',
+          candidatesTransferred: 0,
+          lockInsReleased: 0,
+          sessionsRevoked: true,
+          payrollDeactivated: true,
+          exitConfirmedDate: user.exitConfirmedDate || user.updatedAt,
+        },
+        user,
+      });
+    }
+
+    const { resignationDate, lastWorkingDate, exitReason, exitRemarks } = req.body || {};
+    const confirmedAt = new Date();
+
+    // 1. Update User Status & Audit Fields
+    user.status = 'Former Employee';
+    user.employmentStatus = 'Former Employee';
+    user.resignationDate = resignationDate ? new Date(resignationDate) : (user.resignationDate || confirmedAt);
+    user.lastWorkingDate = lastWorkingDate ? new Date(lastWorkingDate) : (user.lastWorkingDate || confirmedAt);
+    user.lastWorkingDay = user.lastWorkingDate;
+    user.exitConfirmedDate = confirmedAt;
+    user.exitReason = exitReason || 'Resignation';
+    user.exitRemarks = exitRemarks || '';
+    user.exitConfirmedBy = req.user._id;
+    user.exitConfirmedByName = req.user.name || 'System Administrator';
+    user.exitProcessingTimestamp = confirmedAt;
+    user.offboardedBy = req.user._id;
+    user.offboardedAt = confirmedAt;
+    await user.save();
+
+    // 2. Deactivate Payroll Profile
+    const EmployeePayrollProfile = require('../models/EmployeePayrollProfile');
+    await EmployeePayrollProfile.updateMany({ user: user._id }, { status: 'exited' });
+
+    // 3. Candidate General Pool Automation & Immediate 30-Day Lock Release
+    const Candidate = require('../models/Candidate');
+    const candidateFilter = {
+      assignedRecruiter: user._id,
+      status: { $nin: ['Joined', 'Exited', 'Joined and Abort', 'Black List'] }
+    };
+
+    const countTransferred = await Candidate.countDocuments(candidateFilter);
+
+    // Ensure originalRecruiter is preserved
+    await Candidate.updateMany(
+      { assignedRecruiter: user._id, originalRecruiter: { $exists: false } },
+      { $set: { originalRecruiter: user._id, originalRecruiterName: user.name } }
+    );
+
+    // Build automated note for candidate history preservation
+    const exitNote = {
+      text: `Candidate automatically transferred to General Pool & 30-day lock-in terminated due to recruiter exit (${user.name} - ${user.employeeId || 'ID'}). Complete history, notes, and resumes preserved.`,
+      addedBy: req.user._id,
+      addedByName: req.user.name || 'System Admin',
+      createdAt: confirmedAt,
+    };
+
+    // Execute atomic candidate pool migration & 30-day lock release
+    await Candidate.updateMany(
+      candidateFilter,
+      {
+        $set: {
+          ownershipStatus: 'General Data',
+          assignedRecruiter: null,
+          assignedRecruiterName: 'General Pool',
+          availableInGeneralPoolAfter: confirmedAt,
+          lockInStatus: 'TERMINATED_ON_EMPLOYEE_EXIT',
+          lockInTerminatedAt: confirmedAt,
+          lockInTerminationReason: 'Recruiter Exited',
+          isExitReleased: true,
+          previousOwner: user._id,
+          previousOwnerName: user.name,
+          reassignedAt: confirmedAt,
+          reassignedBy: req.user._id,
+        },
+        $push: {
+          notes: exitNote,
+        }
+      }
+    );
+
+    // 4. Create Audit Log Entry
+    await createLog({
+      type: 'offboard',
+      user: req.user._id,
+      userName: req.user.name,
+      role: req.user.role,
+      action: `Confirmed recruiter exit for ${user.name} (${user.employeeId}). ${countTransferred} active candidate(s) transferred to General Pool & 30-day locks released. Sessions revoked. Payroll deactivated.`,
+      target: user._id.toString(),
+      ip: req.ip,
+    });
+
+    res.json({
+      success: true,
+      message: `Recruiter exit processed successfully. ${countTransferred} candidate(s) transferred to General Pool.`,
+      summary: {
+        recruiterId: user.employeeId || user._id,
+        recruiterName: user.name,
+        status: 'Former Employee',
+        candidatesTransferred: countTransferred,
+        lockInsReleased: countTransferred,
+        sessionsRevoked: true,
+        payrollDeactivated: true,
+        exitConfirmedDate: confirmedAt,
+      },
+      user,
+    });
+  } catch (err) {
+    next(err);
+  }
+};

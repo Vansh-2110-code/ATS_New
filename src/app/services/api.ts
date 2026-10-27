@@ -520,6 +520,17 @@ class ApiService {
     });
   }
 
+  async getExitPreview(id: string) {
+    return this.request<any>(`/users/${id}/exit-preview`);
+  }
+
+  async confirmEmployeeExit(id: string, data: { resignationDate: string; lastWorkingDate: string; exitReason: string; exitRemarks?: string }) {
+    return this.request<any>(`/users/${id}/confirm-exit`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   // ─── Attendance ───
   async getTodayAttendance() {
     return this.request<any>('/attendance/today');
@@ -1642,6 +1653,121 @@ class ApiService {
       body: JSON.stringify(data),
     });
   }
+
+  // ─── Payment Disbursal & UTR Tracking ───
+  async recordPayrollPayment(data: { recordIds?: string[]; runId?: string; paymentMode?: string; utrNumber: string; paymentDate?: string; reference?: string }) {
+    return this.request<{ success: boolean; message: string; modifiedCount: number }>('/payroll/payment/record', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ─── Permanent Employee Financial History Ledger ───
+  async getEmployeeFinancialHistory(id: string) {
+    return this.request<any>(`/payroll/employees/${id}/history`);
+  }
+
+  async addSalaryRevision(id: string, data: { grossSalary: number; annualCTC?: number; effectiveDate?: string; reason?: string }) {
+    return this.request<any>(`/payroll/employees/${id}/revision`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async addAdvanceOrRecovery(id: string, data: { title: string; totalAmount: number; monthlyDeduction?: number; disbursedDate?: string; notes?: string }) {
+    return this.request<any>(`/payroll/employees/${id}/advance`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async claimReimbursement(id: string, data: { category: string; amount: number; claimDate?: string; remarks?: string }) {
+    return this.request<any>(`/payroll/employees/${id}/reimbursement`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateReimbursementStatus(id: string, reimbursementId: string, data: any) {
+    return this.request<any>(`/payroll/employees/${id}/reimbursement/${reimbursementId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ─── Full-and-Final Settlements & Exit Automation ───
+  async getSettlements(params: Record<string, string> = {}) {
+    const q = new URLSearchParams(params).toString();
+    return this.request<any[]>(`/payroll/settlement${q ? `?${q}` : ''}`);
+  }
+
+  async getSettlementById(id: string) {
+    return this.request<any>(`/payroll/settlement/${id}`);
+  }
+
+  async initiateResignation(data: { userId: string; resignationDate?: string; noticePeriodDays?: number; lastWorkingDay?: string; exitReason?: string }) {
+    return this.request<any>('/payroll/settlement/initiate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async previewSettlement(data: any) {
+    return this.request<any>('/payroll/settlement/preview', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async finalizeSettlement(data: any) {
+    return this.request<any>('/payroll/settlement/finalize', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async disburseSettlement(id: string, data: { paymentMode?: string; utrNumber: string; paymentDate?: string; paymentRemarks?: string; relievingLetterIssued?: boolean }) {
+    return this.request<any>(`/payroll/settlement/${id}/disburse`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSettlementClearance(id: string, data: { clearances?: any; relievingLetterIssued?: boolean; experienceCertificateIssued?: boolean }) {
+    return this.request<any>(`/payroll/settlement/${id}/clearance`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // ─── Recruitment Revenue Attribution (Attributed, Invoiced, Collected) ───
+  async getRecruitmentRevenueAttribution() {
+    return this.request<{
+      pipeline: {
+        attributed: { candidatesCount: number; totalCTC: number; estimatedRevenue: number; label: string };
+        invoiced: { invoicesCount: number; totalAmount: number; label: string };
+        collected: { collectedInvoicesCount: number; totalAmount: number; label: string };
+      };
+      recruiterScorecard: any[];
+    }>('/payroll/recruitment-revenue');
+  }
+
+  // ─── Statutory Compliance Reports (EPFO ECR, ESIC, Bank NEFT, MoM) ───
+  async getComplianceReports(params: Record<string, string> = {}) {
+    const q = new URLSearchParams(params).toString();
+    return this.request<{
+      month: number;
+      year: number;
+      recordCount: number;
+      ecrCount: number;
+      ecrRawText: string;
+      esicRecords: any[];
+      esicTotalContribution: number;
+      neftCsv: string;
+      variance: any;
+    }>(`/payroll/reports${q ? `?${q}` : ''}`);
+  }
+
 
   // ─── Internal Employee Chat Suite ───
   async getChatRooms() {

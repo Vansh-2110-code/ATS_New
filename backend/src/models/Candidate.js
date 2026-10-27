@@ -1,18 +1,22 @@
 const mongoose = require('mongoose');
 
-const CANDIDATE_STATUSES = [
-  // Official Statuses
+const OFFICIAL_STATUSES = [
   'Eligible', 'Not Eligible', 'Not Interested', 'No Response', 'Duplicate-Client', 'Call Back',
-  'Hold', 'Hotlist', 'Hot List', 'Submitted To Client', 'Submitted to Client', 'Sublitted To Client', 'Walkin Company', 'Walkin WHM',
+  'Hold', 'Hotlist', 'Submitted to Client', 'Walkin Company', 'Walkin WHM',
   'No Show', 'VNA Select', 'VNA Reject', 'Test Select', 'Test Reject',
   'Candidate Drop Post L1 Select', 'Candidate Drop Post L2 Select',
   'Candidate Drop During Final Stage', 'L1 Select', 'L1 Reject', 'L2 Select',
   'L2 Reject', 'Final Select', 'Final Reject', 'Document Initialized',
-  'Documennt Initialted', 'Documentation Completed', 'Documentation Incomplete',
+  'Documentation Completed', 'Documentation Incomplete',
   'Waiting for Offer', 'Offer Accept', 'Offer Reject', 'Joined',
-  'Joined and Abort', 'Black List',
+  'Joined and Abort', 'Black List'
+];
 
-  // Legacy Statuses (for backward compatibility)
+const CANDIDATE_STATUSES = [
+  ...OFFICIAL_STATUSES,
+
+  // Legacy & Alias Statuses (for backward compatibility in schema validation)
+  'Hot List', 'Submitted To Client', 'Sublitted To Client', 'Documennt Initialted',
   'Contacted', 'Interested', 'Selected for Call', 'Screening',
   'Interview Scheduled', 'Selected', 'Rejected', 'Eligible Candidates',
   'Wrong Number', 'Unreachable', 'Did Not Pick', 'Unanswered Calls',
@@ -208,6 +212,12 @@ const candidateSchema = new mongoose.Schema({
   tlRejectedByName: { type: String },
   tlRejectionReason: { type: String },
   availableInGeneralPoolAfter: { type: Date },
+  lockInStatus: { type: String, enum: ['ACTIVE_LOCK', 'EXPIRED', 'TERMINATED_ON_EMPLOYEE_EXIT', 'OVERRIDDEN'], default: 'ACTIVE_LOCK' },
+  lockInTerminatedAt: { type: Date },
+  lockInTerminationReason: { type: String },
+  previousOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  previousOwnerName: { type: String },
+  isExitReleased: { type: Boolean, default: false },
 
   // Immutable JR History Audit Trail
   jrHistory: [{
@@ -606,7 +616,9 @@ candidateSchema.post('save', async function(doc) {
   }
 });
 
-candidateSchema.statics.STATUSES = CANDIDATE_STATUSES;
+candidateSchema.statics.STATUSES = OFFICIAL_STATUSES;
+candidateSchema.statics.OFFICIAL_STATUSES = OFFICIAL_STATUSES;
+candidateSchema.statics.ALL_ALLOWED_STATUSES = CANDIDATE_STATUSES;
 candidateSchema.statics.SOURCES = SOURCES;
 candidateSchema.statics.FIRST_CALL_STATUSES = FIRST_CALL_STATUSES;
 candidateSchema.statics.INTERVIEW_STATUSES = INTERVIEW_STATUSES;

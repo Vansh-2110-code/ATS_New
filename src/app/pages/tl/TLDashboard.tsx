@@ -5,7 +5,8 @@ import {
   Phone, Calendar, AlertCircle, TrendingUp, ArrowRight, Users, Edit3, Loader2, Mail,
   X, Eye, BarChart3, Zap, Target, Award, CheckCircle2, FileText,
   PhoneOff, PhoneMissed, PhoneCall, ClipboardList, UserX, Building2,
-  BadgeCheck, Clipboard, UserPlus, Clock, Briefcase, UserCheck, FileCheck
+  BadgeCheck, Clipboard, UserPlus, Clock, Briefcase, UserCheck, FileCheck,
+  Flame, ExternalLink, Shield
 } from 'lucide-react';
 import api from '../../services/api';
 import { getGreeting } from '../../utils/greetingUtils';
@@ -39,22 +40,41 @@ interface TeamMember {
 }
 
 const STATUS_ICON_MAP: Record<string, any> = {
-  'Eligible Candidates': UserCheck,
-  'Wrong Number': PhoneOff,
-  'Did Not Pick': PhoneMissed,
+  // 34 Official Statuses
+  Eligible: UserCheck,
+  'Not Eligible': UserX,
+  'Not Interested': UserX,
+  'No Response': PhoneMissed,
+  'Duplicate-Client': Users,
   'Call Back': PhoneCall,
-  'HR Shortlist': ClipboardList,
-  'Written Test': FileText,
-  'Operations Round': Building2,
-  'Selected': BadgeCheck,
-  'Documentation': Clipboard,
-  'Yet To Join': UserX,
-  'Joined': CheckCircle2,
-  'New': UserPlus,
-  'Contacted': Phone,
-  'Interested': CheckCircle2,
-  'Interview Scheduled': Calendar,
-  'Rejected': X,
+  Hold: Clock,
+  Hotlist: Flame,
+  'Submitted to Client': ExternalLink,
+  'Walkin Company': Building2,
+  'Walkin WHM': Briefcase,
+  'No Show': UserX,
+  'VNA Select': BadgeCheck,
+  'VNA Reject': X,
+  'Test Select': FileCheck,
+  'Test Reject': X,
+  'Candidate Drop Post L1 Select': UserX,
+  'Candidate Drop Post L2 Select': UserX,
+  'Candidate Drop During Final Stage': UserX,
+  'L1 Select': CheckCircle2,
+  'L1 Reject': X,
+  'L2 Select': CheckCircle2,
+  'L2 Reject': X,
+  'Final Select': BadgeCheck,
+  'Final Reject': X,
+  'Document Initialized': Clipboard,
+  'Documentation Completed': CheckCircle2,
+  'Documentation Incomplete': AlertCircle,
+  'Waiting for Offer': Clock,
+  'Offer Accept': BadgeCheck,
+  'Offer Reject': X,
+  Joined: CheckCircle2,
+  'Joined and Abort': UserX,
+  'Black List': Shield,
 };
 
 const STATUS_COLOR_LIST = ['emerald','red','orange','amber','violet','indigo','cyan','teal','sky','pink','green'];

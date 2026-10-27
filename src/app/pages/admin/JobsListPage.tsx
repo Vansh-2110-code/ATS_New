@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router';
 import {
   Search, Briefcase, Plus, Edit2, Trash2, RefreshCw,
   X, ChevronLeft, ChevronRight, Building2, Users, AlertCircle,
-  Eye, Phone, MapPin, UserCheck, Tag, UserPlus, Lock,
+  Eye, Phone, MapPin, UserCheck, Tag, UserPlus, Lock, FileText,
 } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -356,7 +356,12 @@ export function JobsListPage() {
                         </button>
                       </td>
                       <td className="px-4 py-3">
-                        <p className="text-slate-700 text-xs" style={{ fontWeight: 600 }}>{j.jobTitle}</p>
+                        <button
+                          onClick={() => navigate(`/recruiter/jobs/${j._id}/summary`)}
+                          className="text-slate-800 hover:text-blue-600 text-xs text-left font-semibold hover:underline cursor-pointer"
+                        >
+                          {j.jobTitle}
+                        </button>
                       </td>
                       <td className="px-4 py-3">
                         <button onClick={() => navigate('/admin/companies', { state: { company: j.companyName } })}
@@ -449,7 +454,14 @@ export function JobsListPage() {
                               <Lock className="w-3.5 h-3.5" />
                             </span>
                           )}
-                          <button onClick={() => openCandidatePanel(j)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="View candidates">
+                          <button
+                            onClick={() => navigate(`/recruiter/jobs/${j._id}/summary`)}
+                            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="View JR Summary & Formatted JD"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => openCandidatePanel(j)} className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer" title="View candidates">
                             <Eye className="w-3.5 h-3.5" />
                           </button>
                           <button onClick={() => openReferPanel(j)} className="p-1.5 text-slate-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors" title="Refer a Candidate">

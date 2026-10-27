@@ -7,7 +7,7 @@ import {
   DollarSign, TrendingUp, UserCog, Activity, ChevronRight,
   ScanLine, CalendarCheck, UserPlus, ListChecks, Briefcase, FileCheck,
   Building2, Database, ClipboardCheck, CheckSquare, MonitorCheck, Mail, LayoutGrid, Upload, Settings, Globe, XCircle, RotateCcw,
-  BookOpen, Play, ShieldCheck, Award, MessageSquare, FileSignature, ChevronDown, Layers,
+  BookOpen, Play, ShieldCheck, Award, MessageSquare, FileSignature, ChevronDown, Layers, UserMinus,
 } from 'lucide-react';
 import { useAuth, Role, ROLE_DASHBOARD } from '../../context/AuthContext';
 import { useInternalChat } from '../../context/InternalChatContext';
@@ -29,7 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Candidate Management', href: '/recruiter/resumes',       icon: Users,           roles: ['recruiter', 'spoc', 'tl'], category: 'Recruiter' },
   { label: 'Eligible Tracker', href: '/recruiter/eligible-tracker',  icon: ClipboardCheck,  roles: ['recruiter', 'spoc'], category: 'Recruiter' },
   { label: 'Rejected Bucket',  href: '/recruiter/rejected',      icon: XCircle,         roles: ['recruiter', 'spoc', 'tl', 'manager', 'admin'], category: 'Recruiter' },
-  { label: 'Add Candidate',    href: '/recruiter/add',           icon: UserPlus,        roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
+  { label: 'Add Candidate',    href: '/recruiter/add',           icon: UserPlus,        roles: ['admin', 'superadmin', 'manager', 'tl', 'recruiter', 'spoc'], category: 'Recruiter' },
   { label: 'Walk-In Queue',    href: '/recruiter/walkin-queue',  icon: ListChecks,      roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
   { label: 'Walk-In Mgmt',     href: '/recruiter/walkins',       icon: UserCheck,       roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
   { label: 'Interviews',       href: '/recruiter/interviews',    icon: CalendarCheck,   roles: ['recruiter', 'tl', 'spoc'], category: 'Recruiter' },
@@ -113,6 +113,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Employee Salary CTC', href: '/payroll/employees', icon: Users,           roles: ['admin', 'manager'], category: 'Payroll' },
   { label: 'Salary Slips Hub',   href: '/payroll/payslips',  icon: FileText,        roles: ['admin', 'manager'], category: 'Payroll' },
   { label: 'Recruiter Incentives', href: '/payroll/incentives', icon: Award,        roles: ['admin', 'manager'], category: 'Payroll' },
+  { label: 'Exit & Settlements', href: '/payroll/settlement', icon: UserMinus,      roles: ['admin', 'manager'], category: 'Payroll' },
+  { label: 'Compliance Reports', href: '/payroll/reports',    icon: ShieldCheck,    roles: ['admin', 'manager'], category: 'Payroll' },
   { label: 'Payroll Masters',    href: '/payroll/masters',   icon: Settings,        roles: ['admin'],            category: 'Payroll' },
 ];
 

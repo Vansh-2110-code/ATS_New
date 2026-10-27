@@ -12,6 +12,7 @@ const Attendance = require('../models/Attendance');
 const RecruitmentIncentive = require('../models/RecruitmentIncentive');
 const Candidate = require('../models/Candidate');
 const Invoice = require('../models/Invoice');
+const Settlement = require('../models/Settlement');
 
 // Number to words converter for Indian Rupees
 function numberToWords(num) {
@@ -605,13 +606,15 @@ exports.calculatePayroll = async (req, res) => {
     if (isValidObjectId(branchId)) profileQuery.branch = branchId;
     const allProfiles = await EmployeePayrollProfile.find(profileQuery).populate('user');
 
-    // Filter profiles: remove suspended/demo and restrict to includedEmployeeIds if provided
+    // Filter profiles: remove suspended/demo/exited and restrict to includedEmployeeIds if provided
     const profiles = allProfiles.filter(p => {
       if (!p.user) return false;
       const uId = p.user._id ? p.user._id.toString() : '';
       const profId = p._id.toString();
       if (excludedIds.includes(uId)) return false;
-      if (p.user.status === 'Suspended') return false;
+      if (p.status === 'exited' || p.exitDetails?.isExited) return false;
+      if (['Suspended', 'Exited', 'Inactive', 'Former Employee'].includes(p.user.status)) return false;
+      if (['Former Staff', 'Former Employee', 'Exited'].includes(p.user.employmentStatus)) return false;
       if (p.user.isDemoAccount) return false;
       if (p.user.employeeId && p.user.employeeId.toUpperCase().startsWith('DEMO')) return false;
 
@@ -714,7 +717,30 @@ exports.calculatePayroll = async (req, res) => {
       });
       const incentiveEarned = approvedIncentives.reduce((s, inc) => s + (inc.incentiveAmount || 0), 0);
       runTotalIncentives += incentiveEarned;
-      const totalEarnedGross = earnedGross + incentiveEarned;
+
+      // Advances deduction for this month
+      let advanceDeduction = 0;
+      if (Array.isArray(p.advancesAndRecoveries)) {
+        p.advancesAndRecoveries.forEach(adv => {
+          if (adv.status === 'active' && adv.balanceAmount > 0) {
+            const deduct = Math.min(adv.monthlyDeduction || 0, adv.balanceAmount);
+            advanceDeduction += deduct;
+          }
+        });
+      }
+
+      // Approved Reimbursements
+      let reimbursementEarned = 0;
+      const currentMonthKey = `${calcYear}-${String(calcMonth).padStart(2, '0')}`;
+      if (Array.isArray(p.reimbursements)) {
+        p.reimbursements.forEach(rem => {
+          if (rem.status === 'approved' && (!rem.paidInPayrollMonth || rem.paidInPayrollMonth === currentMonthKey)) {
+            reimbursementEarned += (rem.approvedAmount || rem.amount || 0);
+          }
+        });
+      }
+
+      const totalEarnedGross = earnedGross + incentiveEarned + reimbursementEarned;
 
       // Statutory Deductions
       let pfEmployee = 0;
@@ -727,7 +753,8 @@ exports.calculatePayroll = async (req, res) => {
 
       let esiEmployee = 0;
       let esiEmployer = 0;
-      if (!p.statutory?.isESIExempt && monthlyGross <= statConfig.esic.wageCeiling) {
+      const isEsiExempt = Boolean(p.statutory?.isESIExempt || p.statutory?.isPFExempt);
+      if (!isEsiExempt && monthlyGross <= statConfig.esic.wageCeiling) {
         esiEmployee = Math.round((earnedGross * statConfig.esic.employeeRate) / 100);
         esiEmployer = Math.round((earnedGross * statConfig.esic.employerRate) / 100);
       }
@@ -737,7 +764,7 @@ exports.calculatePayroll = async (req, res) => {
         pt = calcMonth === 2 ? 300 : 200; // Karnataka PT rule: ₹300 in February
       }
 
-      const totalDeductions = pfEmployee + esiEmployee + pt;
+      const totalDeductions = pfEmployee + esiEmployee + pt + advanceDeduction;
       const netPayable = Math.max(0, totalEarnedGross - totalDeductions);
       const totalEmployerContrib = pfEmployer + esiEmployer;
       const totalCtc = totalEarnedGross + totalEmployerContrib;
@@ -777,12 +804,14 @@ exports.calculatePayroll = async (req, res) => {
           { code: 'BASIC', name: 'Basic Salary', standardAmount: Math.round(monthlyGross * 0.5), earnedAmount: basicEarned },
           { code: 'HRA', name: 'House Rent Allowance', standardAmount: Math.round(monthlyGross * 0.2), earnedAmount: hraEarned },
           { code: 'SPL_ALLOW', name: 'Special Allowance', standardAmount: Math.round(monthlyGross * 0.3), earnedAmount: splAllowEarned },
-          ...(incentiveEarned > 0 ? [{ code: 'INCENTIVE', name: 'Recruitment Placement Incentive', standardAmount: 0, earnedAmount: incentiveEarned }] : [])
+          ...(incentiveEarned > 0 ? [{ code: 'INCENTIVE', name: 'Recruitment Placement Incentive', standardAmount: 0, earnedAmount: incentiveEarned }] : []),
+          ...(reimbursementEarned > 0 ? [{ code: 'REIMBURSEMENT', name: 'Expense Reimbursement', standardAmount: 0, earnedAmount: reimbursementEarned }] : [])
         ],
         deductions: [
           { code: 'PF_EE', name: p.statutory?.isPFExempt ? 'Provident Fund (Opted Out)' : 'Provident Fund (EPF)', amount: pfEmployee },
           { code: 'ESI_EE', name: 'Employee State Insurance (ESIC)', amount: esiEmployee },
-          { code: 'PT', name: 'Professional Tax (PT)', amount: pt }
+          { code: 'PT', name: 'Professional Tax (PT)', amount: pt },
+          ...(advanceDeduction > 0 ? [{ code: 'ADVANCE_REC', name: 'Salary Advance / Recovery', amount: advanceDeduction }] : [])
         ],
         employerContributions: [
           { code: 'PF_ER', name: p.statutory?.isPFExempt ? 'Employer EPF (Opted Out)' : 'Employer EPF', amount: pfEmployer },
@@ -1150,6 +1179,868 @@ exports.updateIncentiveStatus = async (req, res) => {
     }
     await inc.save();
     res.json(inc);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ─── 12. Payment Tracking & Disbursal ──────────────────────────────────
+exports.recordPayment = async (req, res) => {
+  try {
+    const { recordIds, runId, paymentMode = 'bank_transfer', utrNumber, paymentDate = new Date(), reference } = req.body;
+    if (!utrNumber) {
+      return res.status(400).json({ message: 'UTR / Transaction Reference number is required for payment tracking' });
+    }
+
+    const filter = {};
+    if (Array.isArray(recordIds) && recordIds.length > 0) {
+      filter._id = { $in: recordIds };
+    } else if (runId) {
+      filter.payrollRun = runId;
+    } else {
+      return res.status(400).json({ message: 'Either recordIds or runId must be provided' });
+    }
+
+    const updateData = {
+      paymentStatus: 'PAID',
+      paymentDetails: {
+        paymentMode,
+        utrNumber,
+        paymentDate: new Date(paymentDate),
+        reference: reference || utrNumber,
+        paidBy: req.user?._id
+      }
+    };
+
+    const updateResult = await PayrollEmployeeRecord.updateMany(filter, { $set: updateData });
+
+    // If runId provided or records belong to a run, check if all records are paid
+    if (runId) {
+      const unpaidCount = await PayrollEmployeeRecord.countDocuments({
+        payrollRun: runId,
+        paymentStatus: { $ne: 'PAID' }
+      });
+      if (unpaidCount === 0) {
+        await PayrollRun.findByIdAndUpdate(runId, {
+          status: 'PAID',
+          paidAt: new Date(paymentDate)
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Payment recorded successfully for ${updateResult.modifiedCount} payslip records`,
+      modifiedCount: updateResult.modifiedCount
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ─── 13. Permanent Employee Financial History ─────────────────────────
+exports.getEmployeeFinancialHistory = async (req, res) => {
+  try {
+    const { id } = req.params; // Can be user _id or employeeId string
+    let user = null;
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      user = await User.findById(id).select('name email employeeId role status employmentStatus joinedDate branch avatar lastWorkingDay');
+    }
+    if (!user) {
+      user = await User.findOne({
+        $or: [
+          { employeeId: id.trim() },
+          { employeeId: { $regex: new RegExp(`^${id.trim()}$`, 'i') } }
+        ]
+      }).select('name email employeeId role status employmentStatus joinedDate branch avatar lastWorkingDay');
+    }
+
+    if (!user) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // Role-based access control: regular users only see their own history
+    if (req.user && !['admin', 'manager', 'hr'].includes(req.user.role)) {
+      if (req.user._id.toString() !== user._id.toString()) {
+        return res.status(403).json({ message: 'Unauthorized to view financial history of another employee' });
+      }
+    }
+
+    const profile = await EmployeePayrollProfile.findOne({ user: user._id })
+      .populate('salaryStructure', 'name code')
+      .populate('branch', 'name code state')
+      .populate('exitDetails.settlementId');
+
+    const payslips = await PayrollEmployeeRecord.find({ user: user._id })
+      .sort({ year: -1, month: -1 });
+
+    const lifetimeGross = payslips.reduce((sum, p) => sum + (p.grossEarned || 0), 0);
+    const lifetimeNet = payslips.reduce((sum, p) => sum + (p.netSalary || 0), 0);
+    const lifetimeDeductions = payslips.reduce((sum, p) => sum + (p.totalDeductions || 0), 0);
+    const lifetimeEmployerCost = payslips.reduce((sum, p) => sum + (p.totalEmployerCost || 0), 0);
+    const lifetimeIncentives = payslips.reduce((sum, p) => sum + (p.incentiveAmount || 0), 0);
+
+    const settlement = await Settlement.findOne({
+      $or: [{ user: user._id }, { employeeId: user.employeeId }]
+    });
+
+    const recruiterIncentives = await RecruitmentIncentive.find({ recruiter: user._id })
+      .sort({ createdAt: -1 });
+
+    res.json({
+      employee: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        employeeId: user.employeeId,
+        role: user.role,
+        status: user.status,
+        employmentStatus: user.employmentStatus,
+        joinedDate: user.joinedDate,
+        lastWorkingDay: user.lastWorkingDay
+      },
+      profile,
+      summary: {
+        lifetimeGross,
+        lifetimeNet,
+        lifetimeDeductions,
+        lifetimeEmployerCost,
+        lifetimeIncentives,
+        payslipCount: payslips.length,
+        currentGrossSalary: profile?.grossSalary || 0,
+        currentAnnualCTC: profile?.annualCTC || 0,
+        salaryRevisionsCount: profile?.revisions?.length || 0,
+        isExited: Boolean(profile?.exitDetails?.isExited || settlement || user.employmentStatus === 'Former Staff')
+      },
+      revisions: profile?.revisions || [],
+      payslips,
+      advances: profile?.advancesAndRecoveries || [],
+      reimbursements: profile?.reimbursements || [],
+      settlement,
+      recruiterIncentives
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ─── 14. Salary Revisions & Effective Dating ───────────────────────────
+exports.addSalaryRevision = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { grossSalary, annualCTC, effectiveDate = new Date(), reason } = req.body;
+    if (!grossSalary || grossSalary <= 0) {
+      return res.status(400).json({ message: 'Valid gross salary is required' });
+    }
+
+    const profile = await EmployeePayrollProfile.findOne({
+      $or: [{ _id: mongoose.Types.ObjectId.isValid(id) ? id : null }, { user: mongoose.Types.ObjectId.isValid(id) ? id : null }]
+    });
+    if (!profile) return res.status(404).json({ message: 'Employee payroll profile not found' });
+
+    const computedCTC = annualCTC || (grossSalary * 12);
+    const revision = {
+      effectiveDate: new Date(effectiveDate),
+      grossSalary: Number(grossSalary),
+      annualCTC: Number(computedCTC),
+      reason: reason || 'Annual Increment / Performance Review',
+      revisedBy: req.user?._id,
+      createdAt: new Date()
+    };
+
+    profile.revisions.push(revision);
+    profile.grossSalary = Number(grossSalary);
+    profile.annualCTC = Number(computedCTC);
+    await profile.save();
+
+    // Also update Employee joining form record
+    try {
+      const Employee = require('../models/Employee');
+      await Employee.updateMany(
+        { $or: [{ employeeId: profile.user?.employeeId }, { email: profile.user?.email }] },
+        { $set: { salaryOffered: String(grossSalary), offeredCTC: String(computedCTC) } }
+      );
+    } catch (_) {}
+
+    res.json({
+      success: true,
+      message: `Salary revised to ₹${grossSalary.toLocaleString('en-IN')}/mo effective from ${new Date(effectiveDate).toLocaleDateString()}`,
+      profile
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ─── 15. Advances, Recoveries & Reimbursements ─────────────────────────
+exports.addAdvanceOrRecovery = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, totalAmount, monthlyDeduction, disbursedDate = new Date(), notes } = req.body;
+    if (!totalAmount || totalAmount <= 0) {
+      return res.status(400).json({ message: 'Valid total advance amount is required' });
+    }
+
+    const profile = await EmployeePayrollProfile.findOne({
+      $or: [{ _id: mongoose.Types.ObjectId.isValid(id) ? id : null }, { user: mongoose.Types.ObjectId.isValid(id) ? id : null }]
+    });
+    if (!profile) return res.status(404).json({ message: 'Employee payroll profile not found' });
+
+    const newAdvance = {
+      title: title || 'Salary Advance',
+      totalAmount: Number(totalAmount),
+      balanceAmount: Number(totalAmount),
+      monthlyDeduction: Number(monthlyDeduction) || Math.round(Number(totalAmount) / 3),
+      disbursedDate: new Date(disbursedDate),
+      status: 'active',
+      notes
+    };
+
+    profile.advancesAndRecoveries.push(newAdvance);
+    await profile.save();
+
+    res.json({
+      success: true,
+      message: 'Advance recorded successfully',
+      advance: newAdvance,
+      advances: profile.advancesAndRecoveries
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.claimReimbursement = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { category, amount, claimDate = new Date(), remarks } = req.body;
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ message: 'Valid reimbursement amount is required' });
+    }
+
+    const profile = await EmployeePayrollProfile.findOne({
+      $or: [{ _id: mongoose.Types.ObjectId.isValid(id) ? id : null }, { user: mongoose.Types.ObjectId.isValid(id) ? id : null }]
+    });
+    if (!profile) return res.status(404).json({ message: 'Employee payroll profile not found' });
+
+    const newClaim = {
+      category: category || 'Travel & Client Expense',
+      amount: Number(amount),
+      approvedAmount: Number(amount),
+      claimDate: new Date(claimDate),
+      status: 'pending',
+      remarks
+    };
+
+    profile.reimbursements.push(newClaim);
+    await profile.save();
+
+    res.json({
+      success: true,
+      message: 'Reimbursement claim submitted',
+      reimbursements: profile.reimbursements
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.updateReimbursementStatus = async (req, res) => {
+  try {
+    const { id, reimbursementId } = req.params;
+    const { status, approvedAmount, paidInPayrollMonth, remarks } = req.body;
+
+    const profile = await EmployeePayrollProfile.findOne({
+      $or: [{ _id: mongoose.Types.ObjectId.isValid(id) ? id : null }, { user: mongoose.Types.ObjectId.isValid(id) ? id : null }]
+    });
+    if (!profile) return res.status(404).json({ message: 'Employee payroll profile not found' });
+
+    const claim = profile.reimbursements.id(reimbursementId);
+    if (!claim) return res.status(404).json({ message: 'Reimbursement claim not found' });
+
+    if (status) claim.status = status;
+    if (approvedAmount !== undefined) claim.approvedAmount = Number(approvedAmount);
+    if (paidInPayrollMonth) claim.paidInPayrollMonth = paidInPayrollMonth;
+    if (remarks) claim.remarks = remarks;
+
+    await profile.save();
+
+    res.json({ success: true, message: 'Reimbursement updated', claim });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ─── 16. Exit Automation & Full-and-Final Settlement ──────────────────
+exports.initiateResignation = async (req, res) => {
+  try {
+    const { userId, resignationDate, noticePeriodDays = 30, lastWorkingDay, exitReason } = req.body;
+    const profile = await EmployeePayrollProfile.findOne({ user: userId });
+    if (!profile) return res.status(404).json({ message: 'Employee payroll profile not found' });
+
+    const rDate = resignationDate ? new Date(resignationDate) : new Date();
+    let lwd = lastWorkingDay ? new Date(lastWorkingDay) : new Date(rDate);
+    if (!lastWorkingDay) {
+      lwd.setDate(lwd.getDate() + Number(noticePeriodDays));
+    }
+
+    profile.exitDetails = {
+      isExited: false,
+      resignationDate: rDate,
+      lastWorkingDay: lwd,
+      exitReason: exitReason || 'Voluntary Resignation',
+      exitStatus: 'notice_period'
+    };
+    await profile.save();
+
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        employmentStatus: 'Notice Period',
+        lastWorkingDay: lwd
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Resignation initiated. Notice period active until ' + lwd.toISOString().split('T')[0],
+      profile
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.calculateSettlementPreview = async (req, res) => {
+  try {
+    const {
+      userId,
+      resignationDate,
+      lastWorkingDay,
+      noticePeriodDays = 30,
+      noticeServedDays = 30,
+      unpaidSalaryDays = 0,
+      bonus = 0,
+      otherPayable = 0,
+      otherPayableRemark = '',
+      assetDamage = 0,
+      otherDeductions = 0,
+      otherDeductionRemark = ''
+    } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const profile = await EmployeePayrollProfile.findOne({ user: userId });
+    const monthlyGross = profile?.grossSalary || 0;
+    const basicSalary = Math.round(monthlyGross * 0.50);
+    const perDayGross = monthlyGross / 30;
+    const perDayBasic = basicSalary / 30;
+
+    // 1. Unpaid salary amount
+    const unpaidSalaryAmount = Math.round(perDayGross * (Number(unpaidSalaryDays) || 0));
+
+    // 2. Notice shortfall
+    const shortfallDays = Math.max(0, Number(noticePeriodDays) - Number(noticeServedDays));
+    const noticeShortfallAmount = Math.round(perDayGross * shortfallDays);
+
+    // 3. Leave Encashment calculation
+    let accruedLeaves = 0;
+    const joinDate = user.joinedDate ? new Date(user.joinedDate) : new Date();
+    const lwdDate = lastWorkingDay ? new Date(lastWorkingDay) : new Date();
+    const serviceMonths = Math.max(1, Math.round((lwdDate - joinDate) / (1000 * 60 * 60 * 24 * 30.4375)));
+    accruedLeaves = Math.min(18, Math.round(serviceMonths * 1.5));
+    const leaveEncashmentAmount = Math.round(perDayBasic * accruedLeaves);
+
+    // 4. Gratuity (if tenure >= 5 years / 60 months)
+    let gratuityAmount = 0;
+    const completedYears = Math.floor(serviceMonths / 12);
+    if (completedYears >= 5) {
+      gratuityAmount = Math.round((15 * (basicSalary / 26)) * completedYears);
+    }
+
+    // 5. Pending approved placement incentives
+    const pendingIncentivesDocs = await RecruitmentIncentive.find({
+      recruiter: user._id,
+      status: { $in: ['APPROVED_FOR_PAYROLL', 'RETENTION_PASSED'] }
+    });
+    const pendingIncentives = pendingIncentivesDocs.reduce((s, i) => s + (i.incentiveAmount || 0), 0);
+
+    // 6. Outstanding advances balance
+    let advanceRecovery = 0;
+    if (profile?.advancesAndRecoveries) {
+      advanceRecovery = profile.advancesAndRecoveries
+        .filter(a => a.status === 'active')
+        .reduce((s, a) => s + (a.balanceAmount || 0), 0);
+    }
+
+    // 7. Statutory deductions
+    let professionalTax = unpaidSalaryAmount >= 15000 ? 200 : 0;
+    let providentFund = 0;
+    if (!profile?.statutory?.isPFExempt && unpaidSalaryAmount > 0) {
+      const unpaidBasic = Math.round(unpaidSalaryAmount * 0.5);
+      providentFund = Math.round(Math.min(unpaidBasic, 15000) * 0.12);
+    }
+
+    const totalPayable = unpaidSalaryAmount + leaveEncashmentAmount + gratuityAmount + pendingIncentives + Number(bonus) + Number(otherPayable);
+    const totalDeductions = noticeShortfallAmount + advanceRecovery + Number(assetDamage) + professionalTax + providentFund + Number(otherDeductions);
+    const netSettlementAmount = Math.max(0, totalPayable - totalDeductions);
+
+    res.json({
+      employee: {
+        userId: user._id,
+        employeeId: user.employeeId,
+        name: user.name,
+        role: user.role,
+        joinedDate: user.joinedDate
+      },
+      salary: {
+        monthlyGross,
+        basicSalary,
+        perDayGross: Math.round(perDayGross),
+        perDayBasic: Math.round(perDayBasic)
+      },
+      payable: {
+        unpaidSalaryDays: Number(unpaidSalaryDays) || 0,
+        unpaidSalaryAmount,
+        leaveEncashmentDays: accruedLeaves,
+        leaveEncashmentAmount,
+        gratuityAmount,
+        completedYears,
+        pendingIncentives,
+        bonus: Number(bonus),
+        otherPayable: Number(otherPayable),
+        otherPayableRemark,
+        totalPayable
+      },
+      deductions: {
+        noticePeriodDays: Number(noticePeriodDays),
+        noticeServedDays: Number(noticeServedDays),
+        noticeShortfallDays: shortfallDays,
+        noticeShortfallAmount,
+        advanceRecovery,
+        assetDamage: Number(assetDamage),
+        professionalTax,
+        providentFund,
+        otherDeductions: Number(otherDeductions),
+        otherDeductionRemark,
+        totalDeductions
+      },
+      netSettlementAmount,
+      netSettlementInWords: numberToWords(netSettlementAmount)
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.finalizeSettlement = async (req, res) => {
+  try {
+    const {
+      userId,
+      resignationDate,
+      lastWorkingDay,
+      exitReason,
+      noticePeriodDays,
+      noticeServedDays,
+      payable,
+      deductions,
+      netSettlementAmount,
+      clearances
+    } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const company = await Company.findOne({ isPayrollTenant: true }) || await Company.findOne();
+
+    let settlement = await Settlement.findOne({ user: user._id });
+    if (!settlement) {
+      settlement = new Settlement({
+        user: user._id,
+        employeeId: user.employeeId || 'EMP-' + user._id.toString().slice(-4),
+        employeeName: user.name,
+        designation: user.role,
+        department: 'Recruitment & Operations',
+        company: company._id,
+        branch: user.branch,
+        joiningDate: user.joinedDate || new Date(),
+        resignationDate: resignationDate ? new Date(resignationDate) : new Date(),
+        lastWorkingDay: lastWorkingDay ? new Date(lastWorkingDay) : new Date(),
+        exitReason: exitReason || 'Resignation',
+        noticePeriodDays: Number(noticePeriodDays) || 30,
+        noticeServedDays: Number(noticeServedDays) || 30,
+        noticeShortfallDays: Math.max(0, (Number(noticePeriodDays) || 30) - (Number(noticeServedDays) || 30)),
+        payable,
+        deductions,
+        netSettlementAmount: Number(netSettlementAmount) || 0,
+        netSettlementInWords: numberToWords(Number(netSettlementAmount) || 0),
+        status: 'APPROVED',
+        settledBy: req.user?._id,
+        approvedBy: req.user?._id,
+        approvedAt: new Date(),
+        clearances: clearances || { itAssets: true, accounts: true, hr: true, department: true }
+      });
+    } else {
+      settlement.resignationDate = resignationDate ? new Date(resignationDate) : settlement.resignationDate;
+      settlement.lastWorkingDay = lastWorkingDay ? new Date(lastWorkingDay) : settlement.lastWorkingDay;
+      settlement.exitReason = exitReason || settlement.exitReason;
+      settlement.payable = payable;
+      settlement.deductions = deductions;
+      settlement.netSettlementAmount = Number(netSettlementAmount) || 0;
+      settlement.netSettlementInWords = numberToWords(Number(netSettlementAmount) || 0);
+      settlement.status = 'APPROVED';
+      settlement.approvedBy = req.user?._id;
+      settlement.approvedAt = new Date();
+      if (clearances) settlement.clearances = clearances;
+    }
+
+    await settlement.save();
+
+    // Update EmployeePayrollProfile: mark exited, link settlementId
+    await EmployeePayrollProfile.findOneAndUpdate(
+      { user: user._id },
+      {
+        $set: {
+          status: 'exited',
+          'exitDetails.isExited': true,
+          'exitDetails.exitStatus': 'settled',
+          'exitDetails.resignationDate': settlement.resignationDate,
+          'exitDetails.lastWorkingDay': settlement.lastWorkingDay,
+          'exitDetails.exitReason': settlement.exitReason,
+          'exitDetails.settlementId': settlement._id
+        }
+      }
+    );
+
+    // Update User: mark employmentStatus 'Former Staff', revoke active login
+    user.status = 'Inactive';
+    user.employmentStatus = 'Former Staff';
+    user.lastWorkingDay = settlement.lastWorkingDay;
+    await user.save();
+
+    // Mark any advances as settled/cancelled
+    await EmployeePayrollProfile.updateOne(
+      { user: user._id },
+      { $set: { 'advancesAndRecoveries.$[elem].status': 'repaid' } },
+      { arrayFilters: [{ 'elem.status': 'active' }] }
+    );
+
+    res.json({
+      success: true,
+      message: `Full-and-Final Settlement generated and approved for ${user.name}. Account marked Former Staff.`,
+      settlement
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.recordSettlementDisbursal = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paymentMode = 'bank_transfer', utrNumber, paymentDate = new Date(), paymentRemarks, relievingLetterIssued = true } = req.body;
+
+    const settlement = await Settlement.findById(id);
+    if (!settlement) return res.status(404).json({ message: 'Settlement record not found' });
+
+    settlement.status = 'DISBURSED';
+    settlement.paymentDetails = {
+      paymentMode,
+      utrNumber,
+      paymentDate: new Date(paymentDate),
+      paymentRemarks: paymentRemarks || `UTR: ${utrNumber}`
+    };
+    settlement.disbursedAt = new Date(paymentDate);
+    if (relievingLetterIssued) {
+      settlement.relievingLetterIssued = true;
+      settlement.experienceCertificateIssued = true;
+      settlement.relievingLetterDate = new Date(paymentDate);
+    }
+    await settlement.save();
+
+    await EmployeePayrollProfile.updateOne(
+      { user: settlement.user },
+      { $set: { 'exitDetails.exitStatus': 'relieved' } }
+    );
+
+    res.json({
+      success: true,
+      message: 'Settlement disbursal and UTR recorded. Relieving documentation generated.',
+      settlement
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.updateSettlementClearance = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { clearances, relievingLetterIssued, experienceCertificateIssued } = req.body;
+    const settlement = await Settlement.findById(id);
+    if (!settlement) return res.status(404).json({ message: 'Settlement not found' });
+
+    if (clearances) settlement.clearances = clearances;
+    if (relievingLetterIssued !== undefined) {
+      settlement.relievingLetterIssued = relievingLetterIssued;
+      if (relievingLetterIssued && !settlement.relievingLetterDate) settlement.relievingLetterDate = new Date();
+    }
+    if (experienceCertificateIssued !== undefined) settlement.experienceCertificateIssued = experienceCertificateIssued;
+
+    await settlement.save();
+    res.json({ success: true, settlement });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.listSettlements = async (req, res) => {
+  try {
+    const { status, search } = req.query;
+    const query = {};
+    if (status) query.status = status;
+    if (search) {
+      query.$or = [
+        { employeeName: { $regex: search, $options: 'i' } },
+        { employeeId: { $regex: search, $options: 'i' } }
+      ];
+    }
+    const settlements = await Settlement.find(query)
+      .populate('user', 'email avatar joinedDate')
+      .populate('approvedBy', 'name role')
+      .sort({ createdAt: -1 });
+
+    res.json(settlements);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.getSettlementById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const settlement = await Settlement.findById(id)
+      .populate('user', 'email avatar joinedDate address phone')
+      .populate('company')
+      .populate('branch')
+      .populate('approvedBy', 'name role');
+    if (!settlement) return res.status(404).json({ message: 'Settlement record not found' });
+    res.json(settlement);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ─── 17. Recruitment Revenue Attribution (Attributed, Invoiced, Collected) ──
+exports.getRecruitmentRevenueAttribution = async (req, res) => {
+  try {
+    // 1. Attributed: Joined Candidates
+    const joinedCandidates = await Candidate.find({
+      $or: [
+        { status: { $in: ['Joined', 'Joining', 'Offer Accept'] } },
+        { dateOfJoining: { $exists: true, $ne: null } }
+      ]
+    }).populate('assignedRecruiter', 'name email employeeId');
+
+    let totalAttributedCandidates = 0;
+    let totalAttributedCTC = 0;
+    let totalAttributedRevenue = 0;
+
+    const recruiterMap = {};
+
+    joinedCandidates.forEach(c => {
+      const salVal = parseFloat(c.joiningSalary || c.offerDetails?.joiningSalary || c.offerDetails?.offeredCTC || 300000);
+      const ctc = isNaN(salVal) ? 300000 : salVal;
+      const pct = parseFloat(c.placementPercentage || c.offerDetails?.placementPercentage || 8.33);
+      const rev = Math.round((ctc * pct) / 100);
+
+      totalAttributedCandidates++;
+      totalAttributedCTC += ctc;
+      totalAttributedRevenue += rev;
+
+      const recId = c.assignedRecruiter?._id?.toString() || 'unassigned';
+      const recName = c.assignedRecruiter?.name || c.assignedRecruiterName || 'Unassigned Recruiter';
+      if (!recruiterMap[recId]) {
+        recruiterMap[recId] = {
+          recruiterId: recId,
+          recruiterName: recName,
+          attributedCount: 0,
+          attributedRevenue: 0,
+          invoicedCount: 0,
+          invoicedRevenue: 0,
+          collectedRevenue: 0,
+          incentivesEarned: 0,
+          incentivesPaid: 0
+        };
+      }
+      recruiterMap[recId].attributedCount++;
+      recruiterMap[recId].attributedRevenue += rev;
+    });
+
+    // 2. Invoiced & Collected: Invoices from Invoice model
+    const invoices = await Invoice.find().populate('candidateRef', 'assignedRecruiter');
+    let totalInvoicedAmount = 0;
+    let totalCollectedAmount = 0;
+    let invoicedCount = 0;
+    let collectedCount = 0;
+
+    invoices.forEach(inv => {
+      const amt = Number(inv.grandTotal || inv.totalAmount || inv.subTotal || 0);
+      totalInvoicedAmount += amt;
+      invoicedCount++;
+
+      const isPaid = (inv.status || '').toLowerCase() === 'paid';
+      if (isPaid) {
+        totalCollectedAmount += amt;
+        collectedCount++;
+      }
+
+      const candRecId = inv.candidateRef?.assignedRecruiter?.toString();
+      if (candRecId && recruiterMap[candRecId]) {
+        recruiterMap[candRecId].invoicedCount++;
+        recruiterMap[candRecId].invoicedRevenue += amt;
+        if (isPaid) {
+          recruiterMap[candRecId].collectedRevenue += amt;
+        }
+      }
+    });
+
+    // 3. Incentives
+    const incentives = await RecruitmentIncentive.find();
+    incentives.forEach(inc => {
+      const recId = inc.recruiter?.toString();
+      if (recId && recruiterMap[recId]) {
+        if (['APPROVED_FOR_PAYROLL', 'PAID_IN_PAYROLL'].includes(inc.status)) {
+          recruiterMap[recId].incentivesEarned += (inc.incentiveAmount || 0);
+        }
+        if (inc.status === 'PAID_IN_PAYROLL') {
+          recruiterMap[recId].incentivesPaid += (inc.incentiveAmount || 0);
+        }
+      }
+    });
+
+    res.json({
+      pipeline: {
+        attributed: {
+          candidatesCount: totalAttributedCandidates,
+          totalCTC: totalAttributedCTC,
+          estimatedRevenue: totalAttributedRevenue,
+          label: 'Attributed Pipeline Revenue'
+        },
+        invoiced: {
+          invoicesCount: invoicedCount,
+          totalAmount: totalInvoicedAmount,
+          label: 'Invoiced Billed Revenue'
+        },
+        collected: {
+          collectedInvoicesCount: collectedCount,
+          totalAmount: totalCollectedAmount,
+          label: 'Collected Cash-in-Bank'
+        }
+      },
+      recruiterScorecard: Object.values(recruiterMap).sort((a, b) => b.attributedRevenue - a.attributedRevenue)
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ─── 18. Compliance Reports (EPFO ECR, ESIC Return, Bank NEFT, MoM) ───
+exports.getComplianceReports = async (req, res) => {
+  try {
+    const { month, year, companyId, type = 'summary' } = req.query;
+    const calcMonth = Number(month) || (new Date().getMonth() + 1);
+    const calcYear = Number(year) || new Date().getFullYear();
+
+    const query = { month: calcMonth, year: calcYear };
+    if (companyId) query.company = companyId;
+
+    const records = await PayrollEmployeeRecord.find(query)
+      .populate('company', 'companyName legalName logo pan address gstin')
+      .populate('user', 'employeeId name uan pfNumber esicNumber panNumber');
+
+    // 1. EPFO ECR Format
+    const ecrLines = records
+      .filter(r => !r.statutoryDetails?.isPFExempt)
+      .map(r => {
+        const uan = r.statutoryDetails?.uan || '100000000000';
+        const name = (r.name || 'Member').toUpperCase().replace(/#/g, '');
+        const gross = r.grossEarned || 0;
+        const basic = r.earnings?.find(e => e.code === 'BASIC')?.earnedAmount || Math.round(gross * 0.5);
+        const epfWage = Math.min(basic, 15000);
+        const eeContrib = Math.round(epfWage * 0.12);
+        const erEps = Math.round(epfWage * 0.0833);
+        const erEpf = Math.max(0, eeContrib - erEps);
+        const ncpDays = r.lopDays || 0;
+        return `${uan}#${name}#${gross}#${epfWage}#${epfWage}#${epfWage}#${eeContrib}#${erEps}#${erEpf}#${ncpDays}#0`;
+      });
+    const ecrRawText = ecrLines.join('\r\n');
+
+    // 2. ESIC Return Summary
+    const esicRecords = records
+      .filter(r => !r.statutoryDetails?.isPFExempt && (r.grossStandard <= 21000 || r.deductions?.some(d => d.code === 'ESI_EE' && d.amount > 0)))
+      .map(r => {
+        const ipNumber = r.statutoryDetails?.esicNumber || 'N/A';
+        const ipName = r.name;
+        const paidDays = r.payableDays || 30;
+        const totalWages = r.grossEarned || 0;
+        const eeESI = r.deductions?.find(d => d.code === 'ESI_EE')?.amount || Math.round(totalWages * 0.0075);
+        const erESI = r.employerContributions?.find(e => e.code === 'ESI_ER')?.amount || Math.round(totalWages * 0.0325);
+        return { ipNumber, ipName, paidDays, totalWages, eeESI, erESI, totalESI: eeESI + erESI };
+      });
+
+    // 3. Bank NEFT Transfer Batch CSV
+    const neftRows = [
+      'Beneficiary Name,Account Number,IFSC Code,Amount,Payment Mode,Transaction Reference'
+    ];
+    records.forEach(r => {
+      const bName = `"${r.name.replace(/"/g, '""')}"`;
+      const acc = `"${r.bankDetails?.accountNumber || ''}"`;
+      const ifsc = `"${r.bankDetails?.ifscCode || ''}"`;
+      const amt = r.netSalary || 0;
+      const ref = `SAL/${calcYear}${String(calcMonth).padStart(2, '0')}/${r.employeeId || 'EMP'}`;
+      neftRows.push(`${bName},${acc},${ifsc},${amt},NEFT,${ref}`);
+    });
+    const neftCsv = neftRows.join('\r\n');
+
+    // 4. MoM Variance Comparison
+    let prevMonth = calcMonth - 1;
+    let prevYear = calcYear;
+    if (prevMonth === 0) {
+      prevMonth = 12;
+      prevYear -= 1;
+    }
+    const prevRecords = await PayrollEmployeeRecord.find({ month: prevMonth, year: prevYear });
+    const currentGross = records.reduce((s, r) => s + (r.grossEarned || 0), 0);
+    const prevGross = prevRecords.reduce((s, r) => s + (r.grossEarned || 0), 0);
+    const currentNet = records.reduce((s, r) => s + (r.netSalary || 0), 0);
+    const prevNet = prevRecords.reduce((s, r) => s + (r.netSalary || 0), 0);
+
+    const variance = {
+      currentMonth: `${calcYear}-${String(calcMonth).padStart(2, '0')}`,
+      prevMonth: `${prevYear}-${String(prevMonth).padStart(2, '0')}`,
+      currentHeadcount: records.length,
+      prevHeadcount: prevRecords.length,
+      headcountDelta: records.length - prevRecords.length,
+      currentGross,
+      prevGross,
+      grossDelta: currentGross - prevGross,
+      currentNet,
+      prevNet,
+      netDelta: currentNet - prevNet
+    };
+
+    res.json({
+      month: calcMonth,
+      year: calcYear,
+      recordCount: records.length,
+      ecrCount: ecrLines.length,
+      ecrRawText,
+      esicRecords,
+      esicTotalContribution: esicRecords.reduce((s, e) => s + e.totalESI, 0),
+      neftCsv,
+      variance
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

@@ -65,6 +65,7 @@ function isMisUserRecord(user) {
 
 function isCandidateInGeneralPool(candidate) {
   if (!candidate) return false;
+  if (candidate.lockInStatus === 'TERMINATED_ON_EMPLOYEE_EXIT' || candidate.isExitReleased) return true;
   const own = String(candidate.ownershipStatus || '').trim().toLowerCase();
   if (own === 'general data' || own === 'expired' || own === 'unassigned') return true;
 
@@ -202,8 +203,10 @@ exports.list = async (req, res, next) => {
     } else if (status) {
       const reverseMap = {
         'Eligible': ['Eligible', 'Eligible Candidates'],
-        'No Response': ['No Response', 'No response', 'Did Not Pick', 'Not reachable'],
-        'Not Eligible': ['Not Eligible', 'Rejected', 'Rejected – Communication', 'Rejected – Experience Mismatch', 'Rejected – Salary Mismatch', 'Rejected – Location Constraint', 'Rejected – Notice Period'],
+        'Hotlist': ['Hotlist', 'Hot List'],
+        'Submitted to Client': ['Submitted to Client', 'Submitted To Client', 'Sublitted To Client', 'Shortlisted'],
+        'No Response': ['No Response', 'No response', 'Did Not Pick', 'Not reachable', 'Unanswered Calls'],
+        'Not Eligible': ['Not Eligible', 'Rejected', 'Rejected – Communication', 'Rejected – Experience Mismatch', 'Rejected – Salary Mismatch', 'Rejected – Location Constraint', 'Rejected – Notice Period', 'Wrong Number'],
         'Final Select': ['Final Select', 'Selected', 'Final Round Scheduled'],
         'Offer Accept': ['Offer Accept', 'Yet To Join', 'Offer Released', 'Offer Accepted', 'Salary Negotiation in Progress'],
         'Document Initialized': ['Document Initialized', 'Documentation', 'Documents Pending', 'Document Pending', 'Documennt Initialted'],
@@ -211,7 +214,6 @@ exports.list = async (req, res, next) => {
         'L1 Select': ['L1 Select', 'HR Shortlist', 'HR Round Scheduled'],
         'Interview Scheduled': ['Interview Scheduled', 'Interview Completed', 'Interview Rescheduled'],
         'Hold': ['Hold', 'On Hold', 'Interview Feedback Pending'],
-        'Submitted to Client': ['Submitted to Client', 'Shortlisted'],
         'Waiting for Offer': ['Waiting for Offer', 'Offer in Progress', 'Offer Approval Pending'],
         'Offer Reject': ['Offer Reject', 'Offer Declined'],
         'Duplicate-Client': ['Duplicate-Client', 'Duplicate Profile'],
@@ -352,7 +354,7 @@ exports.list = async (req, res, next) => {
         const { getDateRange } = require('../utils/helpers');
         const { start, end } = getDateRange(selectedRange, fromDate, toDate);
         query.createdAt = { $gte: start, $lt: end };
-      } else {
+      } else if (fromDate || toDate) {
         if (!query.createdAt) query.createdAt = {};
         if (fromDate) {
           query.createdAt.$gte = new Date(fromDate);
@@ -425,23 +427,30 @@ exports.list = async (req, res, next) => {
           query.$or = tlUserCond;
         }
       }
-    } else if (!isAllRecruiters && (req.user.role === 'tl' || req.user.role === 'admin' || req.user.role === 'manager')) {
+    } else if (!isAllRecruiters && (req.user.role === 'tl' || req.user.role === 'admin' || req.user.role === 'superadmin' || req.user.role === 'manager')) {
       const mongoose = require('mongoose');
       const User = require('../models/User');
       let cond = [];
+      const cleanRegex = (name) => {
+        if (!name || typeof name !== 'string') return null;
+        return new RegExp('^' + name.trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + '$', 'i');
+      };
+
       if (mongoose.Types.ObjectId.isValid(recruiter)) {
         cond.push({ assignedRecruiter: recruiter });
         const recUser = await User.findById(recruiter).select('_id name');
         if (recUser) {
-          cond.push({ assignedRecruiterName: recUser.name });
-          cond.push({ sourcedBy: recUser.name });
-          cond.push({ recruiterName: recUser.name });
+          const reg = cleanRegex(recUser.name);
+          cond.push({ assignedRecruiterName: reg || recUser.name });
+          cond.push({ sourcedBy: reg || recUser.name });
+          cond.push({ recruiterName: reg || recUser.name });
         }
       } else {
-        cond.push({ assignedRecruiterName: recruiter });
-        cond.push({ sourcedBy: recruiter });
-        cond.push({ recruiterName: recruiter });
-        const recUser = await User.findOne({ name: recruiter }).select('_id name');
+        const reg = cleanRegex(recruiter);
+        cond.push({ assignedRecruiterName: reg || recruiter });
+        cond.push({ sourcedBy: reg || recruiter });
+        cond.push({ recruiterName: reg || recruiter });
+        const recUser = await User.findOne({ name: reg || recruiter }).select('_id name');
         if (recUser) cond.push({ assignedRecruiter: recUser._id });
       }
       if (cond.length > 0) {
@@ -579,6 +588,9 @@ exports.list = async (req, res, next) => {
       'On Hold': 'Hold',
       'Interview Feedback Pending': 'Hold',
       'Shortlisted': 'Submitted to Client',
+      'Submitted To Client': 'Submitted to Client',
+      'Sublitted To Client': 'Submitted to Client',
+      'Hot List': 'Hotlist',
       'Offer in Progress': 'Waiting for Offer',
       'Offer Approval Pending': 'Waiting for Offer',
       'Duplicate Profile': 'Duplicate-Client',
@@ -1408,7 +1420,17 @@ exports.recordExit = async (req, res, next) => {
 // PUT /api/candidates/:id/status
 exports.updateStatus = async (req, res, next) => {
   try {
-    const { status } = req.body;
+    let { status } = req.body;
+    const STATUS_ALIASES = {
+      'Hot List': 'Hotlist',
+      'Submitted To Client': 'Submitted to Client',
+      'Sublitted To Client': 'Submitted to Client',
+      'Documennt Initialted': 'Document Initialized',
+      'Eligible Candidates': 'Eligible',
+    };
+    if (STATUS_ALIASES[status]) {
+      status = STATUS_ALIASES[status];
+    }
     if (!Candidate.STATUSES.includes(status)) {
       return res.status(400).json({ message: `Invalid status. Allowed: ${Candidate.STATUSES.join(', ')}` });
     }

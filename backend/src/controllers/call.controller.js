@@ -161,13 +161,27 @@ exports.getMyCalls = async (req, res, next) => {
 
     let targetUserId = req.user._id;
     let targetUserName = req.user.name;
+    let isAllForAdmin = false;
 
-    if (recruiterId && ['admin', 'manager', 'tl'].includes(req.user.role)) {
-      const u = await User.findById(recruiterId).select('name');
-      if (u) {
-        targetUserId = u._id;
-        targetUserName = u.name;
+    if (recruiterId && recruiterId !== 'All' && recruiterId !== 'All Recruiters' && ['admin', 'superadmin', 'manager', 'tl'].includes(req.user.role)) {
+      const mongoose = require('mongoose');
+      if (mongoose.Types.ObjectId.isValid(recruiterId)) {
+        const u = await User.findById(recruiterId).select('name');
+        if (u) {
+          targetUserId = u._id;
+          targetUserName = u.name;
+        }
+      } else {
+        const u = await User.findOne({ name: recruiterId }).select('_id name');
+        if (u) {
+          targetUserId = u._id;
+          targetUserName = u.name;
+        } else {
+          targetUserName = recruiterId;
+        }
       }
+    } else if ((!recruiterId || recruiterId === 'All' || recruiterId === 'All Recruiters') && ['admin', 'superadmin', 'manager'].includes(req.user.role)) {
+      isAllForAdmin = true;
     }
 
     const targetDate = date ? new Date(date) : new Date();
@@ -177,32 +191,42 @@ exports.getMyCalls = async (req, res, next) => {
     endOfToday.setHours(23, 59, 59, 999);
 
     // 1. Get CallLogs if any
-    const callLogs = await CallLog.find({
-      recruiter: targetUserId,
+    const callLogQuery = {
       createdAt: { $gte: startOfToday, $lt: endOfToday }
-    }).populate('candidate').lean();
+    };
+    if (!isAllForAdmin) {
+      callLogQuery.recruiter = targetUserId;
+    }
+    const callLogs = await CallLog.find(callLogQuery).populate('candidate').lean();
 
     // 2. Get Candidate entries touched on that date
-    const candFilter = {
-      $and: [
-        {
-          $or: [
-            { assignedRecruiter: targetUserId },
-            { assignedRecruiterName: targetUserName },
-            { sourcedBy: targetUserName },
-            { recruiterName: targetUserName }
-          ]
-        },
-        {
-          $or: [
-            { createdAt: { $gte: startOfToday, $lt: endOfToday } },
-            { firstCallDate: { $gte: startOfToday, $lt: endOfToday } },
-            { updatedAt: { $gte: startOfToday, $lt: endOfToday } },
-            { 'notes.createdAt': { $gte: startOfToday, $lt: endOfToday } }
-          ]
-        }
-      ]
-    };
+    const dateConditions = [
+      { createdAt: { $gte: startOfToday, $lt: endOfToday } },
+      { firstCallDate: { $gte: startOfToday, $lt: endOfToday } },
+      { updatedAt: { $gte: startOfToday, $lt: endOfToday } },
+      { 'notes.createdAt': { $gte: startOfToday, $lt: endOfToday } }
+    ];
+
+    let candFilter;
+    if (isAllForAdmin) {
+      candFilter = { $or: dateConditions };
+    } else {
+      const recMatch = [];
+      if (targetUserId) recMatch.push({ assignedRecruiter: targetUserId });
+      if (targetUserName) {
+        const escaped = targetUserName.trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+        const reg = new RegExp('^' + escaped + '$', 'i');
+        recMatch.push({ assignedRecruiterName: reg });
+        recMatch.push({ sourcedBy: reg });
+        recMatch.push({ recruiterName: reg });
+      }
+      candFilter = {
+        $and: [
+          { $or: recMatch },
+          { $or: dateConditions }
+        ]
+      };
+    }
 
     const candidates = await Candidate.find(candFilter)
       .sort({ updatedAt: -1, createdAt: -1 })

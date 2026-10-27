@@ -67,7 +67,16 @@ export function RunPayrollPage() {
         params.branchId = branchId;
       }
       const data = await api.getPayrollEmployees(params);
-      const nonDemo = (data || []).filter((p: any) => p.user?.status !== 'Suspended' && !p.user?.isDemoAccount && !p.user?.employeeId?.toUpperCase()?.startsWith('DEMO'));
+      const nonDemo = (data || []).filter((p: any) => 
+        p.user?.status !== 'Suspended' && 
+        p.user?.status !== 'Former Employee' &&
+        p.user?.status !== 'Exited' &&
+        p.user?.employmentStatus !== 'Former Staff' &&
+        p.status !== 'exited' &&
+        !p.exitDetails?.isExited &&
+        !p.user?.isDemoAccount && 
+        !p.user?.employeeId?.toUpperCase()?.startsWith('DEMO')
+      );
       setEmployees(nonDemo);
       setSelectedEmployees(nonDemo.map((p: any) => p._id));
     } catch (err) {

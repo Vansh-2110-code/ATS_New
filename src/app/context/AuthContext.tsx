@@ -96,16 +96,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('ats_token');
   };
 
-  // Auto-logout after 30 minutes of inactivity (Requirement 9)
+  // Auto-logout after 10 hours of inactivity (full workday session to prevent mid-day logout while calling candidates)
   useEffect(() => {
     if (!user) return;
     let timer: any;
-    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+    const INACTIVITY_TIMEOUT = 10 * 60 * 60 * 1000; // 10 hours
 
     const resetTimer = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
-        console.warn('[Session] User inactive for 30 minutes. Auto logging out...');
+        console.warn('[Session] User inactive for 10 hours. Auto logging out...');
         logout();
       }, INACTIVITY_TIMEOUT);
     };

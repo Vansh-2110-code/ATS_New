@@ -87,6 +87,8 @@ import { EmployeePayrollPage } from './pages/payroll/EmployeePayrollPage';
 import { RunPayrollPage } from './pages/payroll/RunPayrollPage';
 import { PayslipHubPage } from './pages/payroll/PayslipHubPage';
 import { RecruiterIncentivePage } from './pages/payroll/RecruiterIncentivePage';
+import { SettlementHubPage } from './pages/payroll/SettlementHubPage';
+import { ComplianceReportsPage } from './pages/payroll/ComplianceReportsPage';
 import { InternalChatHubPage } from './pages/chat/InternalChatHubPage';
 
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -222,6 +224,9 @@ export const router = createBrowserRouter([
       { path: '/payroll/payslips/:id', Component: PayslipHubPage },
       { path: '/payroll/incentives', Component: RecruiterIncentivePage },
       { path: '/recruiter/incentives', Component: RecruiterIncentivePage },
+      { path: '/payroll/settlement', Component: SettlementHubPage },
+      { path: '/payroll/settlements', Component: SettlementHubPage },
+      { path: '/payroll/reports', Component: ComplianceReportsPage },
     ],
   },
 

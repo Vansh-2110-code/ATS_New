@@ -43,22 +43,41 @@ const ALERT_ICONS: Record<string, string> = { warning: '⚠️', error: '🔴', 
 
 // ─── Recruiter constants ───────────────────────────────────────────────────────
 const STATUS_ICON_MAP: Record<string, any> = {
-  'Eligible Candidates': UserCheck,
-  'Wrong Number': PhoneOff,
-  'Did Not Pick': PhoneMissed,
+  // 34 Official Statuses
+  Eligible: UserCheck,
+  'Not Eligible': UserX,
+  'Not Interested': UserX,
+  'No Response': PhoneMissed,
+  'Duplicate-Client': Users,
   'Call Back': PhoneCall,
-  'HR Shortlist': ClipboardList,
-  'Written Test': FileText,
-  'Operations Round': Building2,
-  'Selected': BadgeCheck,
-  'Documentation': Clipboard,
-  'Yet To Join': UserX,
-  'Joined': CheckCircle2,
-  'New': UserPlus,
-  'Contacted': Phone,
-  'Interested': CheckCircle2,
-  'Interview Scheduled': Calendar,
-  'Rejected': X,
+  Hold: Clock,
+  Hotlist: Flame,
+  'Submitted to Client': ExternalLink,
+  'Walkin Company': Building2,
+  'Walkin WHM': Briefcase,
+  'No Show': UserX,
+  'VNA Select': BadgeCheck,
+  'VNA Reject': X,
+  'Test Select': FileCheck,
+  'Test Reject': X,
+  'Candidate Drop Post L1 Select': UserX,
+  'Candidate Drop Post L2 Select': UserX,
+  'Candidate Drop During Final Stage': UserX,
+  'L1 Select': CheckCircle2,
+  'L1 Reject': X,
+  'L2 Select': CheckCircle2,
+  'L2 Reject': X,
+  'Final Select': BadgeCheck,
+  'Final Reject': X,
+  'Document Initialized': Clipboard,
+  'Documentation Completed': CheckCircle2,
+  'Documentation Incomplete': AlertCircle,
+  'Waiting for Offer': Clock,
+  'Offer Accept': BadgeCheck,
+  'Offer Reject': X,
+  Joined: CheckCircle2,
+  'Joined and Abort': UserX,
+  'Black List': Shield,
 };
 
 const STATUS_COLOR_LIST = ['emerald', 'red', 'orange', 'amber', 'violet', 'indigo', 'cyan', 'teal', 'sky', 'pink', 'green'];
@@ -104,9 +123,9 @@ const TL_STATUS_COLORS: Record<string, { dot: string; badge: string }> = {
 const PIE_COLORS = ['#16A34A', '#7C3AED', '#059669', '#D97706', '#DC2626'];
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
-type DateRange = 'Day' | 'Week' | 'Quarter' | 'Year' | 'All' | 'Custom';
+type DateRange = 'Day' | 'Week' | 'Month' | 'Quarter' | 'Year' | 'All' | 'Custom';
 type Tab = 'overview' | 'divisionDashboard' | 'recruiting' | 'team' | 'structure' | 'analytics' | 'businessDev';
-const DATE_TABS: DateRange[] = ['Day', 'Week', 'Quarter', 'Year', 'All', 'Custom'];
+const DATE_TABS: DateRange[] = ['Day', 'Week', 'Month', 'Quarter', 'Year', 'All', 'Custom'];
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'divisionDashboard', label: 'Division Dashboard' },
@@ -577,6 +596,7 @@ export function AdminDashboard() {
         if (dateRange === 'Custom') { params.from = customFrom; params.to = customTo; }
         if (recDivision && recDivision !== 'All') params.division = recDivision;
         if (recruiterFilter && recruiterFilter !== 'All') params.recruiter = recruiterFilter;
+        if (recCompanyFilter && recCompanyFilter !== 'All Companies') params.company = recCompanyFilter;
         const data = await api.getRecruiterDashboard(params);
         setDashData(data);
       } catch (err) {
@@ -586,7 +606,7 @@ export function AdminDashboard() {
       }
     };
     loadRec();
-  }, [dateRange, customFrom, customTo, recDivision, recruiterFilter]);
+  }, [dateRange, customFrom, customTo, recDivision, recruiterFilter, recCompanyFilter]);
 
   // ── Division Dashboard loader ───────────────────────────────────────────────
   // Load ONLY created companies from Company Management (deduplicated & sorted A-Z)
@@ -647,7 +667,15 @@ export function AdminDashboard() {
   const totalFollowUps = teamSummary.totalFollowUps || 0;
 
   const goToStatus = (status: string) => navigate('/admin/candidates', { state: { statusFilter: status } });
-  const goToTodayCalls = () => navigate('/recruiter/resumes', { state: { todayCalls: true } });
+  const goToTodayCalls = () => {
+    const selectedRec = recruitersList.find((r: any) => (r._id || r.id) === recruiterFilter);
+    navigate('/recruiter/calls/today', {
+      state: {
+        recruiterId: recruiterFilter !== 'All' ? recruiterFilter : undefined,
+        recruiterName: selectedRec?.name || (recruiterFilter !== 'All' ? undefined : 'All Recruiters')
+      }
+    });
+  };
   const goToSource = (source: string) => navigate('/admin/candidates', { state: { sourceFilter: source } });
 
   // ── Sticky Notes ───────────────────────────────────────────────────────────
@@ -1491,6 +1519,7 @@ export function AdminDashboard() {
                 slicerName={recruitingSlicer}
                 division={recDivision}
                 recruiter={recruiterFilter}
+                company={recCompanyFilter !== 'All Companies' ? recCompanyFilter : undefined}
                 range={dateRange}
                 fromDate={customFrom}
                 toDate={customTo}

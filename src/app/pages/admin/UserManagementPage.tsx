@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { UserPlus, Search, Edit3, Trash2, CheckCircle2, X, Shield, Wifi, Monitor, Eye, EyeOff, Loader2, ChevronRight, Mail, Calendar, Clock, Lock, Key } from 'lucide-react';
+import { UserPlus, Search, Edit3, Trash2, CheckCircle2, X, Shield, Wifi, Monitor, Eye, EyeOff, Loader2, ChevronRight, Mail, Calendar, Clock, Lock, Key, UserMinus, LogOut, AlertTriangle } from 'lucide-react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
@@ -15,7 +15,8 @@ interface SystemUser {
   role: Role;
   roles?: Role[];
   isWFH: boolean;
-  status: 'Active' | 'Suspended' | 'On Leave' | 'Former Employee' | 'Inactive';
+  status: 'Active' | 'Suspended' | 'On Leave' | 'Resigned / Notice Period' | 'Former Employee' | 'Inactive';
+  employmentStatus?: string;
   lastLogin: string;
   joinedDate: string;
   pseudoName?: string;
@@ -23,6 +24,10 @@ interface SystemUser {
   loginEndTime?: string;
   allowHomeLogin?: boolean;
   disableBiometric?: boolean;
+  resignationDate?: string;
+  lastWorkingDate?: string;
+  exitReason?: string;
+  exitRemarks?: string;
 }
 
 const INITIAL_USERS: SystemUser[] = [
@@ -132,6 +137,63 @@ export function UserManagementPage() {
   const [resetError, setResetError] = useState('');
   const navigate = useNavigate();
 
+  // Exit Modal & Workflow States
+  const [exitUser, setExitUser] = useState<SystemUser | null>(null);
+  const [exitPreview, setExitPreview] = useState<{ activeCandidatesCount: number; totalCandidatesCount: number } | null>(null);
+  const [exitLoadingPreview, setExitLoadingPreview] = useState(false);
+  const [exitSubmitting, setExitSubmitting] = useState(false);
+  const [exitForm, setExitForm] = useState({
+    resignationDate: new Date().toISOString().split('T')[0],
+    lastWorkingDate: new Date().toISOString().split('T')[0],
+    exitReason: 'Resignation',
+    exitRemarks: '',
+  });
+  const [exitSummary, setExitSummary] = useState<any | null>(null);
+
+  const handleOpenExitModal = async (u: SystemUser) => {
+    setExitUser(u);
+    setExitForm({
+      resignationDate: new Date().toISOString().split('T')[0],
+      lastWorkingDate: new Date().toISOString().split('T')[0],
+      exitReason: 'Resignation',
+      exitRemarks: '',
+    });
+    setExitPreview(null);
+    try {
+      setExitLoadingPreview(true);
+      const preview = await api.getExitPreview(u._id || u.id);
+      setExitPreview(preview);
+    } catch (e) {
+      console.error('Failed to load exit preview', e);
+    } finally {
+      setExitLoadingPreview(false);
+    }
+  };
+
+  const handleConfirmExit = async () => {
+    if (!exitUser) return;
+    if (!exitForm.resignationDate || !exitForm.lastWorkingDate) {
+      alert('Please provide both Resignation Date and Last Working Date.');
+      return;
+    }
+    try {
+      setExitSubmitting(true);
+      const res = await api.confirmEmployeeExit(exitUser._id || exitUser.id, exitForm);
+      if (res?.summary) {
+        setExitSummary(res.summary);
+        setUsers(prev => prev.map(u => (u.id === exitUser.id || u._id === exitUser._id) ? { ...u, status: 'Former Employee' } : u));
+        setExitUser(null);
+      } else {
+        alert(res?.message || 'Employee exit processed successfully.');
+        setExitUser(null);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to process employee exit');
+    } finally {
+      setExitSubmitting(false);
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -147,6 +209,7 @@ export function UserManagementPage() {
           roles: u.roles || [u.role || 'recruiter'],
           isWFH: u.isWFH ?? false,
           status: (u.status || (u.isActive === false ? 'Suspended' : 'Active')) as any,
+          employmentStatus: u.employmentStatus || '',
           lastLogin: u.lastLogin ? new Date(u.lastLogin).toLocaleString() : '—',
           joinedDate: u.createdAt ? new Date(u.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—',
           pseudoName: u.pseudoName || u.aliasName || '',
@@ -154,6 +217,10 @@ export function UserManagementPage() {
           loginEndTime: u.loginEndTime || '19:00',
           allowHomeLogin: u.allowHomeLogin ?? true,
           disableBiometric: u.disableBiometric ?? false,
+          resignationDate: u.resignationDate,
+          lastWorkingDate: u.lastWorkingDate || u.lastWorkingDay,
+          exitReason: u.exitReason,
+          exitRemarks: u.exitRemarks,
         }));
         setUsers(list);
       } catch (err) {
@@ -181,6 +248,7 @@ export function UserManagementPage() {
     const matchStatus =
       statusFilter === 'all' ? true :
       statusFilter === 'active' ? u.status === 'Active' :
+      statusFilter === 'notice' ? (u.status === 'Resigned / Notice Period' || u.employmentStatus === 'Resigned / Notice Period') :
       statusFilter === 'on_leave' ? u.status === 'On Leave' :
       statusFilter === 'former' ? ['Former Employee', 'Suspended', 'Inactive', 'Exited'].includes(u.status) :
       statusFilter === 'suspended' ? u.status === 'Suspended' :
@@ -331,6 +399,7 @@ const getHighestRole = (roles: Role[]): Role => {
   };
 
   const activeCount = users.filter(u => u.status === 'Active').length;
+  const noticeCount = users.filter(u => u.status === 'Resigned / Notice Period' || u.employmentStatus === 'Resigned / Notice Period').length;
   const onLeaveCount = users.filter(u => u.status === 'On Leave').length;
   const formerCount = users.filter(u => ['Former Employee', 'Suspended', 'Inactive', 'Exited'].includes(u.status)).length;
   const wfhCount = users.filter(u => u.isWFH).length;
@@ -366,16 +435,18 @@ const getHighestRole = (roles: Role[]): Role => {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
           { label: 'Total Staff', value: users.length, color: 'slate', filter: 'all' },
           { label: 'Active', value: activeCount, color: 'emerald', filter: 'active' },
+          { label: 'Notice Period', value: noticeCount, color: 'amber', filter: 'notice' },
           { label: 'On Leave', value: onLeaveCount, color: 'purple', filter: 'on_leave' },
-          { label: 'Former / Inactive', value: formerCount, color: 'red', filter: 'former' },
+          { label: 'Former Staff', value: formerCount, color: 'red', filter: 'former' },
         ].map(({ label, value, color, filter }) => {
           const c: Record<string, string> = {
             slate: 'bg-slate-50 border-slate-100 text-slate-700',
             emerald: 'bg-emerald-50 border-emerald-100 text-emerald-700',
+            amber: 'bg-amber-50 border-amber-100 text-amber-700',
             purple: 'bg-purple-50 border-purple-100 text-purple-700',
             red: 'bg-red-50 border-red-100 text-red-600',
           };
@@ -529,6 +600,15 @@ const getHighestRole = (roles: Role[]): Role => {
                       >
                         <Edit3 className="w-3.5 h-3.5" />
                       </button>
+                      {user.status !== 'Former Employee' && user.id !== 'WH000001' && user.email !== 'admin@whitehorsemanpower.in' && (
+                        <button
+                          onClick={() => handleOpenExitModal(user)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                          title="Confirm Exit & Release Candidates to General Pool"
+                        >
+                          <UserMinus className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       {isCurrentUserSuperAdmin && user.id !== 'WH000001' && user.id !== 'ADM001' && user.email !== 'admin@whitehorsemanpower.in' && (
                         <button
                           onClick={() => setDeleteConfirm(user.id)}
@@ -580,6 +660,9 @@ const getHighestRole = (roles: Role[]): Role => {
                   <button onClick={() => navigate(`/admin/employee/${user.id}`)} className="text-xs text-blue-600 px-2 py-1 bg-blue-50 rounded-md" style={{ fontWeight: 500 }}>Profile</button>
                   <button onClick={() => setResetPassUser(user)} className="text-xs text-amber-600 px-2 py-1 bg-amber-50 rounded-md" style={{ fontWeight: 500 }}>Reset Pass</button>
                   <button onClick={() => handleEdit(user)} className="text-xs text-green-600 px-2 py-1 bg-green-50 rounded-md" style={{ fontWeight: 500 }}>Edit</button>
+                  {user.status !== 'Former Employee' && user.id !== 'WH000001' && (
+                    <button onClick={() => handleOpenExitModal(user)} className="text-xs text-rose-600 px-2 py-1 bg-rose-50 rounded-md font-semibold">Exit</button>
+                  )}
                 </div>
               </div>
             </div>
@@ -897,6 +980,210 @@ const getHighestRole = (roles: Role[]): Role => {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Exit Confirmation Modal */}
+      {exitUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-lg border border-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <UserMinus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-slate-800 text-base font-bold">Confirm Recruiter Exit</h3>
+                  <p className="text-slate-400 text-xs">Automated Candidate Migration & Payroll Deactivation</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setExitUser(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Recruiter Details Card */}
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-slate-800">{exitUser.name}</p>
+                <p className="text-xs text-slate-500">{exitUser.id} • {exitUser.email}</p>
+              </div>
+              <div className="text-right">
+                <span className={`text-xs px-2.5 py-1 rounded-full ${ROLE_COLORS[exitUser.role]} font-semibold`}>
+                  {ROLE_LABELS[exitUser.role]}
+                </span>
+                <p className="text-[10px] text-slate-400 mt-1">Status: {exitUser.status}</p>
+              </div>
+            </div>
+
+            {/* Automated Actions Warning */}
+            <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl mb-4 text-xs text-amber-900 space-y-1.5">
+              <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+                <span>Automated Workflow Execution:</span>
+              </div>
+              <p className="text-amber-800 leading-relaxed">
+                Confirming exit will immediately:
+              </p>
+              <ul className="list-disc list-inside space-y-1 pl-1 text-[11px] text-amber-800">
+                <li>Revoke login credentials and invalidate active sessions immediately.</li>
+                <li>
+                  {exitLoadingPreview ? (
+                    <span className="inline-flex items-center gap-1">Calculating affected candidates... <Loader2 className="w-3 h-3 animate-spin" /></span>
+                  ) : (
+                    <span>
+                      Transfer <strong>{exitPreview?.activeCandidatesCount ?? 0} active candidate(s)</strong> directly to the <strong>General Pool</strong>.
+                    </span>
+                  )}
+                </li>
+                <li>Immediately release the <strong>30-day candidate lock-in</strong>, making candidates claimable by other active recruiters.</li>
+                <li>Deactivate future routine payroll processing while <strong>100% preserving historical payslips</strong>.</li>
+              </ul>
+            </div>
+
+            {/* Form Fields */}
+            <div className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Resignation Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={exitForm.resignationDate}
+                    onChange={e => setExitForm({ ...exitForm, resignationDate: e.target.value })}
+                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:border-rose-400 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    Last Working Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={exitForm.lastWorkingDate}
+                    onChange={e => setExitForm({ ...exitForm, lastWorkingDate: e.target.value })}
+                    className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:border-rose-400 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Exit Reason *
+                </label>
+                <select
+                  value={exitForm.exitReason}
+                  onChange={e => setExitForm({ ...exitForm, exitReason: e.target.value })}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:border-rose-400 bg-white font-medium"
+                >
+                  <option value="Resignation">Resignation</option>
+                  <option value="Termination">Termination</option>
+                  <option value="Contract End">Contract End</option>
+                  <option value="Absconding">Absconding</option>
+                  <option value="Mutual Agreement">Mutual Agreement</option>
+                  <option value="Performance">Performance</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                  Exit Remarks / Handover Notes
+                </label>
+                <textarea
+                  value={exitForm.exitRemarks}
+                  onChange={e => setExitForm({ ...exitForm, exitRemarks: e.target.value })}
+                  rows={2}
+                  placeholder="e.g. Exit formalities initiated; candidate pool handover to General Pool..."
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:border-rose-400 resize-none bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 mt-5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setExitUser(null)}
+                className="flex-1 py-2.5 border border-slate-200 text-slate-600 text-xs font-semibold rounded-xl hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmExit}
+                disabled={exitSubmitting}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                {exitSubmitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Processing Exit...
+                  </>
+                ) : (
+                  <>
+                    <UserMinus className="w-3.5 h-3.5" />
+                    Confirm Exit & Release Pool
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Exit Summary Modal */}
+      {exitSummary && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border border-slate-100 text-center">
+            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-slate-800 text-base font-bold mb-1">Recruiter Exit Processed</h3>
+            <p className="text-slate-500 text-xs mb-4">
+              Automated candidate migration and deactivation completed successfully.
+            </p>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-left text-xs space-y-2 mb-5">
+              <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                <span className="text-slate-500">Employee:</span>
+                <span className="font-bold text-slate-800">{exitSummary.recruiterName} ({exitSummary.recruiterId})</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                <span className="text-slate-500">New Status:</span>
+                <span className="font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded text-[11px] border border-rose-200">{exitSummary.status}</span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                <span className="text-slate-500">Candidates Transferred:</span>
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px] border border-emerald-200">
+                  {exitSummary.candidatesTransferred} to General Pool
+                </span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                <span className="text-slate-500">30-Day Lock-Ins Released:</span>
+                <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px] border border-emerald-200">
+                  {exitSummary.lockInsReleased} Immediately Claimable
+                </span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                <span className="text-slate-500">System Sessions:</span>
+                <span className="font-semibold text-rose-600">Revoked (403 Forbidden)</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Active Payroll:</span>
+                <span className="font-semibold text-slate-700">Deactivated (Past Slips Preserved)</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setExitSummary(null)}
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-all"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}

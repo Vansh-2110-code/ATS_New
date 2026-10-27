@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import {
   Users, DollarSign, Clock, CheckCircle2, AlertCircle, Play,
   Building2, MapPin, Calendar, FileText, ChevronRight, Download,
-  ArrowUpRight, ShieldCheck, RefreshCw, Settings, Sparkles, TrendingUp
+  ArrowUpRight, ShieldCheck, RefreshCw, Settings, Sparkles, TrendingUp, UserMinus, FileSpreadsheet
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -306,65 +306,70 @@ export function PayrollDashboard() {
       </div>
 
       {/* Quick Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
         <div
           onClick={() => navigate('/payroll/masters')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group"
+          className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                <Settings className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
-                  Salary Masters & Builder
-                </h3>
-                <p className="text-xs text-slate-500">Components, formulas & statutory PT slabs</p>
-              </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
+          <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-3">
+            <Settings className="w-5 h-5" />
           </div>
+          <h3 className="font-bold text-sm text-slate-900 group-hover:text-emerald-700 transition-colors">
+            Salary Masters
+          </h3>
+          <p className="text-[11px] text-slate-500 mt-0.5">Components & PT slabs</p>
         </div>
 
         <div
           onClick={() => navigate('/payroll/employees')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group"
+          className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                <Users className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
-                  Employee Payroll Master
-                </h3>
-                <p className="text-xs text-slate-500">Gross, CTC, UAN, PAN & bank account details</p>
-              </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
+          <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-3">
+            <Users className="w-5 h-5" />
           </div>
+          <h3 className="font-bold text-sm text-slate-900 group-hover:text-emerald-700 transition-colors">
+            Employee Payroll
+          </h3>
+          <p className="text-[11px] text-slate-500 mt-0.5">Gross, CTC & Ledger</p>
         </div>
 
         <div
           onClick={() => navigate('/payroll/payslips')}
-          className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group"
+          className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer group"
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                <FileText className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
-                  Payslip Hub & Downloads
-                </h3>
-                <p className="text-xs text-slate-500">Branded PDF payslips & single-download lock</p>
-              </div>
-            </div>
-            <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
+          <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-3">
+            <FileText className="w-5 h-5" />
           </div>
+          <h3 className="font-bold text-sm text-slate-900 group-hover:text-emerald-700 transition-colors">
+            Payslips & UTR
+          </h3>
+          <p className="text-[11px] text-slate-500 mt-0.5">Slips & Disbursal UTR</p>
+        </div>
+
+        <div
+          onClick={() => navigate('/payroll/settlement')}
+          className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm hover:border-rose-500 hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center mb-3">
+            <UserMinus className="w-5 h-5" />
+          </div>
+          <h3 className="font-bold text-sm text-slate-900 group-hover:text-rose-700 transition-colors">
+            Exit & Settlements
+          </h3>
+          <p className="text-[11px] text-slate-500 mt-0.5">F&F, Gratuity & Relieving</p>
+        </div>
+
+        <div
+          onClick={() => navigate('/payroll/reports')}
+          className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer group"
+        >
+          <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center mb-3">
+            <FileSpreadsheet className="w-5 h-5" />
+          </div>
+          <h3 className="font-bold text-sm text-slate-900 group-hover:text-indigo-700 transition-colors">
+            Compliance & ECR
+          </h3>
+          <p className="text-[11px] text-slate-500 mt-0.5">EPFO, ESIC & NEFT</p>
         </div>
       </div>
 

@@ -57,7 +57,8 @@ export function generateSalaryFromGross(
   statutoryOpts?: StatutoryOptions
 ): SalaryBreakdown {
   const isPFExempt = statutoryOpts?.isPFExempt === true;
-  const isESIExempt = statutoryOpts?.isESIExempt === true;
+  // ESI is automatically removed if PF is removed/opted out, while PT remains intact
+  const isESIExempt = isPFExempt || statutoryOpts?.isESIExempt === true;
   const isPTExempt = statutoryOpts?.isPTExempt === true;
 
   const gross = Number(grossSalary) || 0;

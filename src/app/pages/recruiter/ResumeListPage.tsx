@@ -89,7 +89,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const isTLOrAdminOrManager = ['admin', 'tl', 'manager'].includes(user?.role || '');
-  const locationState = location.state as { statusFilter?: string; todayCalls?: boolean } | null;
+  const locationState = location.state as { statusFilter?: string; todayCalls?: boolean; recruiter?: string; recruiterName?: string } | null;
 
   const savedStateRef = useRef<any>(getInitialSavedState());
   const savedState = savedStateRef.current;
@@ -98,7 +98,7 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
   const [sourceFilter, setSourceFilter] = useState<string>(() => savedState?.sourceFilter ?? 'All Sources');
   const [statusFilter, setStatusFilter] = useState<string>(() => lockedStatus || locationState?.statusFilter || savedState?.statusFilter || 'All Status');
   const [todayCallsOnly, setTodayCallsOnly] = useState<boolean>(() => Boolean(locationState?.todayCalls ?? savedState?.todayCallsOnly));
-  const [recruiterFilter, setRecruiterFilter] = useState<string>(() => savedState?.recruiterFilter ?? 'All Recruiters');
+  const [recruiterFilter, setRecruiterFilter] = useState<string>(() => locationState?.recruiterName || locationState?.recruiter || savedState?.recruiterFilter || 'All Recruiters');
   const [recruitersList, setRecruitersList] = useState<string[]>([]);
   const [recruiterUsers, setRecruiterUsers] = useState<any[]>([]);
   const [customerFilter, setCustomerFilter] = useState<string>(() => savedState?.customerFilter ?? 'All Customers');
@@ -285,7 +285,9 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
   useEffect(() => {
     if (locationState?.statusFilter) setStatusFilter(locationState.statusFilter);
     if (locationState?.todayCalls !== undefined) setTodayCallsOnly(Boolean(locationState.todayCalls));
-  }, [locationState?.statusFilter, locationState?.todayCalls]);
+    if (locationState?.recruiterName) setRecruiterFilter(locationState.recruiterName);
+    else if (locationState?.recruiter) setRecruiterFilter(locationState.recruiter);
+  }, [locationState?.statusFilter, locationState?.todayCalls, locationState?.recruiter, locationState?.recruiterName]);
 
   // Load dynamic lists for filter dropdowns (Recruiters & Customers)
   useEffect(() => {

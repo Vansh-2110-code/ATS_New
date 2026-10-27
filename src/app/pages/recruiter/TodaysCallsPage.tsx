@@ -115,8 +115,14 @@ export function TodaysCallsPage() {
         </button>
 
         <button
-          onClick={() => navigate('/recruiter/resumes', { state: { todayCalls: true } })}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 text-xs font-semibold rounded-lg transition-colors"
+          onClick={() => navigate('/recruiter/resumes', {
+            state: {
+              todayCalls: true,
+              recruiter: locationState?.recruiterId,
+              recruiterName: locationState?.recruiterName
+            }
+          })}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
         >
           <ExternalLink className="w-3.5 h-3.5" />
           Open in Candidate Management Table

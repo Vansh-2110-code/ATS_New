@@ -112,7 +112,7 @@ exports.getSalary = async (req, res, next) => {
         sObj.isPFExempt = sObj.isPFExempt === true || prof?.statutory?.isPFExempt === true || isPayslipPFExempt === true;
       }
 
-      sObj.isESIExempt = sObj.isESIExempt === true || prof?.statutory?.isESIExempt === true || ps?.statutoryDetails?.isESIExempt === true;
+      sObj.isESIExempt = sObj.isPFExempt === true || sObj.isESIExempt === true || prof?.statutory?.isESIExempt === true || ps?.statutoryDetails?.isESIExempt === true;
       sObj.isPTExempt = sObj.isPTExempt === true || prof?.statutory?.isPTExempt === true || ps?.statutoryDetails?.isPTExempt === true;
       sObj.panNumber = prof?.statutory?.panNumber || ps?.statutoryDetails?.pan || 'N/A';
       sObj.uanNumber = prof?.statutory?.uanNumber || ps?.statutoryDetails?.uan || 'N/A';
@@ -467,8 +467,16 @@ exports.updateSalary = async (req, res, next) => {
     if (wfhAllowance !== undefined) salary.wfhAllowance = parseFloat(wfhAllowance);
     if (presentDays !== undefined) salary.presentDays = parseInt(presentDays);
     if (adminNotes !== undefined) salary.adminNotes = adminNotes;
-    if (isPFExempt !== undefined) salary.isPFExempt = Boolean(isPFExempt);
-    if (isESIExempt !== undefined) salary.isESIExempt = Boolean(isESIExempt);
+    if (isPFExempt !== undefined) {
+      salary.isPFExempt = Boolean(isPFExempt);
+      if (salary.isPFExempt) {
+        salary.isESIExempt = true;
+      } else if (isESIExempt !== undefined) {
+        salary.isESIExempt = Boolean(isESIExempt);
+      }
+    } else if (isESIExempt !== undefined) {
+      salary.isESIExempt = Boolean(isESIExempt);
+    }
     if (isPTExempt !== undefined) salary.isPTExempt = Boolean(isPTExempt);
 
     // Recalculate net salary
@@ -491,8 +499,16 @@ exports.updateSalary = async (req, res, next) => {
           updateFields['grossSalary'] = salary.baseSalary;
           updateFields['annualCTC'] = salary.baseSalary * 12;
         }
-        if (isPFExempt !== undefined) updateFields['statutory.isPFExempt'] = Boolean(isPFExempt);
-        if (isESIExempt !== undefined) updateFields['statutory.isESIExempt'] = Boolean(isESIExempt);
+        if (isPFExempt !== undefined) {
+          updateFields['statutory.isPFExempt'] = Boolean(isPFExempt);
+          if (salary.isPFExempt) {
+            updateFields['statutory.isESIExempt'] = true;
+          } else if (isESIExempt !== undefined) {
+            updateFields['statutory.isESIExempt'] = Boolean(isESIExempt);
+          }
+        } else if (isESIExempt !== undefined) {
+          updateFields['statutory.isESIExempt'] = Boolean(isESIExempt);
+        }
         if (isPTExempt !== undefined) updateFields['statutory.isPTExempt'] = Boolean(isPTExempt);
 
         if (Object.keys(updateFields).length > 0) {
@@ -512,6 +528,7 @@ exports.updateSalary = async (req, res, next) => {
 
         const newGross = salary.baseSalary;
         const isExempt = salary.isPFExempt === true;
+        const isEsiExempt = isExempt || salary.isESIExempt === true;
         const newBasic = Math.round(newGross * 0.5);
         const newHra = Math.round(newBasic * 0.4);
         const newSpecial = Math.max(0, newGross - (newBasic + newHra));
@@ -544,13 +561,24 @@ exports.updateSalary = async (req, res, next) => {
 
           if (!ps.statutoryDetails) ps.statutoryDetails = {};
           if (isPFExempt !== undefined) ps.statutoryDetails.isPFExempt = isExempt;
-          if (isESIExempt !== undefined) ps.statutoryDetails.isESIExempt = Boolean(isESIExempt);
+          ps.statutoryDetails.isESIExempt = isEsiExempt;
+          if (isPTExempt !== undefined) ps.statutoryDetails.isPTExempt = Boolean(salary.isPTExempt);
 
           if (Array.isArray(ps.deductions)) {
             let pfDed = ps.deductions.find(d => d.code === 'PF_EE' || (d.name && d.name.toLowerCase().includes('provident fund')));
             if (pfDed) {
               pfDed.name = isExempt ? 'Provident Fund (Opted Out)' : 'Provident Fund (EPF)';
               pfDed.amount = newPf;
+            }
+            let esiDed = ps.deductions.find(d => d.code === 'ESI_EE' || (d.name && d.name.toLowerCase().includes('esi')));
+            if (esiDed) {
+              if (isEsiExempt) {
+                esiDed.name = 'Employee ESI (Opted Out)';
+                esiDed.amount = 0;
+              } else {
+                esiDed.name = 'Employee ESI (0.75%)';
+                esiDed.amount = newGross <= 21000 ? Math.round(newGross * 0.0075) : 0;
+              }
             }
             let ptDed = ps.deductions.find(d => d.code === 'PT' || (d.name && d.name.toLowerCase().includes('professional tax')));
             if (ptDed) {
@@ -563,6 +591,16 @@ exports.updateSalary = async (req, res, next) => {
             if (pfEr) {
               pfEr.name = isExempt ? 'Employer EPF (Opted Out)' : 'Employer EPF';
               pfEr.amount = newPf;
+            }
+            let esiEr = ps.employerContributions.find(d => d.code === 'ESI_ER' || (d.name && d.name.toLowerCase().includes('employer esi')));
+            if (esiEr) {
+              if (isEsiExempt) {
+                esiEr.name = 'Employer ESI (Opted Out)';
+                esiEr.amount = 0;
+              } else {
+                esiEr.name = 'Employer ESI (3.25%)';
+                esiEr.amount = newGross <= 21000 ? Math.round(newGross * 0.0325) : 0;
+              }
             }
           }
 

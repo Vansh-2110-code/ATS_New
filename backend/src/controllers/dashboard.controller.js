@@ -25,7 +25,7 @@ exports.recruiterDashboard = async (req, res, next) => {
     const selectedRange = (customStart || customEnd) ? 'custom' : (range || dateRange || 'month').toLowerCase();
     const { start, end } = getDateRange(selectedRange, customStart, customEnd);
     const userId = req.user._id;
-    const isAdmin = ['admin', 'manager', 'tl'].includes(req.user.role);
+    const isAdmin = ['admin', 'superadmin', 'manager', 'tl'].includes(req.user.role);
 
     const dateFilter = { $gte: start, $lt: end };
     
@@ -118,10 +118,22 @@ exports.recruiterDashboard = async (req, res, next) => {
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]);
 
+    const rawCounts = {};
+    statusCounts.forEach(s => { if (s._id) rawCounts[s._id] = s.count; });
+
     const pipeline = {};
-    Candidate.STATUSES.forEach(s => { pipeline[s] = 0; });
-    statusCounts.forEach(s => { if (s._id) pipeline[s._id] = s.count; });
-    pipeline['Eligible'] = (pipeline['Eligible'] || 0) + (pipeline['Eligible Candidates'] || 0);
+    Candidate.STATUSES.forEach(s => { pipeline[s] = rawCounts[s] || 0; });
+
+    // Safely merge any historical typo/alias counts into canonical statuses so real data is 100% visible:
+    pipeline['Hotlist'] = (pipeline['Hotlist'] || 0) + (rawCounts['Hot List'] || 0);
+    pipeline['Submitted to Client'] = (pipeline['Submitted to Client'] || 0) 
+      + (rawCounts['Submitted To Client'] || 0) 
+      + (rawCounts['Sublitted To Client'] || 0);
+    pipeline['Document Initialized'] = (pipeline['Document Initialized'] || 0) 
+      + (rawCounts['Documennt Initialted'] || 0)
+      + (rawCounts['Documentation'] || 0)
+      + (rawCounts['Document Pending'] || 0);
+    pipeline['Eligible'] = (pipeline['Eligible'] || 0) + (rawCounts['Eligible Candidates'] || 0);
 
     // Candidate & Job metrics
     const startOfToday = new Date(new Date().setHours(0, 0, 0, 0));

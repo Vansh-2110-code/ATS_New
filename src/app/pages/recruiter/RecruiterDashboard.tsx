@@ -6,33 +6,53 @@ import {
   ListChecks, CalendarCheck, ChevronDown, Briefcase, UserCheck,
   X, PhoneMissed, PhoneOff, PhoneCall, ClipboardList,
   UserX, Building2, BadgeCheck, Clipboard, Loader2, Mail, CheckSquare,
-  Info
+  Info, Flame, ExternalLink, Shield, FileCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { getGreeting } from '../../utils/greetingUtils';
+import { SlicerFilteredDataView } from '../../components/SlicerFilteredDataView';
 
 // ─── Date Filter ────────────────────────────────────────────
-type DateRange = 'Day' | 'Week' | 'Quarter' | 'Year' | 'All' | 'Custom';
+type DateRange = 'Day' | 'Week' | 'Month' | 'Quarter' | 'Year' | 'All' | 'Custom';
 
 // ─── Status Cards Icons ───────────────────────────────────────
 const STATUS_ICON_MAP: Record<string, any> = {
-  'Eligible Candidates': UserCheck,
-  'Wrong Number': PhoneOff,
-  'Did Not Pick': PhoneMissed,
+  // 34 Official Statuses
+  Eligible: UserCheck,
+  'Not Eligible': UserX,
+  'Not Interested': UserX,
+  'No Response': PhoneMissed,
+  'Duplicate-Client': Users,
   'Call Back': PhoneCall,
-  'HR Shortlist': ClipboardList,
-  'Written Test': FileText,
-  'Operations Round': Building2,
-  'Selected': BadgeCheck,
-  'Documentation': Clipboard,
-  'Yet To Join': UserX,
-  'Joined': CheckCircle2,
-  'New': UserPlus,
-  'Contacted': Phone,
-  'Interested': CheckCircle2,
-  'Interview Scheduled': Calendar,
-  'Rejected': X,
+  Hold: Clock,
+  Hotlist: Flame,
+  'Submitted to Client': ExternalLink,
+  'Walkin Company': Building2,
+  'Walkin WHM': Briefcase,
+  'No Show': UserX,
+  'VNA Select': BadgeCheck,
+  'VNA Reject': X,
+  'Test Select': FileCheck,
+  'Test Reject': X,
+  'Candidate Drop Post L1 Select': UserX,
+  'Candidate Drop Post L2 Select': UserX,
+  'Candidate Drop During Final Stage': UserX,
+  'L1 Select': CheckCircle2,
+  'L1 Reject': X,
+  'L2 Select': CheckCircle2,
+  'L2 Reject': X,
+  'Final Select': BadgeCheck,
+  'Final Reject': X,
+  'Document Initialized': Clipboard,
+  'Documentation Completed': CheckCircle2,
+  'Documentation Incomplete': AlertCircle,
+  'Waiting for Offer': Clock,
+  'Offer Accept': BadgeCheck,
+  'Offer Reject': X,
+  Joined: CheckCircle2,
+  'Joined and Abort': UserX,
+  'Black List': Shield,
 };
 
 const STATUS_COLOR_LIST = ['emerald','red','orange','amber','violet','indigo','cyan','teal','sky','pink','green'];
@@ -72,7 +92,7 @@ export function RecruiterDashboard() {
   const navigate = useNavigate();
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  const [dateRange, setDateRange] = useState<DateRange>('All');
+  const [dateRange, setDateRange] = useState<DateRange>('Day');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [division, setDivision] = useState('All');
@@ -84,6 +104,7 @@ export function RecruiterDashboard() {
   const [topJobs, setTopJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dashData, setDashData] = useState<any>(null);
+  const [activeSlicer, setActiveSlicer] = useState<string>('All');
   
   const [onboardingStatus, setOnboardingStatus] = useState<{ submitted: boolean; approved: boolean } | null>(null);
 
@@ -103,7 +124,7 @@ export function RecruiterDashboard() {
     }
   }, []);
 
-  const DATE_TABS: DateRange[] = ['Day', 'Week', 'Quarter', 'Year', 'All', 'Custom'];
+  const DATE_TABS: DateRange[] = ['Day', 'Week', 'Month', 'Quarter', 'Year', 'All', 'Custom'];
 
   useEffect(() => {
     Promise.all([
@@ -442,11 +463,14 @@ export function RecruiterDashboard() {
           {STATUS_CARDS.map((s, i) => {
             const Icon = s.icon;
             const c = STATUS_COLOR_MAP[s.color];
+            const isSelected = activeSlicer === s.label;
             return (
               <div key={i} className="relative">
                 <button
-                  onClick={() => goToStatus(s.label)}
-                  className={`w-full flex flex-col items-start p-3.5 rounded-xl border transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${c.card}`}
+                  onClick={() => setActiveSlicer(isSelected ? 'All' : s.label)}
+                  className={`w-full flex flex-col items-start p-3.5 rounded-xl border transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${c.card} ${
+                    isSelected ? 'ring-2 ring-green-600 shadow-md scale-102 border-green-400' : ''
+                  }`}
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-2.5 ${c.icon}`}>
                     <Icon className="w-4 h-4" />
@@ -461,6 +485,20 @@ export function RecruiterDashboard() {
           })}
         </div>
       </div>
+
+      {/* ── In-Place Slicer Filtered Data Table for Recruiter ── */}
+      <SlicerFilteredDataView
+        slicerName={activeSlicer}
+        division={division}
+        recruiter={recruiter || user?._id}
+        company={company}
+        customer={customer}
+        range={dateRange.toLowerCase()}
+        fromDate={customFrom}
+        toDate={customTo}
+        onClear={() => setActiveSlicer('All')}
+        title="Recruiter Pipeline Slicer"
+      />
 
       {/* ── Follow-Ups + Quick Actions ── */}
       <div className="grid lg:grid-cols-3 gap-6">

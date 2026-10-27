@@ -256,6 +256,18 @@ mongoose.connect(MONGODB_URI)
       console.error('Error during startup division migration:', migErr);
     }
 
+    // Candidate Status Normalization: merge old typo / alias records into official statuses
+    try {
+      const Candidate = require('./models/Candidate');
+      await Candidate.updateMany({ status: 'Hot List' }, { $set: { status: 'Hotlist' } });
+      await Candidate.updateMany({ status: { $in: ['Submitted To Client', 'Sublitted To Client'] } }, { $set: { status: 'Submitted to Client' } });
+      await Candidate.updateMany({ status: 'Documennt Initialted' }, { $set: { status: 'Document Initialized' } });
+      await Candidate.updateMany({ status: 'Eligible Candidates' }, { $set: { status: 'Eligible' } });
+      console.log('Candidate status normalization completed.');
+    } catch (normErr) {
+      console.error('Error during candidate status normalization:', normErr);
+    }
+
     // Start candidate archiving scheduler (prunes records > 1 year)
     try {
       const { startArchiveScheduler } = require('./utils/archiveScheduler');

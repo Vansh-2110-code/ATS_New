@@ -55,6 +55,19 @@ const payrollEmployeeRecordSchema = new mongoose.Schema({
     taxRegime: { type: String, default: 'new' },
     isPFExempt: { type: Boolean, default: false }
   },
+  paymentStatus: {
+    type: String,
+    enum: ['UNPAID', 'PROCESSING', 'PAID'],
+    default: 'UNPAID',
+    index: true
+  },
+  paymentDetails: {
+    paymentMode: { type: String, default: 'bank_transfer' },
+    utrNumber: { type: String, trim: true },
+    paymentDate: { type: Date },
+    reference: { type: String, trim: true },
+    paidBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  },
   isFrozen: { type: Boolean, default: false },
   downloadCount: { type: Number, default: 0 },
   firstDownloadedAt: { type: Date }

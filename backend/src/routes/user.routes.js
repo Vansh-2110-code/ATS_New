@@ -13,6 +13,8 @@ router.post('/', authorize('admin'), ctrl.create);
 router.put('/:id', authorize('admin'), ctrl.update);
 router.delete('/:id', authorize('admin'), ctrl.remove);
 router.patch('/:id/status', authorize('admin'), ctrl.toggleStatus);
+router.get('/:id/exit-preview', authorize('admin'), ctrl.getExitPreview);
+router.post('/:id/confirm-exit', authorize('admin'), ctrl.confirmEmployeeExit);
 router.post('/:id/reset-password', authorize('admin'), ctrl.resetPassword);
 router.post('/reset-demo-data', authorize('admin'), ctrl.resetDemoData);
 router.post('/activate-all-suspended', authorize('admin'), ctrl.activateAllSuspended);

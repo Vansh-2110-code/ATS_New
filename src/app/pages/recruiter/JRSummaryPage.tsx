@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router';
 import {
   Loader2, AlertCircle, ArrowLeft, UserPlus, Briefcase, Users,
   FileText, Send, ChevronDown, Phone, Mail, MapPin, User,
-  Copy, Check, Clock, Tag, Download,
+  Copy, Check, Clock, Tag, Download, X
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -125,6 +125,145 @@ function MetricCard({ label, value, icon: Icon }: { label: string; value: number
   );
 }
 
+// ─── Formatted JD Helpers ─────────────────────────────────────
+function formatJobDescriptionText(text: string): string {
+  if (!text) return '';
+  let s = text;
+
+  // 1. Replace special Word / Wingdings bullets (\uF0A7, \uF0B7, etc) with clean bullet and newline
+  s = s.replace(/[\uF0A7\uF0B7\uE25A\u25A0\u25CF\u2022\u00B7]/g, '\n• ');
+
+  // 2. Identify known section headers and give them clear line breaks
+  const headers = [
+    'Key Responsibilities',
+    'Key Responsibilities:',
+    'Responsibilities:',
+    'Roles & Responsibilities:',
+    'Roles and Responsibilities:',
+    'Required Skills',
+    'Required Skills:',
+    'Mandatory Skills:',
+    'Preferred Skills',
+    'Preferred Skills:',
+    'Desired Skills:',
+    'Technical Skills:',
+    'Soft Skills:',
+    'Requirements & Qualifications:',
+    'Requirements & Qualifications',
+    'Detailed Job Description:',
+    'Job Description:',
+    'Job Summary:',
+    'Eligibility Criteria:',
+    'Eligibility:',
+    'About the Role:',
+    'Work Mode:',
+    'Work Location:',
+    'Location:',
+    'Category:',
+    'Category',
+    'Tags:',
+    'Tags',
+    'Rating scale',
+    'Rating scale:',
+    'Experience Type',
+    'Experience Type:',
+    'Organization:',
+    'Organization',
+    'Job Level:',
+    'Job Level',
+    'Position:',
+    'Experience:'
+  ];
+
+  headers.forEach(h => {
+    const re = new RegExp(`(?<!\\n)\\s*\\b(${h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'gi');
+    s = s.replace(re, '\n\n$1');
+  });
+
+  // 3. Normalize multiple line breaks
+  s = s.replace(/\n{3,}/g, '\n\n').trim();
+  return s;
+}
+
+function FormattedJobDescription({ text }: { text: string }) {
+  if (!text) return null;
+  const formatted = formatJobDescriptionText(text);
+  const sections = formatted.split(/\n\n+/);
+
+  return (
+    <div className="space-y-3.5 text-sm leading-relaxed">
+      {sections.map((sec, idx) => {
+        const trimmed = sec.trim();
+        if (!trimmed) return null;
+
+        // If the section contains bullet points (•)
+        if (trimmed.includes('•')) {
+          const lines = trimmed.split('\n');
+          const firstLineIsBullet = lines[0].trim().startsWith('•');
+          const headerLine = firstLineIsBullet ? null : lines[0].trim();
+          const bulletLines = lines
+            .filter(l => l.trim().startsWith('•'))
+            .map(l => l.replace(/^•\s*/, '').trim())
+            .filter(Boolean);
+
+          return (
+            <div key={idx} className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-4 shadow-xs">
+              {headerLine && (
+                <h4 className="text-xs uppercase tracking-wider font-bold text-slate-800 mb-2.5 flex items-center gap-1.5 border-b border-slate-200/60 pb-1.5">
+                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                  {headerLine}
+                </h4>
+              )}
+              <ul className="space-y-2">
+                {bulletLines.map((b, bIdx) => (
+                  <li key={bIdx} className="flex items-start gap-2.5 text-slate-700">
+                    <span className="text-green-600 font-bold mt-0.5 select-none">•</span>
+                    <span className="leading-relaxed">{b}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        }
+
+        // If the section starts with a known header
+        const isHeaderPattern = /^(Key Responsibilities|Required Skills|Preferred Skills|Requirements|Job Description|About the Role|Eligibility Criteria|Tags|Category|Organization|Job Level|Position|Experience|Work Mode|Location)/i.test(trimmed);
+
+        if (isHeaderPattern) {
+          const colonIdx = trimmed.indexOf(':');
+          const newlineIdx = trimmed.indexOf('\n');
+          let header = trimmed;
+          let content = '';
+
+          if (newlineIdx !== -1) {
+            header = trimmed.slice(0, newlineIdx);
+            content = trimmed.slice(newlineIdx + 1).trim();
+          } else if (colonIdx !== -1 && colonIdx < 35) {
+            header = trimmed.slice(0, colonIdx + 1);
+            content = trimmed.slice(colonIdx + 1).trim();
+          }
+
+          return (
+            <div key={idx} className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-4 shadow-xs">
+              <h4 className="text-xs uppercase tracking-wider font-bold text-slate-800 mb-1.5 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                {header}
+              </h4>
+              {content && <p className="text-slate-700 whitespace-pre-wrap leading-relaxed">{content}</p>}
+            </div>
+          );
+        }
+
+        return (
+          <div key={idx} className="bg-slate-50/50 border border-slate-100 rounded-xl p-4 text-slate-700 whitespace-pre-wrap leading-relaxed">
+            {trimmed}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────────────
 export function JRSummaryPage() {
   const { id } = useParams<{ id: string }>();
@@ -239,46 +378,75 @@ export function JRSummaryPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
-      {/* Top nav */}
-      <div className="flex items-center gap-3">
+      {/* Top nav with Back and Close */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/admin/jobs')}
+            className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 transition-colors font-medium cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Jobs
+          </button>
+          <span className="text-slate-300">|</span>
+          <button
+            onClick={() => navigate('/recruiter/add')}
+            className="flex items-center gap-1.5 text-sm text-green-600 hover:text-green-800 font-semibold transition-colors cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            Add Candidate
+          </button>
+        </div>
         <button
           onClick={() => navigate('/admin/jobs')}
-          className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer border border-slate-200"
+          title="Close and return to Job Requirements"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Jobs
-        </button>
-        <span className="text-slate-300">|</span>
-        <button
-          onClick={() => navigate('/recruiter/add')}
-          className="flex items-center gap-1.5 text-sm text-green-600 hover:text-green-800 font-semibold transition-colors"
-        >
-          <UserPlus className="w-4 h-4" />
-          Add Candidate
+          <X className="w-3.5 h-3.5" />
+          Close
         </button>
       </div>
 
       {/* Header Banner */}
-      <div className="bg-green-600 rounded-xl px-6 py-5 text-white">
-        <h1 className="text-lg font-bold mb-1">
-          {jobTitle}
-        </h1>
-        <p className="text-green-200 text-sm">
-          Raised By: <span className="text-white font-semibold">{raisedBy}</span>
-          &nbsp;·&nbsp;
-          HR: <span className="text-white font-semibold">{hrName}</span>
-          &nbsp;·&nbsp;
-          SPOC: <span className="text-white font-semibold">{spocName}</span>
-          &nbsp;·&nbsp;
-          Company: <span className="text-white font-semibold">{client}</span>
-        </p>
+      <div className="bg-green-600 rounded-xl px-6 py-5 text-white flex items-start justify-between gap-4 shadow-sm">
+        <div>
+          <h1 className="text-lg font-bold mb-1">
+            {jobTitle}
+          </h1>
+          <p className="text-green-200 text-sm">
+            Raised By: <span className="text-white font-semibold">{raisedBy}</span>
+            &nbsp;·&nbsp;
+            HR: <span className="text-white font-semibold">{hrName}</span>
+            &nbsp;·&nbsp;
+            SPOC: <span className="text-white font-semibold">{spocName}</span>
+            &nbsp;·&nbsp;
+            Company: <span className="text-white font-semibold">{client}</span>
+          </p>
+        </div>
+        <button
+          onClick={() => navigate('/admin/jobs')}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer flex-shrink-0"
+          title="Close Job Requirement Details"
+        >
+          <X className="w-4 h-4" />
+          Close
+        </button>
       </div>
 
       {/* JR Details Panel */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
-          <Briefcase className="w-5 h-5 text-green-600" />
-          <h2 className="text-slate-800 font-semibold">JR Details</h2>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Briefcase className="w-5 h-5 text-green-600" />
+            <h2 className="text-slate-800 font-semibold">JR Details</h2>
+          </div>
+          <button
+            onClick={() => navigate('/admin/jobs')}
+            className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+            title="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
         <div className="px-6 py-4 grid sm:grid-cols-3 gap-4 text-sm">
           {[
@@ -361,9 +529,7 @@ export function JRSummaryPage() {
           <div>
             <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Detailed Job Description</h3>
             {job?.description ? (
-              <div className="bg-slate-50/70 border border-slate-100 rounded-xl p-4 text-sm text-slate-800 whitespace-pre-line leading-relaxed">
-                {job.description}
-              </div>
+              <FormattedJobDescription text={job.description} />
             ) : (
               <p className="text-slate-400 text-sm italic">No detailed description added for this JR.</p>
             )}
@@ -373,9 +539,7 @@ export function JRSummaryPage() {
           {job?.requirements && (
             <div>
               <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-2">Requirements & Qualifications</h3>
-              <div className="bg-slate-50/70 border border-slate-100 rounded-xl p-4 text-sm text-slate-800 whitespace-pre-line leading-relaxed">
-                {job.requirements}
-              </div>
+              <FormattedJobDescription text={job.requirements} />
             </div>
           )}
 

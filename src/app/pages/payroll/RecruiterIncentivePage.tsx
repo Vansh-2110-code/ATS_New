@@ -19,12 +19,23 @@ export function RecruiterIncentivePage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [revenueData, setRevenueData] = useState<any>(null);
 
   const isAdminOrManager = user && ['admin', 'manager'].includes(user.role);
 
   useEffect(() => {
     loadIncentives();
+    loadRevenueData();
   }, [statusFilter]);
+
+  const loadRevenueData = async () => {
+    try {
+      const data = await api.getRecruitmentRevenueAttribution();
+      setRevenueData(data);
+    } catch (err) {
+      console.error('Failed to load recruitment revenue attribution:', err);
+    }
+  };
 
   const loadIncentives = async () => {
     try {
@@ -118,6 +129,54 @@ export function RecruiterIncentivePage() {
             <FileText className="w-4 h-4 text-slate-500" />
             Create Invoice
           </button>
+        </div>
+      </div>
+
+      {/* 3 DISTINCT RECRUITMENT REVENUE BUCKETS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Bucket 1: Attributed */}
+        <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white p-5 rounded-2xl border border-indigo-700/50 shadow-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wider text-indigo-300 font-bold">1. Attributed Pipeline</span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-medium">Joined in ATS</span>
+          </div>
+          <div className="text-2xl font-black mt-2 font-mono">
+            ₹{(revenueData?.pipeline?.attributed?.estimatedRevenue || 0).toLocaleString('en-IN')}
+          </div>
+          <div className="text-xs text-indigo-200/80 mt-1 flex justify-between">
+            <span>{revenueData?.pipeline?.attributed?.candidatesCount || 0} Placements (8.33% CTC)</span>
+            <span>Est. Gross Revenue</span>
+          </div>
+        </div>
+
+        {/* Bucket 2: Invoiced */}
+        <div className="bg-gradient-to-br from-blue-900 via-slate-900 to-blue-950 text-white p-5 rounded-2xl border border-blue-700/50 shadow-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wider text-blue-300 font-bold">2. Invoiced Billed</span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">Billed Tax Invoices</span>
+          </div>
+          <div className="text-2xl font-black mt-2 font-mono">
+            ₹{(revenueData?.pipeline?.invoiced?.totalAmount || 0).toLocaleString('en-IN')}
+          </div>
+          <div className="text-xs text-blue-200/80 mt-1 flex justify-between">
+            <span>{revenueData?.pipeline?.invoiced?.invoicesCount || 0} Issued Invoices</span>
+            <span>Client Receivables</span>
+          </div>
+        </div>
+
+        {/* Bucket 3: Collected */}
+        <div className="bg-gradient-to-br from-emerald-900 via-slate-900 to-teal-950 text-white p-5 rounded-2xl border border-emerald-700/50 shadow-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wider text-emerald-300 font-bold">3. Collected Cash-in-Bank</span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">Bank Realized</span>
+          </div>
+          <div className="text-2xl font-black mt-2 font-mono text-emerald-400">
+            ₹{(revenueData?.pipeline?.collected?.totalAmount || 0).toLocaleString('en-IN')}
+          </div>
+          <div className="text-xs text-emerald-200/80 mt-1 flex justify-between">
+            <span>{revenueData?.pipeline?.collected?.collectedInvoicesCount || 0} Cleared Invoices</span>
+            <span>Realized Revenue</span>
+          </div>
         </div>
       </div>
 

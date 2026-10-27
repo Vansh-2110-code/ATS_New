@@ -36,9 +36,36 @@ const employeePayrollProfileSchema = new mongoose.Schema({
     reason: { type: String, trim: true },
     revisedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now }
-  }]
+  }],
+  advancesAndRecoveries: [{
+    title: { type: String, trim: true },
+    totalAmount: { type: Number, required: true },
+    balanceAmount: { type: Number, required: true },
+    monthlyDeduction: { type: Number, default: 0 },
+    disbursedDate: { type: Date, default: Date.now },
+    status: { type: String, enum: ['active', 'repaid', 'cancelled'], default: 'active' },
+    notes: { type: String, trim: true }
+  }],
+  reimbursements: [{
+    category: { type: String, trim: true, default: 'Travel & Client Expense' },
+    amount: { type: Number, required: true },
+    claimDate: { type: Date, default: Date.now },
+    status: { type: String, enum: ['pending', 'approved', 'rejected', 'paid'], default: 'pending' },
+    approvedAmount: { type: Number, default: 0 },
+    paidInPayrollMonth: { type: String, trim: true },
+    remarks: { type: String, trim: true }
+  }],
+  exitDetails: {
+    isExited: { type: Boolean, default: false },
+    resignationDate: { type: Date },
+    lastWorkingDay: { type: Date },
+    exitReason: { type: String, trim: true },
+    settlementId: { type: mongoose.Schema.Types.ObjectId, ref: 'Settlement' },
+    exitStatus: { type: String, enum: ['active', 'resigned', 'notice_period', 'settled', 'relieved'], default: 'active' }
+  }
 }, { timestamps: true });
 
 employeePayrollProfileSchema.index({ company: 1, status: 1 });
+employeePayrollProfileSchema.index({ 'exitDetails.isExited': 1 });
 
 module.exports = mongoose.model('EmployeePayrollProfile', employeePayrollProfileSchema);
