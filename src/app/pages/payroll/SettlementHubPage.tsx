@@ -25,6 +25,10 @@ interface SettlementRecord {
   noticePeriodDays: number;
   noticeServedDays: number;
   noticeShortfallDays: number;
+  waiveNoticeShortfall?: boolean;
+  personalEmail?: string;
+  personalPhone?: string;
+  netType?: 'PAYABLE' | 'RECOVERABLE';
   payable: {
     unpaidSalaryDays: number;
     unpaidSalaryAmount: number;
@@ -97,6 +101,9 @@ export function SettlementHubPage() {
     lastWorkingDay: '',
     noticePeriodDays: 30,
     noticeServedDays: 30,
+    waiveNoticeShortfall: false,
+    personalEmail: '',
+    personalPhone: '',
     exitReason: 'Career Growth / Better Opportunity',
     unpaidSalaryDays: 0,
     bonus: 0,
@@ -113,6 +120,16 @@ export function SettlementHubPage() {
   useEffect(() => {
     loadSettlements();
     loadActiveEmployees();
+
+    // Check URL parameters for direct initiation
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    const userParam = urlParams.get('userId');
+    if (tabParam === 'initiate') setActiveTab('initiate');
+    if (userParam) {
+      setSelectedEmpId(userParam);
+      triggerPreviewCalculation(userParam);
+    }
   }, [statusFilter]);
 
   async function loadSettlements() {
@@ -158,6 +175,7 @@ export function SettlementHubPage() {
         lastWorkingDay: formValues.lastWorkingDay,
         noticePeriodDays: formValues.noticePeriodDays,
         noticeServedDays: formValues.noticeServedDays,
+        waiveNoticeShortfall: formValues.waiveNoticeShortfall,
         unpaidSalaryDays: formValues.unpaidSalaryDays,
         bonus: formValues.bonus,
         otherPayable: formValues.otherPayable,
@@ -181,9 +199,13 @@ export function SettlementHubPage() {
 
   async function handleFinalizeSettlement() {
     if (!selectedEmpId || !calculationPreview) return;
-    if (!confirm(`Are you sure you want to approve and finalize Full-and-Final settlement of ₹${calculationPreview.netSettlementAmount.toLocaleString('en-IN')}? This will update the employee status to Former Staff and lock their active payroll.`)) {
-      return;
-    }
+    const isRec = calculationPreview.isRecoverable || calculationPreview.netType === 'RECOVERABLE';
+    const amountStr = `₹${(calculationPreview.netSettlementAmount || 0).toLocaleString('en-IN')}`;
+    const promptMsg = isRec
+      ? `Are you sure you want to approve and finalize this Full-and-Final settlement? There is a NET RECOVERY of ${amountStr} from the employee due to shortfall/advances.`
+      : `Are you sure you want to approve and finalize Full-and-Final settlement of ${amountStr}? This will update the employee status to Former Staff and lock their active payroll.`;
+    
+    if (!confirm(promptMsg)) return;
     setSubmitting(true);
     try {
       await api.finalizeSettlement({
@@ -193,8 +215,12 @@ export function SettlementHubPage() {
         exitReason: initForm.exitReason,
         noticePeriodDays: initForm.noticePeriodDays,
         noticeServedDays: initForm.noticeServedDays,
+        waiveNoticeShortfall: initForm.waiveNoticeShortfall,
+        personalEmail: initForm.personalEmail,
+        personalPhone: initForm.personalPhone,
         payable: calculationPreview.payable,
         deductions: calculationPreview.deductions,
+        netType: calculationPreview.netType || (isRec ? 'RECOVERABLE' : 'PAYABLE'),
         netSettlementAmount: calculationPreview.netSettlementAmount,
         clearances: { itAssets: true, accounts: true, hr: true, department: true }
       });
@@ -461,7 +487,7 @@ export function SettlementHubPage() {
                               <button
                                 onClick={() => { setSelectedSettlement(s); setViewDocType('settlement'); }}
                                 className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-medium transition-colors"
-                                title="View Settlement Slip"
+                                title="View F&F Statement (Payslip)"
                               >
                                 View F&F
                               </button>
@@ -645,6 +671,67 @@ export function SettlementHubPage() {
               </div>
             </div>
 
+            {/* Zoho Parity: Waive Notice Shortfall Penalty Toggle */}
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                  <span>Waive Notice Shortfall Penalty?</span>
+                  {initForm.waiveNoticeShortfall && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold border border-amber-300">
+                      WAIVED (₹0)
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] text-amber-700 dark:text-amber-400 mt-0.5">
+                  If approved by management for early release, the shortfall deduction is waived.
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={initForm.waiveNoticeShortfall}
+                  onChange={e => {
+                    const val = e.target.checked;
+                    setInitForm(prev => {
+                      const next = { ...prev, waiveNoticeShortfall: val };
+                      triggerPreviewCalculation(selectedEmpId, next);
+                      return next;
+                    });
+                  }}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-amber-600"></div>
+              </label>
+            </div>
+
+            {/* Zoho Parity: Personal Contact Information for Post-Exit Communications */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Personal Email Address <span className="text-slate-400 font-normal">(for post-exit documents)</span>
+                </label>
+                <input
+                  type="email"
+                  value={initForm.personalEmail}
+                  onChange={e => setInitForm(prev => ({ ...prev, personalEmail: e.target.value }))}
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                  placeholder="personal.email@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Personal Contact Number
+                </label>
+                <input
+                  type="tel"
+                  value={initForm.personalPhone}
+                  onChange={e => setInitForm(prev => ({ ...prev, personalPhone: e.target.value }))}
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
+                  placeholder="+91 98765 43210"
+                />
+              </div>
+            </div>
+
             {/* Exit Reason */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
@@ -798,14 +885,30 @@ export function SettlementHubPage() {
                     </div>
                   </div>
 
-                  {/* Net Payable Banner */}
-                  <div className="bg-gradient-to-r from-emerald-950/80 to-teal-950/80 p-4 rounded-xl border border-emerald-500/30 text-center space-y-1">
-                    <div className="text-xs uppercase tracking-wider text-emerald-400 font-semibold">Net Disbursable Settlement</div>
-                    <div className="text-3xl font-extrabold text-white">
-                      ₹{calculationPreview.netSettlementAmount?.toLocaleString('en-IN')}
+                  {/* Net Payable or Net Recoverable Banner (Zoho Parity) */}
+                  {calculationPreview.isRecoverable || calculationPreview.netType === 'RECOVERABLE' ? (
+                    <div className="bg-gradient-to-r from-rose-950/90 to-amber-950/90 p-4 rounded-xl border border-rose-500/40 text-center space-y-1 shadow-lg">
+                      <div className="flex items-center justify-center gap-1.5 text-xs uppercase tracking-wider text-rose-300 font-bold">
+                        <AlertTriangle className="w-4 h-4 text-rose-400" />
+                        Net Recoverable from Employee
+                      </div>
+                      <div className="text-3xl font-extrabold text-rose-300 font-mono">
+                        ₹{calculationPreview.netSettlementAmount?.toLocaleString('en-IN')}
+                      </div>
+                      <div className="text-[11px] text-rose-200/80 italic">{calculationPreview.netSettlementInWords}</div>
+                      <p className="text-[10px] text-rose-300/80 pt-1 border-t border-rose-800/40 mt-1">
+                        Deductions exceed payable earnings. Recover this outstanding balance prior to releasing relieving documentation.
+                      </p>
                     </div>
-                    <div className="text-[11px] text-emerald-300/80 italic">{calculationPreview.netSettlementInWords}</div>
-                  </div>
+                  ) : (
+                    <div className="bg-gradient-to-r from-emerald-950/80 to-teal-950/80 p-4 rounded-xl border border-emerald-500/30 text-center space-y-1">
+                      <div className="text-xs uppercase tracking-wider text-emerald-400 font-semibold">Net Disbursable Settlement</div>
+                      <div className="text-3xl font-extrabold text-white font-mono">
+                        ₹{calculationPreview.netSettlementAmount?.toLocaleString('en-IN')}
+                      </div>
+                      <div className="text-[11px] text-emerald-300/80 italic">{calculationPreview.netSettlementInWords}</div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="py-20 text-center text-indigo-300 text-sm">
@@ -1081,101 +1184,136 @@ export function SettlementHubPage() {
               </div>
             </div>
 
-            {/* DOCUMENT 1: SETTLEMENT STATEMENT SLIP */}
+            {/* DOCUMENT 1: OFFICIAL FULL & FINAL SETTLEMENT STATEMENT (F&F PAYSLIP) */}
             {viewDocType === 'settlement' && (
-              <div className="space-y-6 text-slate-900 dark:text-slate-100">
-                <div className="text-center pb-4 border-b border-slate-200 dark:border-slate-800">
-                  <h2 className="text-xl font-bold tracking-tight">WHITE HORSE MANPOWER CONSULTANCY PVT. LTD.</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Corporate Office: Bangalore, Karnataka, India</p>
-                  <div className="inline-block mt-2 px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-xs font-bold uppercase tracking-wider">
-                    Full-and-Final Settlement Statement
+              <div id="printable-settlement-statement" className="space-y-6 text-slate-900 dark:text-slate-100 text-xs p-2 sm:p-4">
+                {/* Official Letterhead Header */}
+                <div className="text-center pb-4 border-b-2 border-slate-900 dark:border-slate-100">
+                  <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white uppercase">WHITE HORSE MANPOWER CONSULTANCY PVT. LTD.</h2>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300">Office No. 42, 2nd Floor, Brigade Road, Bangalore, Karnataka - 560001</p>
+                  <p className="text-[10px] text-slate-500">Corporate PAN: AABCW1234F • GSTIN: 29AABCW1234F1Z5 • Email: hr@whitehorsemanpower.in</p>
+                  <div className="mt-3 inline-block px-4 py-1 bg-slate-900 text-white font-bold tracking-widest uppercase text-xs rounded">
+                    FULL & FINAL SETTLEMENT STATEMENT (F&F PAYSLIP)
                   </div>
                 </div>
 
-                {/* Employee Meta Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl">
+                {/* Reference & Generation Date */}
+                <div className="flex justify-between items-center text-[11px] text-slate-500 font-mono pb-2 border-b border-slate-200 dark:border-slate-800">
+                  <span>Statement Ref: WHM/FFS/{new Date(selectedSettlement.createdAt || Date.now()).getFullYear()}/{selectedSettlement.employeeId}</span>
+                  <span>Date of Issue: {new Date(selectedSettlement.createdAt || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                </div>
+
+                {/* Employee Profile & Service Details Table */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
                   <div>
-                    <span className="text-slate-400 block">Employee Name:</span>
-                    <span className="font-semibold">{selectedSettlement.employeeName}</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Employee Name</span>
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-xs">{selectedSettlement.employeeName}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Employee ID:</span>
-                    <span className="font-semibold">{selectedSettlement.employeeId}</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Employee ID</span>
+                    <span className="font-bold font-mono text-slate-900 dark:text-slate-100 text-xs">{selectedSettlement.employeeId}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Designation:</span>
-                    <span className="font-semibold">{selectedSettlement.designation}</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Designation</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">{selectedSettlement.designation}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Department:</span>
-                    <span className="font-semibold">{selectedSettlement.department || 'Operations'}</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Department</span>
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 text-xs">{selectedSettlement.department || 'Recruitment & Operations'}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Date of Joining:</span>
-                    <span className="font-semibold">{new Date(selectedSettlement.joiningDate).toLocaleDateString()}</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Date of Joining</span>
+                    <span className="font-medium text-xs">{new Date(selectedSettlement.joiningDate).toLocaleDateString('en-IN')}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Resignation Date:</span>
-                    <span className="font-semibold">{new Date(selectedSettlement.resignationDate).toLocaleDateString()}</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Resignation Date</span>
+                    <span className="font-medium text-xs">{new Date(selectedSettlement.resignationDate).toLocaleDateString('en-IN')}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Last Working Day:</span>
-                    <span className="font-semibold text-rose-600">{new Date(selectedSettlement.lastWorkingDay).toLocaleDateString()}</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Last Working Day</span>
+                    <span className="font-bold text-rose-600 text-xs">{new Date(selectedSettlement.lastWorkingDay).toLocaleDateString('en-IN')}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block">Settlement Status:</span>
-                    <span className="font-semibold text-emerald-600">{selectedSettlement.status}</span>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Exit Reason</span>
+                    <span className="font-medium text-xs">{selectedSettlement.exitReason}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Notice Required / Served</span>
+                    <span className="font-medium text-xs">{selectedSettlement.noticePeriodDays || 30}d req / {selectedSettlement.noticeServedDays || 30}d served</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Shortfall Penalty</span>
+                    <span className="font-medium text-xs">
+                      {selectedSettlement.waiveNoticeShortfall ? (
+                        <span className="text-amber-600 font-bold">Waived by Management</span>
+                      ) : (
+                        `${selectedSettlement.noticeShortfallDays || 0} days`
+                      )}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Personal Email</span>
+                    <span className="font-medium text-xs">{selectedSettlement.personalEmail || selectedSettlement.user?.email || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-semibold">Settlement Status</span>
+                    <span className="font-bold text-emerald-600 text-xs">{selectedSettlement.status}</span>
                   </div>
                 </div>
 
                 {/* Financials Table */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   {/* Earnings */}
-                  <div className="space-y-2 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                    <div className="font-bold text-emerald-600 border-b border-slate-200 dark:border-slate-800 pb-2">
-                      PAYABLE PARTICULARS
+                  <div className="space-y-2 border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-white dark:bg-slate-900">
+                    <div className="font-bold text-emerald-600 border-b border-slate-200 dark:border-slate-800 pb-2 uppercase tracking-wide flex justify-between">
+                      <span>A. SETTLEMENT EARNINGS</span>
+                      <span>AMOUNT (₹)</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Unpaid Salary ({selectedSettlement.payable?.unpaidSalaryDays || 0} days)</span>
+                      <span>Unpaid Days Salary ({selectedSettlement.payable?.unpaidSalaryDays || 0} days)</span>
                       <span className="font-mono">₹{(selectedSettlement.payable?.unpaidSalaryAmount || 0).toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Leave Encashment ({selectedSettlement.payable?.leaveEncashmentDays || 0} days)</span>
+                      <span>Earned Leave Encashment ({selectedSettlement.payable?.leaveEncashmentDays || 0} days)</span>
                       <span className="font-mono">₹{(selectedSettlement.payable?.leaveEncashmentAmount || 0).toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Gratuity</span>
+                      <span>Statutory Gratuity</span>
                       <span className="font-mono">₹{(selectedSettlement.payable?.gratuityAmount || 0).toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Pending Placement Incentives</span>
+                      <span>Approved Placement Incentives</span>
                       <span className="font-mono">₹{(selectedSettlement.payable?.pendingIncentives || 0).toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Bonus / Other Additions</span>
                       <span className="font-mono">₹{(selectedSettlement.payable?.bonus || 0).toLocaleString('en-IN')}</span>
                     </div>
-                    <div className="flex justify-between font-bold pt-2 border-t border-slate-200 dark:border-slate-800 text-emerald-600">
-                      <span>TOTAL PAYABLE (A)</span>
+                    <div className="flex justify-between font-bold pt-2 border-t-2 border-slate-200 dark:border-slate-700 text-emerald-600 text-sm">
+                      <span>TOTAL PAYABLE EARNINGS (A)</span>
                       <span>₹{(selectedSettlement.payable?.totalPayable || 0).toLocaleString('en-IN')}</span>
                     </div>
                   </div>
 
                   {/* Deductions */}
-                  <div className="space-y-2 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                    <div className="font-bold text-rose-600 border-b border-slate-200 dark:border-slate-800 pb-2">
-                      DEDUCTION PARTICULARS
+                  <div className="space-y-2 border border-slate-200 dark:border-slate-800 rounded-xl p-4 bg-white dark:bg-slate-900">
+                    <div className="font-bold text-rose-600 border-b border-slate-200 dark:border-slate-800 pb-2 uppercase tracking-wide flex justify-between">
+                      <span>B. SETTLEMENT DEDUCTIONS</span>
+                      <span>AMOUNT (₹)</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Notice Shortfall ({selectedSettlement.deductions?.noticeShortfallDays || 0} days)</span>
+                      <span>
+                        Notice Shortfall ({selectedSettlement.deductions?.noticeShortfallDays || 0} days)
+                        {selectedSettlement.waiveNoticeShortfall && <span className="text-amber-600 text-[10px] ml-1">(Waived)</span>}
+                      </span>
                       <span className="font-mono">₹{(selectedSettlement.deductions?.noticeShortfallAmount || 0).toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Advance Recoveries</span>
+                      <span>Salary Advance & Loan Recovery</span>
                       <span className="font-mono">₹{(selectedSettlement.deductions?.advanceRecovery || 0).toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>Asset Damage</span>
+                      <span>Company Asset Damage / Loss</span>
                       <span className="font-mono">₹{(selectedSettlement.deductions?.assetDamage || 0).toLocaleString('en-IN')}</span>
                     </div>
                     <div className="flex justify-between">
@@ -1186,7 +1324,7 @@ export function SettlementHubPage() {
                       <span>Provident Fund (PF)</span>
                       <span className="font-mono">₹{(selectedSettlement.deductions?.providentFund || 0).toLocaleString('en-IN')}</span>
                     </div>
-                    <div className="flex justify-between font-bold pt-2 border-t border-slate-200 dark:border-slate-800 text-rose-600">
+                    <div className="flex justify-between font-bold pt-2 border-t-2 border-slate-200 dark:border-slate-700 text-rose-600 text-sm">
                       <span>TOTAL DEDUCTIONS (B)</span>
                       <span>₹{(selectedSettlement.deductions?.totalDeductions || 0).toLocaleString('en-IN')}</span>
                     </div>
@@ -1194,21 +1332,69 @@ export function SettlementHubPage() {
                 </div>
 
                 {/* Net Settlement Banner */}
-                <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-xl flex items-center justify-between">
-                  <div>
-                    <span className="text-xs uppercase font-bold text-slate-500">NET SETTLEMENT AMOUNT (A - B)</span>
-                    <div className="text-xs text-slate-400 italic">{selectedSettlement.netSettlementInWords}</div>
+                {selectedSettlement.netType === 'RECOVERABLE' || (selectedSettlement.payable?.totalPayable || 0) < (selectedSettlement.deductions?.totalDeductions || 0) ? (
+                  <div className="bg-rose-50 dark:bg-rose-950/40 border-2 border-rose-400 p-4 rounded-xl flex items-center justify-between">
+                    <div>
+                      <span className="text-xs uppercase font-black text-rose-700 dark:text-rose-300">NET RECOVERABLE FROM EMPLOYEE (B - A)</span>
+                      <div className="text-xs text-rose-600 dark:text-rose-400 italic">{selectedSettlement.netSettlementInWords}</div>
+                    </div>
+                    <div className="text-2xl font-black text-rose-700 font-mono">
+                      ₹{selectedSettlement.netSettlementAmount.toLocaleString('en-IN')}
+                    </div>
                   </div>
-                  <div className="text-2xl font-black text-emerald-600">
-                    ₹{selectedSettlement.netSettlementAmount.toLocaleString('en-IN')}
+                ) : (
+                  <div className="bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-400 p-4 rounded-xl flex items-center justify-between">
+                    <div>
+                      <span className="text-xs uppercase font-black text-emerald-700 dark:text-emerald-300">NET DISBURSABLE SETTLEMENT (A - B)</span>
+                      <div className="text-xs text-emerald-600 dark:text-emerald-400 italic">{selectedSettlement.netSettlementInWords}</div>
+                    </div>
+                    <div className="text-2xl font-black text-emerald-700 font-mono">
+                      ₹{selectedSettlement.netSettlementAmount.toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                )}
+
+                {/* Clearance & Disbursal Audit Details */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs pt-2">
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide block mb-1.5">Department Clearances</span>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div>IT Assets: {selectedSettlement.clearances?.itAssets ? '✓ Cleared' : '⏳ Pending'}</div>
+                      <div>Accounts: {selectedSettlement.clearances?.accounts ? '✓ Cleared' : '⏳ Pending'}</div>
+                      <div>HR Division: {selectedSettlement.clearances?.hr ? '✓ Cleared' : '⏳ Pending'}</div>
+                      <div>Dept Head: {selectedSettlement.clearances?.department ? '✓ Cleared' : '⏳ Pending'}</div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <span className="font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wide block mb-1.5">Disbursal & Bank Record</span>
+                    <div className="space-y-1 text-[11px]">
+                      <div>Mode: <span className="font-semibold uppercase">{selectedSettlement.paymentDetails?.paymentMode || 'Bank Transfer'}</span></div>
+                      <div>UTR / Ref: <span className="font-mono font-semibold">{selectedSettlement.paymentDetails?.utrNumber || 'PENDING DISBURSAL'}</span></div>
+                      <div>Date: {selectedSettlement.paymentDetails?.paymentDate ? new Date(selectedSettlement.paymentDetails.paymentDate).toLocaleDateString('en-IN') : 'N/A'}</div>
+                    </div>
                   </div>
                 </div>
 
-                {selectedSettlement.paymentDetails?.utrNumber && (
-                  <div className="text-xs text-slate-500 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
-                    Bank UTR Reference: <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{selectedSettlement.paymentDetails.utrNumber}</span> • Mode: {selectedSettlement.paymentDetails.paymentMode} • Disbursed Date: {selectedSettlement.paymentDetails.paymentDate ? new Date(selectedSettlement.paymentDetails.paymentDate).toLocaleDateString() : 'N/A'}
+                {/* Acceptance and Signature Line */}
+                <div className="pt-8 grid grid-cols-2 gap-8 border-t border-slate-300 dark:border-slate-700 text-xs">
+                  <div>
+                    <p className="text-[10px] text-slate-500 italic mb-8 leading-relaxed">
+                      "I hereby accept the above Full and Final Settlement as complete and final satisfaction of all my dues and claims from White Horse Manpower Consultancy Pvt. Ltd. and confirm that no further dues remain outstanding."
+                    </p>
+                    <div className="border-t border-slate-400 pt-1.5">
+                      <div className="font-bold text-slate-900 dark:text-slate-100">{selectedSettlement.employeeName}</div>
+                      <div className="text-slate-500 text-[11px]">Employee Signature & Date</div>
+                    </div>
                   </div>
-                )}
+
+                  <div className="text-right flex flex-col justify-end">
+                    <div className="border-t border-slate-400 pt-1.5">
+                      <div className="font-bold text-slate-900 dark:text-slate-100">For White Horse Manpower Consultancy Pvt. Ltd.</div>
+                      <div className="text-slate-500 text-[11px]">Authorized Signatory / Finance & HR Head</div>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

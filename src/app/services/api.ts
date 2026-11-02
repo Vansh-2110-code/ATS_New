@@ -1602,6 +1602,13 @@ class ApiService {
     });
   }
 
+  async rehirePayrollEmployee(id: string, data: { rehireDate?: string; newGrossSalary: number; designation?: string; department?: string; notes?: string }) {
+    return this.request<any>(`/payroll/employees/${id}/rehire`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async getPayrollDashboard(params: Record<string, string> = {}) {
     const q = new URLSearchParams(params).toString();
     return this.request<any>(`/payroll/dashboard${q ? `?${q}` : ''}`);

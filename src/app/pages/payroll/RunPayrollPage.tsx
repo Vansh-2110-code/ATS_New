@@ -27,6 +27,14 @@ export function RunPayrollPage() {
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
 
+  // Zoho Parity: Check for employees exiting in this pay cycle
+  const exitingEmployeesInPeriod = employees.filter((p: any) => {
+    const lwd = p.exitDetails?.lastWorkingDay || p.user?.lastWorkingDay;
+    if (!lwd) return false;
+    const d = new Date(lwd);
+    return d.getMonth() + 1 === Number(selectedMonth) && d.getFullYear() === Number(selectedYear);
+  });
+
   useEffect(() => {
     loadCompanies();
   }, []);
@@ -256,6 +264,44 @@ export function RunPayrollPage() {
               <strong>Automated Attendance Sync Active:</strong> The engine automatically aggregates daily biometric check-ins, approved leaves, and unauthorized absences. Loss of Pay (LOP) will be calculated on a per-day basis as <code>Gross Salary ÷ {baseDays} × LOP Days</code>.
             </div>
           </div>
+
+          {/* Zoho Parity: Exit Month Alert Banner */}
+          {exitingEmployeesInPeriod.length > 0 && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3 shadow-sm">
+              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1 text-xs text-amber-900 leading-relaxed">
+                <div className="font-bold text-sm text-amber-900">
+                  Zoho Payroll Notice: {exitingEmployeesInPeriod.length} Employee(s) Exiting in this Pay Period ({selectedMonth}/{selectedYear})
+                </div>
+                <div className="mt-1 text-amber-800">
+                  The following employee(s) have their Last Working Day in this cycle:{' '}
+                  <span className="font-semibold">
+                    {exitingEmployeesInPeriod.map(e => `${e.user?.name} (LWD: ${new Date(e.exitDetails?.lastWorkingDay || e.user?.lastWorkingDay).toLocaleDateString()})`).join(', ')}
+                  </span>.
+                  Standard payroll compliance requires exiting employees to be settled via <strong>Full-and-Final (F&F) Settlement</strong> rather than regular monthly payroll.
+                </div>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/payroll/settlement')}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold text-xs inline-flex items-center gap-1.5 transition-colors shadow-sm"
+                  >
+                    Go to Exit & Settlement Hub <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const exitingIds = exitingEmployeesInPeriod.map(e => e._id);
+                      setSelectedEmployees(prev => prev.filter(id => !exitingIds.includes(id)));
+                    }}
+                    className="px-3 py-1.5 bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 rounded-lg font-semibold text-xs transition-colors"
+                  >
+                    Exclude Exiting Staff from This Run
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Employee Selection Section */}
           <div className="border border-slate-200/80 rounded-xl p-4 bg-slate-50/50 space-y-3">

@@ -62,7 +62,16 @@ const employeePayrollProfileSchema = new mongoose.Schema({
     exitReason: { type: String, trim: true },
     settlementId: { type: mongoose.Schema.Types.ObjectId, ref: 'Settlement' },
     exitStatus: { type: String, enum: ['active', 'resigned', 'notice_period', 'settled', 'relieved'], default: 'active' }
-  }
+  },
+  employmentHistory: [{
+    joiningDate: { type: Date },
+    lastWorkingDay: { type: Date },
+    exitReason: { type: String, trim: true },
+    settlementId: { type: mongoose.Schema.Types.ObjectId, ref: 'Settlement' },
+    lastGrossSalary: { type: Number },
+    rehireDate: { type: Date, default: Date.now },
+    notes: { type: String, trim: true }
+  }]
 }, { timestamps: true });
 
 employeePayrollProfileSchema.index({ company: 1, status: 1 });

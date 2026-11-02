@@ -1518,6 +1518,7 @@ exports.calculateSettlementPreview = async (req, res) => {
       lastWorkingDay,
       noticePeriodDays = 30,
       noticeServedDays = 30,
+      waiveNoticeShortfall = false,
       unpaidSalaryDays = 0,
       bonus = 0,
       otherPayable = 0,
@@ -1539,9 +1540,10 @@ exports.calculateSettlementPreview = async (req, res) => {
     // 1. Unpaid salary amount
     const unpaidSalaryAmount = Math.round(perDayGross * (Number(unpaidSalaryDays) || 0));
 
-    // 2. Notice shortfall
+    // 2. Notice shortfall (with Zoho waive option)
     const shortfallDays = Math.max(0, Number(noticePeriodDays) - Number(noticeServedDays));
-    const noticeShortfallAmount = Math.round(perDayGross * shortfallDays);
+    const calculatedNoticeShortfall = Math.round(perDayGross * shortfallDays);
+    const noticeShortfallAmount = waiveNoticeShortfall ? 0 : calculatedNoticeShortfall;
 
     // 3. Leave Encashment calculation
     let accruedLeaves = 0;
@@ -1583,7 +1585,12 @@ exports.calculateSettlementPreview = async (req, res) => {
 
     const totalPayable = unpaidSalaryAmount + leaveEncashmentAmount + gratuityAmount + pendingIncentives + Number(bonus) + Number(otherPayable);
     const totalDeductions = noticeShortfallAmount + advanceRecovery + Number(assetDamage) + professionalTax + providentFund + Number(otherDeductions);
-    const netSettlementAmount = Math.max(0, totalPayable - totalDeductions);
+    
+    // Zoho parity: detect if balance is payable by company or recoverable from employee
+    const rawDiff = totalPayable - totalDeductions;
+    const isRecoverable = rawDiff < 0;
+    const netSettlementAmount = Math.abs(rawDiff);
+    const netType = isRecoverable ? 'RECOVERABLE' : 'PAYABLE';
 
     res.json({
       employee: {
@@ -1616,7 +1623,9 @@ exports.calculateSettlementPreview = async (req, res) => {
         noticePeriodDays: Number(noticePeriodDays),
         noticeServedDays: Number(noticeServedDays),
         noticeShortfallDays: shortfallDays,
+        calculatedNoticeShortfall,
         noticeShortfallAmount,
+        waiveNoticeShortfall: !!waiveNoticeShortfall,
         advanceRecovery,
         assetDamage: Number(assetDamage),
         professionalTax,
@@ -1625,6 +1634,8 @@ exports.calculateSettlementPreview = async (req, res) => {
         otherDeductionRemark,
         totalDeductions
       },
+      isRecoverable,
+      netType,
       netSettlementAmount,
       netSettlementInWords: numberToWords(netSettlementAmount)
     });
@@ -1642,9 +1653,13 @@ exports.finalizeSettlement = async (req, res) => {
       exitReason,
       noticePeriodDays,
       noticeServedDays,
+      waiveNoticeShortfall,
+      personalEmail,
+      personalPhone,
       payable,
       deductions,
       netSettlementAmount,
+      netType,
       clearances
     } = req.body;
 
@@ -1670,8 +1685,12 @@ exports.finalizeSettlement = async (req, res) => {
         noticePeriodDays: Number(noticePeriodDays) || 30,
         noticeServedDays: Number(noticeServedDays) || 30,
         noticeShortfallDays: Math.max(0, (Number(noticePeriodDays) || 30) - (Number(noticeServedDays) || 30)),
+        waiveNoticeShortfall: !!waiveNoticeShortfall,
+        personalEmail: personalEmail || '',
+        personalPhone: personalPhone || '',
         payable,
         deductions,
+        netType: netType || (Number(payable?.totalPayable || 0) < Number(deductions?.totalDeductions || 0) ? 'RECOVERABLE' : 'PAYABLE'),
         netSettlementAmount: Number(netSettlementAmount) || 0,
         netSettlementInWords: numberToWords(Number(netSettlementAmount) || 0),
         status: 'APPROVED',
@@ -1684,8 +1703,12 @@ exports.finalizeSettlement = async (req, res) => {
       settlement.resignationDate = resignationDate ? new Date(resignationDate) : settlement.resignationDate;
       settlement.lastWorkingDay = lastWorkingDay ? new Date(lastWorkingDay) : settlement.lastWorkingDay;
       settlement.exitReason = exitReason || settlement.exitReason;
+      settlement.waiveNoticeShortfall = !!waiveNoticeShortfall;
+      if (personalEmail) settlement.personalEmail = personalEmail;
+      if (personalPhone) settlement.personalPhone = personalPhone;
       settlement.payable = payable;
       settlement.deductions = deductions;
+      settlement.netType = netType || (Number(payable?.totalPayable || 0) < Number(deductions?.totalDeductions || 0) ? 'RECOVERABLE' : 'PAYABLE');
       settlement.netSettlementAmount = Number(netSettlementAmount) || 0;
       settlement.netSettlementInWords = numberToWords(Number(netSettlementAmount) || 0);
       settlement.status = 'APPROVED';
@@ -1729,6 +1752,82 @@ exports.finalizeSettlement = async (req, res) => {
       success: true,
       message: `Full-and-Final Settlement generated and approved for ${user.name}. Account marked Former Staff.`,
       settlement
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ─── 16b. Rehire Exited Employee (Zoho Payroll Parity) ───────────────────
+exports.rehireEmployee = async (req, res) => {
+  try {
+    const { id } = req.params; // profileId or userId
+    const { rehireDate, newGrossSalary, designation, department, notes } = req.body;
+
+    let profile = await EmployeePayrollProfile.findById(id).populate('user');
+    if (!profile) {
+      profile = await EmployeePayrollProfile.findOne({ user: id }).populate('user');
+    }
+    if (!profile) return res.status(404).json({ message: 'Employee payroll profile not found' });
+
+    const user = await User.findById(profile.user?._id || profile.user);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const oldJoiningDate = user.joinedDate;
+    const oldLWD = profile.exitDetails?.lastWorkingDay || user.lastWorkingDay;
+    const oldExitReason = profile.exitDetails?.exitReason || 'Exited';
+    const oldSettlementId = profile.exitDetails?.settlementId;
+    const oldGross = profile.grossSalary || 0;
+
+    // Archive past tenure into permanent employmentHistory
+    if (!profile.employmentHistory) profile.employmentHistory = [];
+    profile.employmentHistory.push({
+      joiningDate: oldJoiningDate,
+      lastWorkingDay: oldLWD,
+      exitReason: oldExitReason,
+      settlementId: oldSettlementId,
+      lastGrossSalary: oldGross,
+      rehireDate: rehireDate ? new Date(rehireDate) : new Date(),
+      notes: notes || 'Employee rehired into active service'
+    });
+
+    const parsedGross = Number(newGrossSalary) || oldGross || 25000;
+    profile.status = 'active';
+    profile.grossSalary = parsedGross;
+    profile.annualCTC = parsedGross * 12;
+    profile.exitDetails = {
+      isExited: false,
+      exitStatus: 'active',
+      resignationDate: null,
+      lastWorkingDay: null,
+      exitReason: '',
+      settlementId: null
+    };
+
+    // Record revision timeline
+    profile.revisions.push({
+      effectiveDate: rehireDate ? new Date(rehireDate) : new Date(),
+      grossSalary: parsedGross,
+      annualCTC: parsedGross * 12,
+      reason: `Rehired: ${notes || 'Reinstated back into service'}`,
+      revisedBy: req.user?._id
+    });
+
+    await profile.save();
+
+    // Re-activate User account
+    user.status = 'Active';
+    user.employmentStatus = 'Permanent';
+    if (designation) user.role = designation;
+    user.joinedDate = rehireDate ? new Date(rehireDate) : new Date();
+    user.lastWorkingDay = null;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: `Employee ${user.name} successfully rehired with monthly gross ₹${parsedGross.toLocaleString('en-IN')}`,
+      profile,
+      user
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

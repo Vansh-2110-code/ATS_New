@@ -4,7 +4,7 @@ import {
   Users, Search, Edit3, ArrowLeft, Building2, CheckCircle2,
   XCircle, Filter, Loader2, Save, CreditCard, ShieldCheck,
   TrendingUp, History, PlusCircle, Calendar, DollarSign, X, Check,
-  Clock, ArrowUpRight, Award, Receipt
+  Clock, ArrowUpRight, Award, Receipt, UserMinus, RefreshCw, FileText, UserCheck
 } from 'lucide-react';
 import api from '../../services/api';
 
@@ -49,6 +49,39 @@ export function EmployeePayrollPage() {
     notes: 'Advance for personal emergency'
   });
   const [submittingAdvance, setSubmittingAdvance] = useState(false);
+
+  // Initiate Exit Modal (Zoho Parity)
+  const [exitModalOpen, setExitModalOpen] = useState(false);
+  const [exitProfile, setExitProfile] = useState<any>(null);
+  const [exitForm, setExitForm] = useState({
+    resignationDate: new Date().toISOString().split('T')[0],
+    lastWorkingDay: '',
+    noticePeriodDays: 30,
+    exitReason: 'Career Growth / Better Opportunity',
+    personalEmail: '',
+    personalPhone: '',
+  });
+  const [initiatingExit, setInitiatingExit] = useState(false);
+
+  // Rehire Employee Modal (Zoho Parity)
+  const [rehireModalOpen, setRehireModalOpen] = useState(false);
+  const [rehireProfile, setRehireProfile] = useState<any>(null);
+  const [rehireForm, setRehireForm] = useState({
+    rehireDate: new Date().toISOString().split('T')[0],
+    newGrossSalary: 0,
+    designation: '',
+    department: '',
+    notes: 'Employee reinstated back into active service'
+  });
+  const [rehiring, setRehiring] = useState(false);
+
+  useEffect(() => {
+    if (exitForm.resignationDate && exitForm.noticePeriodDays) {
+      const d = new Date(exitForm.resignationDate);
+      d.setDate(d.getDate() + Number(exitForm.noticePeriodDays));
+      setExitForm(prev => ({ ...prev, lastWorkingDay: d.toISOString().split('T')[0] }));
+    }
+  }, [exitForm.resignationDate, exitForm.noticePeriodDays]);
 
   useEffect(() => {
     loadCompanies();
@@ -95,6 +128,78 @@ export function EmployeePayrollPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenExitModal = (p: any) => {
+    setExitProfile(p);
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    setExitForm({
+      resignationDate: new Date().toISOString().split('T')[0],
+      lastWorkingDay: d.toISOString().split('T')[0],
+      noticePeriodDays: 30,
+      exitReason: 'Career Growth / Better Opportunity',
+      personalEmail: p.user?.email || '',
+      personalPhone: p.user?.phone || '',
+    });
+    setExitModalOpen(true);
+  };
+
+  const handleInitiateExitSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!exitProfile) return;
+    try {
+      setInitiatingExit(true);
+      await api.initiateResignation({
+        userId: exitProfile.user?._id || exitProfile.user,
+        resignationDate: exitForm.resignationDate,
+        lastWorkingDay: exitForm.lastWorkingDay,
+        noticePeriodDays: exitForm.noticePeriodDays,
+        exitReason: exitForm.exitReason,
+      });
+      alert(`Exit initiated for ${exitProfile.user?.name}. Account placed on Notice Period.`);
+      setExitModalOpen(false);
+      loadProfiles();
+    } catch (err: any) {
+      alert(`Failed to initiate exit: ${err.message}`);
+    } finally {
+      setInitiatingExit(false);
+    }
+  };
+
+  const handleOpenFullCalculator = () => {
+    if (!exitProfile) return;
+    const uid = exitProfile.user?._id || exitProfile.user;
+    navigate(`/payroll/settlement?tab=initiate&userId=${uid}`);
+  };
+
+  const handleOpenRehireModal = (p: any) => {
+    setRehireProfile(p);
+    setRehireForm({
+      rehireDate: new Date().toISOString().split('T')[0],
+      newGrossSalary: p.grossSalary || 25000,
+      designation: p.user?.role || 'Staff',
+      department: p.user?.department || 'Recruitment & Operations',
+      notes: 'Employee reinstated back into active employment'
+    });
+    setRehireModalOpen(true);
+  };
+
+  const handleRehireSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rehireProfile) return;
+    try {
+      setRehiring(true);
+      await api.rehirePayrollEmployee(rehireProfile._id, rehireForm);
+      alert(`Employee ${rehireProfile.user?.name} has been successfully rehired! Past tenure records preserved in financial history.`);
+      setRehireModalOpen(false);
+      setEmploymentTab('active');
+      loadProfiles();
+    } catch (err: any) {
+      alert(`Failed to rehire employee: ${err.message}`);
+    } finally {
+      setRehiring(false);
     }
   };
 
@@ -440,6 +545,37 @@ export function EmployeePayrollPage() {
                           >
                             <Edit3 className="w-4 h-4" />
                           </button>
+
+                          {/* Zoho Parity: Initiate Exit Process (Active Employees) */}
+                          {employmentTab === 'active' && (
+                            <button
+                              onClick={() => handleOpenExitModal(p)}
+                              className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-500 hover:text-rose-600 transition-colors"
+                              title="Initiate Exit Process (Zoho Parity)"
+                            >
+                              <UserMinus className="w-4 h-4 text-rose-500" />
+                            </button>
+                          )}
+
+                          {/* Zoho Parity: Rehire Employee & View Settlement (Exited Staff) */}
+                          {employmentTab === 'exited' && (
+                            <>
+                              <button
+                                onClick={() => handleOpenRehireModal(p)}
+                                className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                                title="Rehire Employee"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" /> Rehire
+                              </button>
+                              <button
+                                onClick={() => navigate('/payroll/settlement')}
+                                className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                                title="View F&F Settlement"
+                              >
+                                <FileText className="w-3.5 h-3.5" /> F&F
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -995,6 +1131,241 @@ export function EmployeePayrollPage() {
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: INITIATE EXIT PROCESS (ZOHO PARITY) */}
+      {exitModalOpen && exitProfile && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-rose-50 text-rose-600 rounded-xl">
+                  <UserMinus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Initiate Exit Process</h3>
+                  <p className="text-xs text-slate-500">{exitProfile.user?.name} ({exitProfile.user?.employeeId || 'WH-STAFF'})</p>
+                </div>
+              </div>
+              <button onClick={() => setExitModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleInitiateExitSubmit} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Designation</span>
+                  <span className="font-bold text-slate-800 text-xs">{exitProfile.user?.role || 'Staff'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[10px] uppercase font-semibold">Current Gross CTC</span>
+                  <span className="font-bold font-mono text-emerald-700 text-xs">₹{(exitProfile.grossSalary || 0).toLocaleString('en-IN')}/mo</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Resignation Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={exitForm.resignationDate}
+                    onChange={(e) => setExitForm({ ...exitForm, resignationDate: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Notice Required (Days)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={exitForm.noticePeriodDays}
+                    onChange={(e) => setExitForm({ ...exitForm, noticePeriodDays: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Agreed Last Working Day (LWD) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={exitForm.lastWorkingDay}
+                  onChange={(e) => setExitForm({ ...exitForm, lastWorkingDay: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl font-semibold text-rose-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Primary Reason for Leaving
+                </label>
+                <select
+                  value={exitForm.exitReason}
+                  onChange={(e) => setExitForm({ ...exitForm, exitReason: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                >
+                  <option value="Career Growth / Better Opportunity">Career Growth / Better Opportunity</option>
+                  <option value="Personal / Family Reasons">Personal / Family Reasons</option>
+                  <option value="Relocation">Relocation</option>
+                  <option value="Higher Studies">Higher Studies</option>
+                  <option value="Health / Medical Issues">Health / Medical Issues</option>
+                  <option value="Mutual Separation">Mutual Separation</option>
+                  <option value="Performance / Involuntary Termination">Performance / Involuntary Termination</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={handleOpenFullCalculator}
+                  className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold rounded-xl flex items-center gap-1.5 transition-colors text-xs"
+                >
+                  <FileText className="w-4 h-4" /> Open Full F&F Calculator
+                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setExitModalOpen(false)}
+                    className="px-3 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={initiatingExit}
+                    className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl shadow-sm text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                  >
+                    {initiatingExit ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserMinus className="w-4 h-4" />}
+                    Confirm Resignation
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: REHIRE EMPLOYEE WORKFLOW (ZOHO PARITY) */}
+      {rehireModalOpen && rehireProfile && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Rehire Former Employee</h3>
+                  <p className="text-xs text-slate-500">{rehireProfile.user?.name} ({rehireProfile.user?.employeeId || 'WH-STAFF'})</p>
+                </div>
+              </div>
+              <button onClick={() => setRehireModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRehireSubmit} className="space-y-4 text-xs">
+              <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200 text-emerald-900 leading-relaxed text-[11px]">
+                <strong>Zoho Rehire Policy:</strong> Reactivating this profile will restore active employee status, set a new tenure start date, and create a fresh compensation structure. All past settlement records, payslips, and lifetime financial ledgers remain 100% permanently preserved.
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Rehire / Effective Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={rehireForm.rehireDate}
+                    onChange={(e) => setRehireForm({ ...rehireForm, rehireDate: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    New Monthly Gross (₹) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="1000"
+                    value={rehireForm.newGrossSalary}
+                    onChange={(e) => setRehireForm({ ...rehireForm, newGrossSalary: Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl font-bold font-mono text-emerald-700"
+                  />
+                  <span className="text-[10px] text-slate-500">Annual CTC: ₹{(Number(rehireForm.newGrossSalary) * 12).toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Designation / Role
+                  </label>
+                  <input
+                    type="text"
+                    value={rehireForm.designation}
+                    onChange={(e) => setRehireForm({ ...rehireForm, designation: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Department
+                  </label>
+                  <input
+                    type="text"
+                    value={rehireForm.department}
+                    onChange={(e) => setRehireForm({ ...rehireForm, department: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Rehire Notes / Justification
+                </label>
+                <textarea
+                  rows={2}
+                  value={rehireForm.notes}
+                  onChange={(e) => setRehireForm({ ...rehireForm, notes: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl"
+                  placeholder="e.g. Employee returned to organization in senior capacity"
+                />
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRehireModalOpen(false)}
+                  className="px-3.5 py-2 text-slate-600 hover:bg-slate-100 rounded-xl font-medium text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={rehiring}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-sm text-xs flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                >
+                  {rehiring ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
+                  Confirm Rehire & Activate Profile
                 </button>
               </div>
             </form>

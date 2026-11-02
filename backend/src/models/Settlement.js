@@ -17,6 +17,9 @@ const settlementSchema = new mongoose.Schema({
   noticePeriodDays: { type: Number, default: 30 },
   noticeServedDays: { type: Number, default: 30 },
   noticeShortfallDays: { type: Number, default: 0 },
+  waiveNoticeShortfall: { type: Boolean, default: false },
+  personalEmail: { type: String, trim: true },
+  personalPhone: { type: String, trim: true },
   
   payable: {
     unpaidSalaryDays: { type: Number, default: 0 },
@@ -45,6 +48,7 @@ const settlementSchema = new mongoose.Schema({
   },
   
   netSettlementAmount: { type: Number, default: 0 },
+  netType: { type: String, enum: ['PAYABLE', 'RECOVERABLE'], default: 'PAYABLE' },
   netSettlementInWords: { type: String, trim: true },
   
   status: {

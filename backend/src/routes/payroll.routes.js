@@ -28,6 +28,7 @@ router.get('/employees', auth, ctrl.getEmployeeProfiles);
 router.put('/employees/:id', auth, ctrl.updateEmployeeProfile);
 router.get('/employees/:id/history', auth, ctrl.getEmployeeFinancialHistory);
 router.post('/employees/:id/revision', auth, ctrl.addSalaryRevision);
+router.post('/employees/:id/rehire', auth, ctrl.rehireEmployee);
 router.post('/employees/:id/advance', auth, ctrl.addAdvanceOrRecovery);
 router.post('/employees/:id/reimbursement', auth, ctrl.claimReimbursement);
 router.put('/employees/:id/reimbursement/:reimbursementId', auth, ctrl.updateReimbursementStatus);
