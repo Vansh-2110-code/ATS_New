@@ -696,12 +696,14 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Import button */}
-          <button
-            onClick={() => { setShowImportModal(true); setImportResult(null); setImportError(''); }}
-            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-50 transition-colors"
-            style={{ fontWeight: 500 }}>
-            <Upload className="w-4 h-4" /> Import
-          </button>
+          {user?.role !== 'view_only_admin' && (
+            <button
+              onClick={() => { setShowImportModal(true); setImportResult(null); setImportError(''); }}
+              className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-50 transition-colors"
+              style={{ fontWeight: 500 }}>
+              <Upload className="w-4 h-4" /> Import
+            </button>
+          )}
 
           {/* Export dropdown */}
           {isAdmin && (
@@ -764,12 +766,14 @@ export function ResumeListPage({ lockedStatus }: { lockedStatus?: string }) {
             </div>
           )}
 
-          <Link
-            to="/recruiter/add"
-            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
-            style={{ fontWeight: 600 }}>
-            <UserPlus className="w-4 h-4" /> Add Candidate
-          </Link>
+          {user?.role !== 'view_only_admin' && (
+            <Link
+              to="/recruiter/add"
+              className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+              style={{ fontWeight: 600 }}>
+              <UserPlus className="w-4 h-4" /> Add Candidate
+            </Link>
+          )}
         </div>
       </div>
 

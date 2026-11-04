@@ -43,7 +43,7 @@ export function CandidateDatabasePage() {
 
   // Role-based access: Only Admin and Manager can view candidate database
   useEffect(() => {
-    if (user && !['admin', 'manager'].includes(user.role)) {
+    if (user && !['admin', 'manager', 'view_only_admin'].includes(user.role)) {
       navigate('/recruiter');
     }
   }, [user, navigate]);
@@ -236,11 +236,16 @@ export function CandidateDatabasePage() {
                 {exporting ? 'Exporting...' : 'Export Candidates'}
               </button>
             )}
-            <button onClick={() => navigate('/recruiter/add')}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-xl transition-colors"
-              style={{ fontWeight: 500 }}>
-              + Add Candidate
-            </button>
+            )}
+            {user?.role !== 'view_only_admin' && (
+            {user?.role !== 'view_only_admin' && (
+              <button onClick={() => navigate('/recruiter/add')}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-2 rounded-xl transition-colors"
+                style={{ fontWeight: 500 }}>
+                + Add Candidate
+              </button>
+            )}
+            )}
           </div>
         </div>
 
@@ -313,6 +318,7 @@ export function CandidateDatabasePage() {
             <button onClick={clearFilters} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-red-500 px-3 py-2 rounded-xl hover:bg-red-50 transition-colors">
               <X className="w-3.5 h-3.5" /> Clear
             </button>
+            )}
           )}
           <button onClick={fetchCandidates} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-colors">
             <RefreshCw className="w-4 h-4" />
@@ -330,6 +336,7 @@ export function CandidateDatabasePage() {
             <button onClick={() => setSourceFilter('')} className="text-slate-400 hover:text-red-500">
               <X className="w-3.5 h-3.5" />
             </button>
+            )}
           </div>
         )}
 
@@ -541,12 +548,14 @@ export function CandidateDatabasePage() {
                               title="View Details">
                               <ExternalLink className="w-3.5 h-3.5" />
                             </button>
+            )}
                             {c.phone && (
                               <button onClick={() => setWaCandidate(c)}
                                 className="text-slate-300 hover:text-emerald-600 p-1 rounded-lg hover:bg-emerald-50 transition-colors"
                                 title="WhatsApp Candidate">
                                 <MessageSquare className="w-3.5 h-3.5" />
                               </button>
+            )}
                             )}
                           </div>
                         </td>
@@ -569,17 +578,19 @@ export function CandidateDatabasePage() {
                   className="p-1.5 rounded-lg disabled:opacity-30 hover:bg-slate-100 text-slate-600 transition-colors">
                   <ChevronLeft className="w-4 h-4" />
                 </button>
+            )}
                 <button disabled={page >= pagination.pages} onClick={() => setPage(p => p + 1)}
                   className="p-1.5 rounded-lg disabled:opacity-30 hover:bg-slate-100 text-slate-600 transition-colors">
                   <ChevronRight className="w-4 h-4" />
                 </button>
+            )}
               </div>
             </div>
           )}
         </div>
 
       {/* ── Floating Bulk Actions Panel ── */}
-      {selectedIds.length > 0 && (
+      {selectedIds.length > 0 && user?.role !== 'view_only_admin' && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 z-40 border border-slate-800 animate-in fade-in slide-in-from-bottom-4 duration-300">
           <div className="text-sm font-medium">
             <span className="text-green-400 font-bold mr-1">{selectedIds.length}</span> candidates selected
@@ -595,12 +606,14 @@ export function CandidateDatabasePage() {
             >
               <Mail className="w-3.5 h-3.5" /> Send Bulk Email
             </button>
+            )}
             <button
               onClick={() => setSelectedIds([])}
               className="text-slate-400 hover:text-white text-xs font-semibold px-3 py-2 transition-colors"
             >
               Clear
             </button>
+            )}
           </div>
         </div>
       )}
@@ -617,6 +630,7 @@ export function CandidateDatabasePage() {
               <button onClick={() => setEmailModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg">
                 <X className="w-4 h-4" />
               </button>
+            )}
             </div>
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
               <p className="text-slate-500 text-xs">Sending to {selectedIds.length} selected candidate(s). You can use `{'{name}'}` to personalize the email body.</p>
@@ -649,6 +663,7 @@ export function CandidateDatabasePage() {
               >
                 Cancel
               </button>
+            )}
               <button
                 disabled={emailSending || !emailSubject.trim() || !emailBody.trim()}
                 onClick={handleSendBulkEmail}
@@ -656,6 +671,7 @@ export function CandidateDatabasePage() {
               >
                 {emailSending ? 'Sending...' : 'Send Emails'}
               </button>
+            )}
             </div>
           </div>
         </div>
@@ -673,6 +689,7 @@ export function CandidateDatabasePage() {
               <button onClick={() => setWaCandidate(null)} className="text-slate-400 hover:text-slate-600 p-1.5 hover:bg-slate-100 rounded-lg">
                 <X className="w-4 h-4" />
               </button>
+            )}
             </div>
             <div className="p-6 space-y-4">
               <div>
@@ -704,6 +721,7 @@ export function CandidateDatabasePage() {
               >
                 Cancel
               </button>
+            )}
               <button
                 onClick={() => {
                   const url = `https://wa.me/91${waCandidate.phone}?text=${encodeURIComponent(waCustomText)}`;
@@ -714,6 +732,7 @@ export function CandidateDatabasePage() {
               >
                 Open WhatsApp
               </button>
+            )}
             </div>
           </div>
         </div>

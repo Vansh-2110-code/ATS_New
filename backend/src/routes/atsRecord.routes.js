@@ -5,16 +5,16 @@ const { auth, authorize } = require('../middleware/auth.middleware');
 router.use(auth);
 
 // All authenticated roles can list (filtered by RBAC inside controller)
-router.get('/',          authorize('admin', 'manager', 'tl', 'recruiter'), ctrl.list);
+router.get('/',          authorize('admin', 'manager', 'tl', 'recruiter', 'view_only_admin'), ctrl.list);
 
 // Export — admin only
 router.get('/export',    authorize('admin'), ctrl.exportExcel);
 
 // Single record
-router.get('/:id',       authorize('admin', 'manager', 'tl', 'recruiter'), ctrl.getOne);
+router.get('/:id',       authorize('admin', 'manager', 'tl', 'recruiter', 'view_only_admin'), ctrl.getOne);
 
 // Download Resume
-router.get('/:id/resume', authorize('admin', 'manager', 'tl', 'recruiter', 'spoc'), ctrl.downloadResume);
+router.get('/:id/resume', authorize('admin', 'manager', 'tl', 'recruiter', 'spoc', 'view_only_admin'), ctrl.downloadResume);
 
 // Update any field of the record
 router.patch('/:id', authorize('admin', 'manager', 'tl', 'recruiter'), ctrl.updateRecord);

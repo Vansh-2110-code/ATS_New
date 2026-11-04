@@ -5,9 +5,9 @@ const { uploadJD, uploadImport, uploadBulkZip } = require('../middleware/upload.
 
 router.use(auth);
 
-router.get('/companies', authorize('admin', 'manager', 'tl'), ctrl.companies);
-router.get('/hr-contacts', authorize('admin', 'tl'), ctrl.getHRContacts);
-router.get('/:id/candidates', authorize('admin', 'manager', 'tl'), ctrl.candidatesForJob);
+router.get('/companies', authorize('admin', 'manager', 'tl', 'view_only_admin'), ctrl.companies);
+router.get('/hr-contacts', authorize('admin', 'tl', 'view_only_admin'), ctrl.getHRContacts);
+router.get('/:id/candidates', authorize('admin', 'manager', 'tl', 'view_only_admin'), ctrl.candidatesForJob);
 router.get('/', ctrl.list);
 
 // Bulk routes — must be before /:id

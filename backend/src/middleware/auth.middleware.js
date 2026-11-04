@@ -40,6 +40,30 @@ const auth = async (req, res, next) => {
     req.user = user;
     req.userId = user._id;
 
+    // Strict RBAC Enforcement for View-Only Admin
+    if (user.role === 'view_only_admin') {
+      const isWriteMethod = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+      const isAllowedWrite = req.path.startsWith('/auth/logout') || req.path.startsWith('/notifications/read');
+      if (isWriteMethod && !isAllowedWrite) {
+        return res.status(403).json({
+          message: 'Action prohibited: View-Only Admin is not permitted to create, edit, update, or delete records.'
+        });
+      }
+
+      // Prohibit restricted financial, payroll, and administrative config modules
+      const forbiddenSubstrings = [
+        '/payroll', '/salary', '/finance', '/revenue',
+        '/invoices', '/proformas', '/credit-notes',
+        '/field-config', '/access-control', '/excel-import'
+      ];
+      const targetUrl = (req.baseUrl || '') + (req.path || '');
+      if (forbiddenSubstrings.some(fb => targetUrl.toLowerCase().includes(fb))) {
+        return res.status(403).json({
+          message: 'Access Denied: View-Only Admin does not have access to financial, payroll, or system configuration modules.'
+        });
+      }
+    }
+
     // Run demo sandbox protection if demo account is active
     if (user.isDemoAccount) {
       const demoProtection = require('./demoProtection.middleware');
@@ -62,7 +86,8 @@ const ROLE_INHERITANCE = {
   tl: ['tl', 'recruiter', 'spoc'],
   recruiter: ['recruiter'],
   spoc: ['spoc'],
-  walkin: ['walkin']
+  walkin: ['walkin'],
+  view_only_admin: ['view_only_admin']
 };
 
 const authorize = (...roles) => {

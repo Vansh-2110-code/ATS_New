@@ -4,7 +4,7 @@ import { UserPlus, Search, Edit3, Trash2, CheckCircle2, X, Shield, Wifi, Monitor
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
-type Role = 'superadmin' | 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin' | 'bd' | 'business_developer' | 'mis' | 'data_entry';
+type Role = 'superadmin' | 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin' | 'bd' | 'business_developer' | 'mis' | 'data_entry' | 'view_only_admin';
 
 interface SystemUser {
   id: string;
@@ -54,6 +54,9 @@ const ROLE_COLORS: Record<Role, string> = {
   demo_walkin: 'bg-indigo-100 text-indigo-700',
   bd: 'bg-cyan-100 text-cyan-700',
   business_developer: 'bg-cyan-100 text-cyan-700',
+  mis: 'bg-teal-100 text-teal-800',
+  data_entry: 'bg-indigo-100 text-indigo-800',
+  view_only_admin: 'bg-slate-200 text-slate-800 font-semibold border border-slate-300',
 };
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -67,6 +70,9 @@ const ROLE_LABELS: Record<Role, string> = {
   demo_walkin: 'Demo Walk-In',
   bd: 'Business Developer',
   business_developer: 'Business Developer',
+  mis: 'MIS / Sourcing',
+  data_entry: 'Data Entry',
+  view_only_admin: 'View-Only Admin',
 };
 
 interface AddUserForm {
@@ -97,6 +103,7 @@ function generateEID(fullName: string, role: Role): string {
 }
 
 export function UserManagementPage() {
+  const { user: currentUser } = useAuth();
   const { user: currentAuthUser } = useAuth();
   const isCurrentUserSuperAdmin = currentAuthUser?.isSuperAdmin === true ||
     currentAuthUser?.role === 'superadmin' ||
@@ -412,26 +419,28 @@ const getHighestRole = (roles: Role[]): Role => {
           <h1 className="text-slate-800" style={{ fontWeight: 700, fontSize: '1.4rem' }}>User Management</h1>
           <p className="text-slate-500 text-sm mt-0.5">Add, edit, and manage system user accounts</p>
         </div>
-        <div className="flex items-center gap-2">
-          {users.length - activeCount > 0 && (
+        {currentUser?.role !== 'view_only_admin' && (
+          <div className="flex items-center gap-2">
+            {users.length - activeCount > 0 && (
+              <button
+                onClick={handleActivateAllSuspended}
+                disabled={activatingAll}
+                className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-xl transition-all shadow-sm font-semibold disabled:opacity-50"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                {activatingAll ? 'Activating...' : `Activate All Suspended (${users.length - activeCount})`}
+              </button>
+            )}
             <button
-              onClick={handleActivateAllSuspended}
-              disabled={activatingAll}
-              className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white text-sm rounded-xl transition-all shadow-sm font-semibold disabled:opacity-50"
+              onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700 transition-colors"
+              style={{ fontWeight: 600 }}
             >
-              <CheckCircle2 className="w-4 h-4" />
-              {activatingAll ? 'Activating...' : `Activate All Suspended (${users.length - activeCount})`}
+              <UserPlus className="w-4 h-4" />
+              Add User
             </button>
-          )}
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700 transition-colors"
-            style={{ fontWeight: 600 }}
-          >
-            <UserPlus className="w-4 h-4" />
-            Add User
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Summary */}
@@ -585,21 +594,25 @@ const getHighestRole = (roles: Role[]): Role => {
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        onClick={() => {
-                          setResetPassUser(user);
-                        }}
-                        className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md"
-                        title="Reset Password"
-                      >
-                        <Key className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => handleEdit(user)}
-                        className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-md"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
+                      {currentUser?.role !== 'view_only_admin' && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setResetPassUser(user);
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-md"
+                            title="Reset Password"
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleEdit(user)}
+                            className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-md"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                       {user.status !== 'Former Employee' && user.id !== 'WH000001' && user.email !== 'admin@whitehorsemanpower.in' && (
                         <button
                           onClick={() => handleOpenExitModal(user)}
@@ -826,6 +839,7 @@ const getHighestRole = (roles: Role[]): Role => {
                     { val: 'tl', label: 'Team Lead' },
                     { val: 'manager', label: 'Manager' },
                     { val: 'admin', label: 'Admin' },
+                    { val: 'view_only_admin', label: 'View-Only Admin' },
                     { val: 'spoc', label: 'SPOC' },
                     { val: 'walkin', label: 'Walk-In' },
                     { val: 'bd', label: 'Business Developer' }

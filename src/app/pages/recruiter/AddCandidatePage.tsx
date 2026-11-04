@@ -272,10 +272,17 @@ const EMPTY_FORM = {
 };
 
 export function AddCandidatePage() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const candidateId = searchParams.get('id') || '';
-  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user?.role === 'view_only_admin') {
+      navigate(candidateId ? `/recruiter/candidate/${candidateId}` : '/recruiter/resumes', { replace: true });
+    }
+  }, [user, candidateId, navigate]);
+
   const isAdmin = user?.role === 'admin';
   const isRecruiter = user?.role === 'recruiter';
   const isTLOrAdmin = user?.role === 'tl' || user?.role === 'admin' || user?.role === 'manager';

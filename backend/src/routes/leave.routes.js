@@ -10,9 +10,9 @@ router.post('/apply', ctrl.apply);
 router.get('/my', ctrl.getMyRequests);
 
 // TL / Manager / Admin review routes
-router.get('/pending', authorize('tl', 'manager', 'admin'), ctrl.getPendingRequests);
+router.get('/pending', authorize('tl', 'manager', 'admin', 'view_only_admin'), ctrl.getPendingRequests);
 router.post('/:id/review', authorize('tl', 'manager', 'admin'), ctrl.reviewRequest);
 router.post('/deduct-absent', authorize('tl', 'manager', 'admin'), ctrl.deductPaidLeaveForAbsence);
-router.get('/all', authorize('manager', 'admin'), ctrl.getAllRequests);
+router.get('/all', authorize('manager', 'admin', 'view_only_admin'), ctrl.getAllRequests);
 
 module.exports = router;

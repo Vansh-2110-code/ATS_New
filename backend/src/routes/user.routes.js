@@ -7,7 +7,7 @@ router.post('/reset-all-faces', ctrl.resetAllFaces);
 router.use(auth);
 
 router.post('/register-face', ctrl.registerFace);
-router.get('/', authorize('admin', 'tl', 'manager'), ctrl.list);
+router.get('/', authorize('admin', 'tl', 'manager', 'view_only_admin'), ctrl.list);
 router.get('/recruiters', ctrl.getRecruiters);
 router.post('/', authorize('admin'), ctrl.create);
 router.put('/:id', authorize('admin'), ctrl.update);

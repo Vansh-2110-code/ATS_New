@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import api from '../services/api';
 
-export type Role = 'superadmin' | 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin' | 'bd' | 'business_developer' | 'mis' | 'data_entry';
+export type Role = 'superadmin' | 'recruiter' | 'tl' | 'manager' | 'admin' | 'spoc' | 'walkin' | 'demo_walkin' | 'bd' | 'business_developer' | 'mis' | 'data_entry' | 'view_only_admin';
 
 export interface AuthUser {
   id: string;
@@ -144,4 +144,5 @@ export const ROLE_DASHBOARD: Record<Role, string> = {
   business_developer: '/admin',
   mis: '/mis',
   data_entry: '/mis',
+  view_only_admin: '/admin',
 };

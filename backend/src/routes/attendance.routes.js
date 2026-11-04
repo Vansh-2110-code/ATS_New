@@ -11,8 +11,8 @@ router.get('/summary', ctrl.summary);
 router.get('/holidays', ctrl.getHolidays);
 router.post('/holidays', authorize('admin'), ctrl.addHoliday);
 router.get('/leave-balance', ctrl.getLeaveBalance);
-router.get('/tl-activity', authorize('admin', 'manager'), ctrl.tlActivity);
-router.get('/employee/:userId', authorize('admin', 'manager'), ctrl.employeeDetail);
+router.get('/tl-activity', authorize('admin', 'manager', 'view_only_admin'), ctrl.tlActivity);
+router.get('/employee/:userId', authorize('admin', 'manager', 'view_only_admin'), ctrl.employeeDetail);
 router.get('/export/excel', authorize('admin'), ctrl.exportExcel);
 
 module.exports = router;

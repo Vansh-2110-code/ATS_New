@@ -4,7 +4,7 @@ const { auth, authorize } = require('../middleware/auth.middleware');
 
 router.use(auth);
 
-router.get('/team-summary', authorize('admin', 'manager'), ctrl.teamSummary);
+router.get('/team-summary', authorize('admin', 'manager', 'view_only_admin'), ctrl.teamSummary);
 router.get('/for-candidate/:candidateId', ctrl.forCandidate);
 router.get('/', ctrl.list);
 router.post('/', authorize('admin', 'tl'), ctrl.create);

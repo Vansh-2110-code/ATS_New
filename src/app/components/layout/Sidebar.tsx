@@ -69,7 +69,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Eligible Tracker', href: '/manager/eligible-tracker', icon: ClipboardCheck, roles: ['manager'], category: 'Manager' },
   { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['manager'], category: 'Manager' },
   { label: 'Bulk Job Post',    href: '/recruiter/jobs/bulk',     icon: LayoutGrid,       roles: ['manager'], category: 'Manager' },
-  { label: 'Reports',          href: '/manager/reports',         icon: BarChart2,        roles: ['manager'], category: 'Manager' },
+  { label: 'Reports',          href: '/manager/reports',         icon: BarChart2,        roles: ['manager', 'view_only_admin'], category: 'Manager' },
   { label: 'Revenue',          href: '/revenue',                 icon: TrendingUp,       roles: ['manager'], category: 'Manager' },
   { label: 'Salary',           href: '/salary',                  icon: DollarSign,       roles: ['manager'], category: 'Manager' },
   { label: 'Performance Reviews', href: '/manager/performance-reviews', icon: Star, roles: ['manager'], category: 'Manager' },
@@ -78,29 +78,29 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Manager Policy & SOP', href: '/manager/policy',      icon: BookOpen,        roles: ['manager'], category: 'Manager' },
 
   // Admin
-  { label: 'Dashboard',        href: '/admin',                   icon: LayoutDashboard, roles: ['admin', 'superadmin', 'bd', 'business_developer'], category: 'Admin' },
+  { label: 'Dashboard',        href: '/admin',                   icon: LayoutDashboard, roles: ['admin', 'superadmin', 'bd', 'business_developer', 'view_only_admin'], category: 'Admin' },
   { label: 'Business Development', href: '/business-development', icon: TrendingUp, roles: ['admin', 'superadmin', 'manager', 'tl', 'recruiter', 'bd', 'business_developer'], category: 'Admin' },
-  { label: 'User Management',  href: '/admin/users',             icon: UserCog,          roles: ['admin', 'superadmin'], category: 'Admin' },
-  { label: 'Attendance',       href: '/admin/attendance',        icon: Clock,            roles: ['admin', 'superadmin'], category: 'Admin' },
+  { label: 'Employee Directory', href: '/admin/users',           icon: UserCog,          roles: ['admin', 'superadmin', 'view_only_admin'], category: 'Admin' },
+  { label: 'Attendance',       href: '/admin/attendance',        icon: Clock,            roles: ['admin', 'superadmin', 'view_only_admin'], category: 'Admin' },
   { label: 'Leave Approvals',  href: '/admin/leaves',            icon: CalendarCheck,   roles: ['admin', 'superadmin'], category: 'Admin' },
   { label: 'Access Control',   href: '/admin/access',            icon: Shield,           roles: ['admin', 'superadmin'], category: 'Admin' },
-  { label: 'Candidate DB',     href: '/admin/candidates',        icon: Database,         roles: ['admin', 'superadmin'], category: 'Admin' },
+  { label: 'Candidate DB',     href: '/admin/candidates',        icon: Database,         roles: ['admin', 'superadmin', 'view_only_admin'], category: 'Admin' },
   { label: 'Eligible Tracker', href: '/admin/eligible-tracker',  icon: ClipboardCheck,   roles: ['admin', 'superadmin'], category: 'Admin' },
-  { label: 'ATS Scan Database',href: '/admin/ats-records',       icon: ScanLine,         roles: ['admin'], category: 'Admin' },
+  { label: 'ATS Scan Database',href: '/admin/ats-records',       icon: ScanLine,         roles: ['admin', 'view_only_admin'], category: 'Admin' },
   { label: 'Excel Import',     href: '/admin/excel-import',      icon: Upload,           roles: ['admin', 'mis', 'data_entry'], category: 'Admin' },
   { label: 'MIS Sourcing Tracker', href: '/admin/mis-tracker',   icon: Users,            roles: ['admin'], category: 'Admin' },
   { label: 'Field Config',     href: '/admin/field-config',      icon: Settings,         roles: ['admin'], category: 'Admin' },
-  { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['admin'], category: 'Admin' },
+  { label: 'Job Requirements', href: '/admin/jobs',              icon: Briefcase,        roles: ['admin', 'view_only_admin'], category: 'Admin' },
   { label: 'Bulk Job Post',    href: '/recruiter/jobs/bulk',     icon: LayoutGrid,       roles: ['admin'], category: 'Admin' },
-  { label: 'Companies',        href: '/admin/companies',         icon: Building2,        roles: ['admin'], category: 'Admin' },
+  { label: 'Companies',        href: '/admin/companies',         icon: Building2,        roles: ['admin', 'view_only_admin'], category: 'Admin' },
   { label: 'Tasks',            href: '/admin/tasks',             icon: CheckSquare,      roles: ['admin', 'tl', 'recruiter', 'bd', 'business_developer'], category: 'Admin' },
   { label: 'My Joining Form', href: '/recruiter/joining', icon: FileCheck,        roles: ['admin', 'recruiter', 'tl'], category: 'Recruiter' },
   { label: 'Recruiter Records',  href: '/admin/joining',           icon: ClipboardCheck,   roles: ['admin', 'recruiter', 'tl'], category: 'Admin' },
   { label: 'Offer Letters',    href: '/admin/offer-letters',     icon: FileSignature,    roles: ['admin'], category: 'Admin' },
   { label: 'Email Center',     href: '/email',                   icon: Mail,            roles: ['admin', 'bd', 'business_developer'], category: 'Admin' },
   { label: 'Team Chat',        href: '/chat',                    icon: MessageSquare,   roles: ['admin', 'bd', 'business_developer'], category: 'Admin' },
-  { label: 'TL Login Activity',href: '/admin/tl-activity',       icon: MonitorCheck,     roles: ['admin'], category: 'Admin' },
-  { label: 'Performance Reviews', href: '/admin/performance-reviews', icon: Star, roles: ['admin'], category: 'Admin' },
+  { label: 'TL Login Activity',href: '/admin/tl-activity',       icon: MonitorCheck,     roles: ['admin', 'view_only_admin'], category: 'Admin' },
+  { label: 'Performance Reviews', href: '/admin/performance-reviews', icon: Star, roles: ['admin', 'view_only_admin'], category: 'Admin' },
   { label: 'System Logs',      href: '/admin/logs',              icon: Activity,         roles: ['admin'], category: 'Admin' },
   { label: 'Salary',           href: '/salary',                  icon: DollarSign,       roles: ['admin'], category: 'Admin' },
   { label: 'Revenue',          href: '/revenue',                 icon: TrendingUp,       roles: ['admin', 'manager', 'bd', 'business_developer'], category: 'Admin' },
@@ -119,6 +119,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const ROLE_LABELS: Record<Role, string> = {
+  superadmin: 'Super Admin',
   recruiter: 'Recruiter',
   tl: 'Team Lead',
   manager: 'Manager',
@@ -128,9 +129,13 @@ const ROLE_LABELS: Record<Role, string> = {
   demo_walkin: 'Demo Walk-In',
   bd: 'Business Developer',
   business_developer: 'Business Developer',
+  mis: 'MIS / Data Entry',
+  data_entry: 'Data Entry',
+  view_only_admin: 'View-Only Admin',
 };
 
 const ROLE_COLORS: Record<Role, string> = {
+  superadmin: 'bg-red-100 text-red-700',
   recruiter: 'bg-emerald-100 text-emerald-700',
   tl: 'bg-violet-100 text-violet-700',
   manager: 'bg-amber-100 text-amber-700',
@@ -140,6 +145,9 @@ const ROLE_COLORS: Record<Role, string> = {
   demo_walkin: 'bg-indigo-100 text-indigo-700',
   bd: 'bg-cyan-100 text-cyan-700',
   business_developer: 'bg-cyan-100 text-cyan-700',
+  mis: 'bg-blue-100 text-blue-700',
+  data_entry: 'bg-blue-100 text-blue-700',
+  view_only_admin: 'bg-slate-200 text-slate-800 border border-slate-300',
 };
 
 interface SidebarProps {
@@ -266,6 +274,7 @@ const ROLE_CATEGORIES: Record<string, string[]> = {
   data_entry: ['Recruiter', 'Admin'],
   bd: ['Admin', 'Manager', 'Team Lead', 'Recruiter'],
   business_developer: ['Admin', 'Manager', 'Team Lead', 'Recruiter'],
+  view_only_admin: ['Admin', 'Recruiter'],
 };
 
 export function Sidebar({ onClose }: SidebarProps) {

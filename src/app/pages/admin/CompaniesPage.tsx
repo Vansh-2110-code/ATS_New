@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router';
+import { useAuth } from '../../context/AuthContext';
 import {
   Building2, Briefcase, Users, RefreshCw, Search, ChevronRight, Plus, X,
   Save, Loader2, Mail, Phone, MapPin, Shield, FileText, Edit2, Trash2,
@@ -88,6 +89,8 @@ export function CompaniesPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const focusCompany = (location.state as any)?.company as string | undefined;
+  const { user } = useAuth();
+  const isViewOnlyAdmin = user?.role === 'view_only_admin';
 
   const [companies, setCompanies] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -235,11 +238,13 @@ export function CompaniesPage() {
             <p className="text-slate-500 text-sm mt-0.5">Client companies and their job requirements</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={openAdd}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700 transition-colors"
-              style={{ fontWeight: 600 }}>
-              <Plus className="w-4 h-4" /> Add Company
-            </button>
+            {!isViewOnlyAdmin && (
+              <button onClick={openAdd}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-xl hover:bg-green-700 transition-colors"
+                style={{ fontWeight: 600 }}>
+                <Plus className="w-4 h-4" /> Add Company
+              </button>
+            )}
             <button onClick={fetchCompanies} className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-xl transition-colors">
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
@@ -378,6 +383,7 @@ export function CompaniesPage() {
                         </div>
                       ))}
                     </div>
+                    {!isViewOnlyAdmin && (
                     <div className="flex items-center gap-1 ml-1">
                       <button
                         onClick={e => openEdit(c, e)}
@@ -393,6 +399,7 @@ export function CompaniesPage() {
                       </button>
                       <ChevronRight className="w-4 h-4 text-slate-300 ml-1" />
                     </div>
+                    )}
                   </div>
                 </div>
               </div>

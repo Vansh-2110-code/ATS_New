@@ -54,7 +54,7 @@ export function isTLOnlyStatus(status: string): boolean {
 }
 
 export function canUserUpdateCandidateStatus(status: string, role?: string): boolean {
-  if (!role) return false;
+  if (!role || role === 'view_only_admin') return false;
   const isTLOrAbove = ['admin', 'tl', 'manager'].includes(role);
   if (isTLOnlyStatus(status)) {
     return isTLOrAbove;

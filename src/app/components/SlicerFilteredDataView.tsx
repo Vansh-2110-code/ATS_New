@@ -255,7 +255,7 @@ export function SlicerFilteredDataView({
                     <div className="flex flex-col gap-1">
                       <select
                         value={c.status || c.firstCallStatus || ''}
-                        disabled={isUpdating}
+                        disabled={isUpdating || user?.role === 'view_only_admin'}
                         onChange={e => handleStatusChange(candId, e.target.value)}
                         className="px-2 py-1 rounded border border-slate-200 text-xs bg-white font-semibold outline-none focus:border-green-400 disabled:opacity-50 cursor-pointer"
                       >

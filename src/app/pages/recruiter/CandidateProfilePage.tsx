@@ -70,6 +70,7 @@ export function CandidateProfilePage() {
   const isRecruiter = user?.role === 'recruiter';
   const isManager = user?.role === 'manager';
   const isTLOrAdmin = isTL || isAdmin;
+  const isViewOnlyAdmin = user?.role === 'view_only_admin';
 
   const [candidate, setCandidate] = useState<any>(null);
   const [status, setStatus] = useState('Eligible');
@@ -813,7 +814,7 @@ export function CandidateProfilePage() {
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-slate-500 hover:text-slate-700 text-sm transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Resumes
         </button>
-        {(isAdmin || isTL || isManager || isCandidateGeneralPool || (isRecruiter && !isLockedForOtherRecruiter)) && (
+        {(isAdmin || isTL || isManager || isCandidateGeneralPool || (isRecruiter && !isLockedForOtherRecruiter)) && !isViewOnlyAdmin && (
           <div className="flex items-center gap-2">
             {isCandidateGeneralPool && !isOwner && (
               <button
@@ -843,7 +844,20 @@ export function CandidateProfilePage() {
         )}
       </div>
 
-      {/* ── Lock & Availability Banners ────────────────────────── */}
+      {/* ── View-Only Admin Mode Banner ── */}
+      {isViewOnlyAdmin && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-slate-100 border border-slate-300 rounded-xl text-slate-700 text-sm shadow-sm">
+          <Shield className="w-5 h-5 text-slate-500 flex-shrink-0" />
+          <div>
+            <p className="font-bold text-slate-900">View-Only Admin · Audit Mode (Read-Only)</p>
+            <p className="text-xs text-slate-600 mt-0.5">
+              Full read-only visibility into candidate details, resume preview, and timeline. Editing, status updates, notes, and document uploads are disabled.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Lock & Availability Banners ── */}
       {isCandidateGeneralPool && !hasAssignedRecruiter && (
         <div className="flex items-center justify-between gap-3 px-4 py-3.5 bg-emerald-50 border-2 border-emerald-300 rounded-xl text-emerald-950 text-sm shadow-sm">
           <div className="flex items-center gap-3">
@@ -1254,7 +1268,7 @@ export function CandidateProfilePage() {
                     </div>
                   </div>
                   {firstCallError && <p className="text-red-600 text-xs mt-2">{firstCallError}</p>}
-                  {(!candidate.firstCallSubmitted || isAdmin) && (
+                  {(!candidate.firstCallSubmitted || isAdmin) && !isViewOnlyAdmin && (
                     <div className="flex justify-end mt-4">
                       <button onClick={handleSaveFirstCall} disabled={savingFirstCall}
                         className="flex items-center gap-2 px-5 py-2 bg-amber-600 text-white text-sm rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
@@ -1313,7 +1327,7 @@ export function CandidateProfilePage() {
                     </div>
                   </div>
                   {finalDetailsError && <p className="text-red-600 text-xs mt-2">{finalDetailsError}</p>}
-                  {(!candidate.finalDetailsSubmitted || isAdmin) && (
+                  {(!candidate.finalDetailsSubmitted || isAdmin) && !isViewOnlyAdmin && (
                     <div className="flex justify-end mt-4">
                       <button onClick={handleSaveFinalDetails} disabled={savingFinalDetails}
                         className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
@@ -1420,7 +1434,7 @@ export function CandidateProfilePage() {
                       <p className="text-red-600 text-xs mt-2">{secondCallError}</p>
                     )}
 
-                    {!(candidate.tlCallSubmitted && !isAdmin) && (
+                    {!(candidate.tlCallSubmitted && !isAdmin) && !isViewOnlyAdmin && (
                       <div className="flex justify-end mt-4">
                         <button onClick={handleSecondCallSubmit} disabled={submittingSecondCall}
                           className="flex items-center gap-2 px-5 py-2 bg-violet-600 text-white text-sm rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
@@ -1451,7 +1465,7 @@ export function CandidateProfilePage() {
               ))}
             </div>
             {/* Only allow notes if not locked */}
-            {!isLockedForAll && !isLockedForRecruiter && !isLockedForTL && !isBlockedAsDuplicate && !isLockedForManager && (
+            {!isLockedForAll && !isLockedForRecruiter && !isLockedForTL && !isBlockedAsDuplicate && !isLockedForManager && !isViewOnlyAdmin && (
               <div className="space-y-3">
                 <textarea value={note} onChange={e => setNote(e.target.value)}
                   placeholder="Add a note..." rows={2}
@@ -1597,12 +1611,14 @@ export function CandidateProfilePage() {
                 {intStatusMsg && (
                   <p className={`text-xs ${intStatusMsg.ok ? 'text-green-600' : 'text-red-600'}`}>{intStatusMsg.text}</p>
                 )}
+                {!isViewOnlyAdmin && (
                 <button onClick={handleSaveInterviewStatus} disabled={savingIntStatus || isLockedForAll || isLockedForRecruiter || isFinalInterviewLocked}
                   className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white text-sm rounded-lg hover:bg-violet-700 disabled:opacity-50 transition-colors"
                   style={{ fontWeight: 500 }}>
                   {savingIntStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                   Save Interview Status
                 </button>
+                )}
               </div>
             )}
           </div>

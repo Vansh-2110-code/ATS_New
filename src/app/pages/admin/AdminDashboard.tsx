@@ -746,7 +746,7 @@ export function AdminDashboard() {
           <p className="text-slate-500 text-sm mt-0.5">System overview — {today}</p>
         </div>
         <span className="self-start sm:self-auto px-3 py-1.5 bg-red-50 text-red-600 border border-red-100 text-xs rounded-full" style={{ fontWeight: 600 }}>
-          Admin · Super Access
+          {user?.role === 'view_only_admin' ? 'View-Only Admin · Audit Mode (Read-Only)' : 'Admin · Super Access'}
         </span>
       </div>
 

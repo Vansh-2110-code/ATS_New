@@ -4,7 +4,7 @@ const reviewController = require('../controllers/review.controller');
 const { auth, authorize } = require('../middleware/auth.middleware');
 
 router.use(auth);
-router.use(authorize('admin', 'tl', 'manager'));
+router.use(authorize('admin', 'tl', 'manager', 'view_only_admin'));
 
 router.get('/', reviewController.getReviews);
 router.get('/employee-metrics', reviewController.getEmployeeMetrics);

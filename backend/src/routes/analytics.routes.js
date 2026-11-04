@@ -3,7 +3,7 @@ const router = express.Router();
 const { auth: authenticate, authorize } = require('../middleware/auth.middleware');
 
 // Compute analytics on the fly from existing data
-router.get('/kpis', authenticate, authorize('tl', 'manager', 'admin', 'spoc'), async (req, res) => {
+router.get('/kpis', authenticate, authorize('tl', 'manager', 'admin', 'spoc', 'view_only_admin'), async (req, res) => {
   try {
     const Candidate = require('../models/Candidate');
     const Job = require('../models/Job');

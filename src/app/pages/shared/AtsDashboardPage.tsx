@@ -86,6 +86,7 @@ function ScoreBadge({ score }: { score: number }) {
 export function AtsDashboardPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const isViewOnlyAdmin = user?.role === 'view_only_admin';
   const [records, setRecords]       = useState<AtsRecord[]>([]);
   const [total, setTotal]           = useState(0);
   const [page, setPage]             = useState(1);
@@ -256,13 +257,15 @@ export function AtsDashboardPage() {
           </p>
         </div>
         <div className="flex gap-2.5">
-          <Link
-            to="/recruiter/scan"
-            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-sm hover:shadow-green-100"
-          >
-            <Plus className="w-4 h-4" />
-            Upload/Scan Resume
-          </Link>
+          {!isViewOnlyAdmin && (
+            <Link
+              to="/recruiter/scan"
+              className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-sm hover:shadow-green-100"
+            >
+              <Plus className="w-4 h-4" />
+              Upload/Scan Resume
+            </Link>
+          )}
           {isAdmin && (
             <button
               onClick={handleExport}
@@ -744,14 +747,16 @@ export function AtsDashboardPage() {
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => { openEditModal(rec); }}
-                        className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors cursor-pointer"
-                        title="Edit full record"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
+                      {!isViewOnlyAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => { openEditModal(rec); }}
+                          className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-500 transition-colors cursor-pointer"
+                          title="Edit full record"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

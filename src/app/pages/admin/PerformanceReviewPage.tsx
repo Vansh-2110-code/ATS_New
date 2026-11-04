@@ -5,6 +5,7 @@ import api from '../../services/api';
 
 export function PerformanceReviewPage() {
   const { user } = useAuth();
+  const isViewOnlyAdmin = user?.role === 'view_only_admin';
   const [reviews, setReviews] = useState<any[]>([]);
   const [dateRange, setDateRange] = useState('Month');
   const [customFrom, setCustomFrom] = useState('');
@@ -129,12 +130,14 @@ export function PerformanceReviewPage() {
           <h1 className="text-2xl text-slate-800" style={{ fontWeight: 700 }}>Performance Reviews</h1>
           <p className="text-slate-500 text-sm mt-1">Manage and view recruiter performance reviews</p>
         </div>
+        {!isViewOnlyAdmin && (
         <button
           onClick={() => setShowModal(true)}
           className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
         >
           + New Review
         </button>
+        )}
       </div>
 
       {/* Filters */}

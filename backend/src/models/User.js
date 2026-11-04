@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
   employeeId: { type: String, unique: true, sparse: true, trim: true },
   password: { type: String, required: true, minlength: 6 },
-  role: { type: String, enum: ['recruiter', 'tl', 'manager', 'admin', 'spoc', 'walkin', 'bd', 'business_developer', 'mis', 'data_entry', 'superadmin'], required: true },
+  role: { type: String, enum: ['recruiter', 'tl', 'manager', 'admin', 'spoc', 'walkin', 'bd', 'business_developer', 'mis', 'data_entry', 'superadmin', 'view_only_admin'], required: true },
   roles: { type: [String], default: [] },
   isWFH: { type: Boolean, default: false },
   status: { type: String, enum: ['Active', 'On Leave', 'Resigned / Notice Period', 'Former Employee', 'Suspended', 'Exited', 'Inactive'], default: 'Active' },
