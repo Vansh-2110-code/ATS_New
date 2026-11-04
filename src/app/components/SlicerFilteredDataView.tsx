@@ -16,6 +16,7 @@ interface SlicerFilteredDataViewProps {
   range?: string;
   fromDate?: string;
   toDate?: string;
+  month?: string;
 }
 
 export function SlicerFilteredDataView({
@@ -28,7 +29,8 @@ export function SlicerFilteredDataView({
   title,
   range,
   fromDate,
-  toDate
+  toDate,
+  month
 }: SlicerFilteredDataViewProps) {
   const { user } = useAuth();
   const [candidates, setCandidates] = useState<any[]>([]);
@@ -137,6 +139,7 @@ export function SlicerFilteredDataView({
         if (range && range !== 'all' && range !== 'All') params.range = range;
         if (fromDate) params.fromDate = fromDate;
         if (toDate) params.toDate = toDate;
+        if (month && month !== 'all' && month !== 'current') params.month = month;
 
         const res = await api.getCandidates(params);
         const list = res.candidates || res.data || (Array.isArray(res) ? res : []);
@@ -150,7 +153,7 @@ export function SlicerFilteredDataView({
     };
 
     fetchFilteredCandidates();
-  }, [slicerName, division, recruiter, company, customer, range, fromDate, toDate]);
+  }, [slicerName, division, recruiter, company, customer, range, fromDate, toDate, month]);
 
   if (!slicerName || slicerName === 'All') return null;
 

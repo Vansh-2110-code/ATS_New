@@ -138,6 +138,8 @@ export const router = createBrowserRouter([
       { path: '/recruiter/jobs/bulk',  Component: BulkJobPostPage },
       { path: '/recruiter/joining',    Component: JoiningFormPage },
       { path: '/recruiter/calls/today', Component: TodaysCallsPage },
+      { path: '/admin/calls/today', Component: TodaysCallsPage },
+      { path: '/calls/today', Component: TodaysCallsPage },
       { path: '/recruiter/walkins',     Component: WalkInManagementPage },
       { path: '/recruiter/walkin-interview', Component: WalkInInterviewFormPage },
       { path: '/recruiter/jobs/:id/summary', Component: JRSummaryPage },

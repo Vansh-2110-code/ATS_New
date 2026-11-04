@@ -93,6 +93,7 @@ export function RecruiterDashboard() {
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
   const [dateRange, setDateRange] = useState<DateRange>('Day');
+  const [selectedMonth, setSelectedMonth] = useState<string>('current');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [division, setDivision] = useState('All');
@@ -140,12 +141,13 @@ export function RecruiterDashboard() {
 
   useEffect(() => {
     loadDashboard();
-  }, [dateRange, customFrom, customTo, division, company, customer, recruiter]);
+  }, [dateRange, selectedMonth, customFrom, customTo, division, company, customer, recruiter]);
 
   const loadDashboard = async () => {
     try {
       setLoading(true);
       const params: Record<string, string> = { range: dateRange.toLowerCase() };
+      if (dateRange === 'Month' && selectedMonth && selectedMonth !== 'current' && selectedMonth !== 'All') { params.month = selectedMonth; }
       if (dateRange === 'Custom' && customFrom) params.from = customFrom;
       if (dateRange === 'Custom' && customTo) params.to = customTo;
       if (division) params.division = division;

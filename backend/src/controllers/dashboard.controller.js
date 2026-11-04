@@ -19,11 +19,17 @@ const { getDateRange } = require('../utils/helpers');
 // GET /api/dashboard/recruiter
 exports.recruiterDashboard = async (req, res, next) => {
   try {
-    const { dateRange = 'month', range, startDate, endDate, from, to, division, company, customer, recruiter, tlId } = req.query;
+    const { dateRange = 'month', range, startDate, endDate, from, to, division, company, customer, recruiter, tlId, month, year } = req.query;
     const customStart = startDate || from || null;
     const customEnd = endDate || to || null;
     const selectedRange = (customStart || customEnd) ? 'custom' : (range || dateRange || 'month').toLowerCase();
-    const { start, end } = getDateRange(selectedRange, customStart, customEnd);
+    const MONTHS_LIST = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    let targetMonth = month || null;
+    if (!targetMonth && MONTHS_LIST.includes(selectedRange)) {
+      targetMonth = selectedRange;
+    }
+    const isSpecificMonth = Boolean(targetMonth && targetMonth !== 'all' && targetMonth !== 'current');
+    const { start, end } = getDateRange(isSpecificMonth ? targetMonth : selectedRange, customStart, customEnd, targetMonth, year);
     const userId = req.user._id;
     const isAdmin = ['admin', 'superadmin', 'manager', 'tl'].includes(req.user.role);
 
@@ -74,7 +80,26 @@ exports.recruiterDashboard = async (req, res, next) => {
 
     const andConditions = [];
     if (selectedRange !== 'all') {
-      andConditions.push({ createdAt: dateFilter });
+      if (isSpecificMonth) {
+        const canonicalMonth = targetMonth.charAt(0).toUpperCase() + targetMonth.slice(1).toLowerCase();
+        andConditions.push({
+          $or: [
+            { selectionMonth: new RegExp('^' + canonicalMonth + String.fromCharCode(36), 'i') },
+            { dateOfSelects: dateFilter },
+            { dateOfJoining: dateFilter },
+            { createdAt: dateFilter }
+          ]
+        });
+      } else {
+        andConditions.push({
+          $or: [
+            { dateOfSelects: dateFilter },
+            { dateOfJoining: dateFilter },
+            { createdAt: dateFilter },
+            { updatedAt: dateFilter }
+          ]
+        });
+      }
     }
     if (division && division !== 'All') {
       andConditions.push({ division });

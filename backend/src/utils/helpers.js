@@ -107,9 +107,35 @@ const generateCandidateId = async (Candidate) => {
 /**
  * Get date range helpers
  */
-const getDateRange = (range, customStart, customEnd) => {
+const MONTH_NAME_TO_INDEX = {
+  jan: 0, january: 0,
+  feb: 1, february: 1,
+  mar: 2, march: 2,
+  apr: 3, april: 3,
+  may: 4,
+  jun: 5, june: 5,
+  jul: 6, july: 6,
+  aug: 7, august: 7,
+  sep: 8, september: 8,
+  oct: 9, october: 9,
+  nov: 10, november: 10,
+  dec: 11, december: 11
+};
+
+const getDateRange = (range, customStart, customEnd, monthVal, yearVal) => {
   const now = new Date();
+  const currentYear = yearVal ? parseInt(yearVal, 10) : (now.getFullYear() || 2026);
   let start, end;
+
+  const checkMonth = monthVal || (range && MONTH_NAME_TO_INDEX[String(range).toLowerCase()] !== undefined ? range : null);
+  if (checkMonth && String(checkMonth).toLowerCase() !== 'all' && String(checkMonth).toLowerCase() !== 'current') {
+    const mIdx = MONTH_NAME_TO_INDEX[String(checkMonth).toLowerCase().trim()];
+    if (mIdx !== undefined) {
+      start = new Date(currentYear, mIdx, 1);
+      end = new Date(currentYear, mIdx + 1, 1);
+      return { start, end };
+    }
+  }
 
   switch (range) {
     case 'day':
@@ -122,22 +148,22 @@ const getDateRange = (range, customStart, customEnd) => {
       end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
       break;
     case 'month':
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-      end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      start = new Date(currentYear, now.getMonth(), 1);
+      end = new Date(currentYear, now.getMonth() + 1, 1);
       break;
     case 'quarter':
       const qMonth = Math.floor(now.getMonth() / 3) * 3;
-      start = new Date(now.getFullYear(), qMonth, 1);
-      end = new Date(now.getFullYear(), qMonth + 3, 1);
+      start = new Date(currentYear, qMonth, 1);
+      end = new Date(currentYear, qMonth + 3, 1);
       break;
     case 'year':
-      start = new Date(now.getFullYear(), 0, 1);
-      end = new Date(now.getFullYear() + 1, 0, 1);
+      start = new Date(currentYear, 0, 1);
+      end = new Date(currentYear + 1, 0, 1);
       break;
     case 'custom':
-      start = customStart ? new Date(customStart) : new Date(now.getFullYear(), now.getMonth(), 1);
+      start = customStart ? new Date(customStart) : new Date(currentYear, now.getMonth(), 1);
       end = customEnd ? new Date(customEnd) : new Date();
-      if (isNaN(start.getTime())) start = new Date(now.getFullYear(), 0, 1);
+      if (isNaN(start.getTime())) start = new Date(currentYear, 0, 1);
       if (isNaN(end.getTime())) end = new Date();
       if (start > end) {
         const temp = start;

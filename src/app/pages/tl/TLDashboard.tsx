@@ -120,6 +120,7 @@ export function TLDashboard() {
 
   // Recruiter Dashboard Slicer & Filter State
   const [dateRange, setDateRange] = useState<DateRange>('Month');
+  const [selectedMonth, setSelectedMonth] = useState<string>('current');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [division, setDivision] = useState('BPO');

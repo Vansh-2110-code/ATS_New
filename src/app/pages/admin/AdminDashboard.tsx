@@ -179,6 +179,7 @@ export function AdminDashboard() {
 
   // ── Recruiter state ─────────────────────────────────────────────────────────
   const [dateRange, setDateRange] = useState<DateRange>('Day');
+  const [selectedMonth, setSelectedMonth] = useState<string>('current');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [recLoading, setRecLoading] = useState(false);
@@ -593,6 +594,7 @@ export function AdminDashboard() {
       try {
         setRecLoading(true);
         const params: Record<string, string> = { range: dateRange.toLowerCase() };
+        if (dateRange === 'Month' && selectedMonth && selectedMonth !== 'current' && selectedMonth !== 'All') { params.month = selectedMonth; }
         if (dateRange === 'Custom') { params.from = customFrom; params.to = customTo; }
         if (recDivision && recDivision !== 'All') params.division = recDivision;
         if (recruiterFilter && recruiterFilter !== 'All') params.recruiter = recruiterFilter;
@@ -606,7 +608,7 @@ export function AdminDashboard() {
       }
     };
     loadRec();
-  }, [dateRange, customFrom, customTo, recDivision, recruiterFilter, recCompanyFilter]);
+  }, [dateRange, selectedMonth, customFrom, customTo, recDivision, recruiterFilter, recCompanyFilter]);
 
   // ── Division Dashboard loader ───────────────────────────────────────────────
   // Load ONLY created companies from Company Management (deduplicated & sorted A-Z)
@@ -1521,6 +1523,7 @@ export function AdminDashboard() {
                 recruiter={recruiterFilter}
                 company={recCompanyFilter !== 'All Companies' ? recCompanyFilter : undefined}
                 range={dateRange}
+                month={dateRange === 'Month' ? selectedMonth : undefined}
                 fromDate={customFrom}
                 toDate={customTo}
                 onClear={() => setRecruitingSlicer('All')}

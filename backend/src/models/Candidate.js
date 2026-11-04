@@ -348,6 +348,11 @@ const candidateSchema = new mongoose.Schema({
 
   // ─── Company & Department Info ──────────────────────────────────
   department: { type: String, trim: true },
+  company: { type: String, trim: true },
+  process: { type: String, trim: true },
+  dateOfSelects: { type: Date, index: true },
+  selectionMonth: { type: String, index: true },
+  teamLeaderName: { type: String, trim: true },
   industry: { type: String, trim: true },
   companySize: { type: String, trim: true },
 

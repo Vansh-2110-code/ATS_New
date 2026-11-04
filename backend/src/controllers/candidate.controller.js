@@ -348,21 +348,60 @@ exports.list = async (req, res, next) => {
       }
     }
 
-    if (fromDate || toDate || req.query.range || req.query.dateRange) {
-      const selectedRange = (req.query.range || req.query.dateRange || '').toLowerCase();
-      if (selectedRange && selectedRange !== 'all') {
-        const { getDateRange } = require('../utils/helpers');
-        const { start, end } = getDateRange(selectedRange, fromDate, toDate);
-        query.createdAt = { $gte: start, $lt: end };
-      } else if (fromDate || toDate) {
-        if (!query.createdAt) query.createdAt = {};
-        if (fromDate) {
-          query.createdAt.$gte = new Date(fromDate);
+    if (fromDate || toDate || req.query.range || req.query.dateRange || req.query.month) {
+      const selectedRange = (req.query.range || req.query.dateRange || "").toLowerCase();
+      const MONTHS_LIST = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+      let targetMonth = req.query.month || null;
+      if (!targetMonth && MONTHS_LIST.includes(selectedRange)) {
+        targetMonth = selectedRange;
+      }
+      const isSpecificMonth = Boolean(targetMonth && targetMonth !== "all" && targetMonth !== "current");
+
+      if (selectedRange !== "all") {
+        const { getDateRange } = require("../utils/helpers");
+        const { start, end } = getDateRange(isSpecificMonth ? targetMonth : selectedRange, fromDate, toDate, targetMonth, req.query.year);
+        const dateFilter = { $gte: start, $lt: end };
+
+        let dateCond;
+        if (isSpecificMonth) {
+          const canonicalMonth = targetMonth.charAt(0).toUpperCase() + targetMonth.slice(1).toLowerCase();
+          dateCond = [
+            { selectionMonth: new RegExp("^" + canonicalMonth + "$", "i") },
+            { dateOfSelects: dateFilter },
+            { dateOfJoining: dateFilter },
+            { createdAt: dateFilter }
+          ];
+        } else {
+          dateCond = [
+            { dateOfSelects: dateFilter },
+            { dateOfJoining: dateFilter },
+            { createdAt: dateFilter },
+            { updatedAt: dateFilter }
+          ];
         }
-        if (toDate) {
-          const endOfDay = new Date(toDate);
-          endOfDay.setHours(23, 59, 59, 999);
-          query.createdAt.$lte = endOfDay;
+
+        if (query.$or) {
+          query.$and = [{ $or: query.$or }, { $or: dateCond }];
+          delete query.$or;
+        } else {
+          query.$or = dateCond;
+        }
+      } else if (fromDate || toDate) {
+        const start = fromDate ? new Date(fromDate) : new Date(2020, 0, 1);
+        const end = toDate ? new Date(toDate) : new Date();
+        end.setHours(23, 59, 59, 999);
+        const dateFilter = { $gte: start, $lte: end };
+        const dateCond = [
+          { dateOfSelects: dateFilter },
+          { dateOfJoining: dateFilter },
+          { createdAt: dateFilter },
+          { updatedAt: dateFilter }
+        ];
+        if (query.$or) {
+          query.$and = [{ $or: query.$or }, { $or: dateCond }];
+          delete query.$or;
+        } else {
+          query.$or = dateCond;
         }
       }
     }
